@@ -1,31 +1,122 @@
 [
-  { "label": "Start here", "items": [
-    { "title": "Overview", "icon": "overview", "route": "#/overview" },
-    { "title": "Roadmap board", "icon": "board", "route": "#/roadmap" }
-  ]},
-  { "label": "Product & features", "items": [
-    { "title": "Feature dossiers", "icon": "feature", "route": "#/features" },
-    { "title": "Product (BRD / PRD)", "icon": "product", "route": "#/product" }
-  ]},
-  { "label": "Engineering", "items": [
-    { "title": "Architecture", "icon": "arch", "route": "#/architecture" },
-    { "title": "Infrastructure & AWS", "icon": "infra", "route": "#/infra" },
-    { "title": "CI/CD", "icon": "cicd", "route": "#/cicd" },
-    { "title": "Observability", "icon": "obs", "route": "#/observability" },
-    { "title": "Traceability", "icon": "trace", "route": "#/traceability" }
-  ]},
-  { "label": "Decisions & quality", "items": [
-    { "title": "Decision log (ADR)", "icon": "adr", "route": "#/adr" },
-    { "title": "Gaps & quality", "icon": "gaps", "route": "#/gaps" },
-    { "title": "Security", "icon": "security", "route": "#/security" },
-    { "title": "Performance", "icon": "perf", "route": "#/performance" }
-  ]},
-  { "label": "Go to market", "items": [
-    { "title": "Production readiness", "icon": "gtm", "route": "#/gtm" }
-  ]},
-  { "label": "Reference", "items": [
-    { "title": "Knowledge base", "icon": "kb", "route": "#/kb" },
-    { "title": "Accounts & access", "icon": "accounts", "route": "#/accounts" },
-    { "title": "Changelog", "icon": "changelog", "route": "#/changelog" }
-  ]}
+  {
+    "label": "Start here",
+    "items": [
+      {
+        "title": "Overview",
+        "icon": "overview",
+        "route": "#/overview"
+      },
+      {
+        "title": "Learning paths",
+        "icon": "learn",
+        "route": "#/learn"
+      },
+      {
+        "title": "Roadmap board",
+        "icon": "board",
+        "route": "#/roadmap"
+      }
+    ]
+  },
+  {
+    "label": "Product & features",
+    "items": [
+      {
+        "title": "Feature dossiers",
+        "icon": "feature",
+        "route": "#/features"
+      },
+      {
+        "title": "Product (BRD / PRD)",
+        "icon": "product",
+        "route": "#/product"
+      }
+    ]
+  },
+  {
+    "label": "Engineering",
+    "items": [
+      {
+        "title": "Architecture",
+        "icon": "arch",
+        "route": "#/architecture"
+      },
+      {
+        "title": "Infrastructure & AWS",
+        "icon": "infra",
+        "route": "#/infra"
+      },
+      {
+        "title": "CI/CD",
+        "icon": "cicd",
+        "route": "#/cicd"
+      },
+      {
+        "title": "Observability",
+        "icon": "obs",
+        "route": "#/observability"
+      },
+      {
+        "title": "Traceability",
+        "icon": "trace",
+        "route": "#/traceability"
+      }
+    ]
+  },
+  {
+    "label": "Decisions & quality",
+    "items": [
+      {
+        "title": "Decision log (ADR)",
+        "icon": "adr",
+        "route": "#/adr"
+      },
+      {
+        "title": "Gaps & quality",
+        "icon": "gaps",
+        "route": "#/gaps"
+      },
+      {
+        "title": "Security",
+        "icon": "security",
+        "route": "#/security"
+      },
+      {
+        "title": "Performance",
+        "icon": "perf",
+        "route": "#/performance"
+      }
+    ]
+  },
+  {
+    "label": "Go to market",
+    "items": [
+      {
+        "title": "Production readiness",
+        "icon": "gtm",
+        "route": "#/gtm"
+      }
+    ]
+  },
+  {
+    "label": "Reference",
+    "items": [
+      {
+        "title": "Knowledge base",
+        "icon": "kb",
+        "route": "#/kb"
+      },
+      {
+        "title": "Accounts & access",
+        "icon": "accounts",
+        "route": "#/accounts"
+      },
+      {
+        "title": "Changelog",
+        "icon": "changelog",
+        "route": "#/changelog"
+      }
+    ]
+  }
 ]

@@ -6,7 +6,8 @@
    ============================================================ */
 (() => {
   'use strict';
-  const PASSCODE = 'changeme';
+  // Soft gate passcode: brand.json "passcode" overrides this default.
+  let PASSCODE = 'changeme';
   const SKEY = 'tb-hub-ok';
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
@@ -30,7 +31,8 @@
     changelog: '<path d="M12 8v4l3 2"/><circle cx="12" cy="12" r="9"/>',
     gtm: '<path d="M4.5 16.5c-1.5 1.3-2 5-2 5s3.7-.5 5-2c.7-.8.7-2 0-2.8a2 2 0 0 0-3 0zM12 15l-3-3a12 12 0 0 1 8-8l3 .5.5 3a12 12 0 0 1-8 8zM15 9h.01"/>',
     trace: '<path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1.5 1.5M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1.5-1.5"/>',
-    ext: '<path d="M14 4h6v6M20 4l-9 9M19 13v6H5V5h6"/>'
+    ext: '<path d="M14 4h6v6M20 4l-9 9M19 13v6H5V5h6"/>',
+    learn: '<path d="M2 9l10-5 10 5-10 5z"/><path d="M6 11v5c3 2.5 9 2.5 12 0v-5M22 9v6"/>'
   };
   const ico = (name, cls = 'nav-ico') => `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONS[name] || ICONS.overview}</svg>`;
 
@@ -78,7 +80,8 @@
     const map = { '--tb-blue-700': b.primary, '--tb-blue-500': b.primaryFill, '--tb-blue-300': b.primaryLight, '--tb-blue-900': b.primaryDark, '--tb-blue-800': b.primaryDark };
     Object.entries(map).forEach(([k, v]) => { if (v) r.setProperty(k, v); });
     if (b.font) r.setProperty('--font', b.font);
-    if (b.name) { document.title = `${b.name} Engineering Hub`; const el = $('.brand-sub'); if (el) el.textContent = 'Engineering Hub'; }
+    if (b.passcode) PASSCODE = b.passcode;
+    if (b.name) { document.title = `${b.name} Engineering Hub`; const el = $('.brand-sub'); if (el) el.textContent = `${b.name} Engineering Hub`; }
     const logo = $('.brand-logo'); if (logo && b.logo) logo.src = b.logo;
     const gm = $('.gate__card h1'); if (gm && b.name) gm.textContent = `${b.name} Engineering Hub`;
     const gmk = $('.gate__mark svg rect'); if (gmk && b.primary) gmk.setAttribute('fill', b.primary);
@@ -116,7 +119,8 @@
       '#/adr': (DATA.adrs || []).length,
       '#/gaps': (DATA.gaps || []).length,
       '#/security': (DATA.security || []).length,
-      '#/kb': (DATA.kb || []).length
+      '#/kb': (DATA.kb || []).length,
+      '#/learn': ((DATA.learning || {}).courses || []).reduce((n, c) => n + (c.lessons || []).length, 0)
     };
     $('#sidebar').innerHTML = (DATA.nav || []).map(g => `
       <div class="nav-group">
@@ -138,7 +142,8 @@
     feature: renderFeature, product: md('product'), architecture: md('architecture'),
     infra: md('infra'), cicd: md('cicd'), adr: renderADR, gaps: renderGaps,
     security: renderSecurity, performance: renderPerformance, observability: md('observability'),
-    kb: renderKB, doc: renderDoc, gtm: renderGTM, traceability: renderTrace, accounts: renderAccounts, changelog: md('changelog')
+    kb: renderKB, doc: renderDoc, gtm: renderGTM, traceability: renderTrace, accounts: renderAccounts, changelog: md('changelog'),
+    learn: renderLearn, course: renderCourse, lesson: renderLesson
   };
   async function route() {
     if (!location.hash || location.hash === '#') { location.hash = '#/overview'; return; }
@@ -196,7 +201,7 @@
     const adrN = (DATA.adrs || []).length, gapN = (DATA.gaps || []).length, secN = (DATA.security || []).length;
     $('#content').innerHTML = `
       <div class="page-head">
-        <p class="eyebrow">Project Platform</p>
+        <p class="eyebrow">${esc(o.eyebrow || 'Engineering')}</p>
         <h1>${esc(o.title || 'Engineering Hub')}</h1>
         <p class="lede">${esc(o.lede || '')}</p>
       </div>
@@ -211,16 +216,7 @@
       ${o.intro ? `<div class="md" style="margin:6px 0 26px">${window.marked ? marked.parse(o.intro) : esc(o.intro)}</div>` : ''}
       <h2 style="color:var(--heading);font-size:1.15rem;margin:10px 0 14px">Jump in</h2>
       <div class="cards">
-        ${[
-          ['board', 'Roadmap board', 'What is shipped, in progress, next and on the North Star horizon.', '#/roadmap'],
-          ['feature', 'Feature dossiers', 'Every feature with product view, plan, UI mockup, technical design and test cases.', '#/features'],
-          ['arch', 'Architecture', 'The five services, how they connect, data model and workflows.', '#/architecture'],
-          ['infra', 'Infrastructure & AWS', 'What runs in AWS today and the recommended demo / dev / prod split.', '#/infra'],
-          ['adr', 'Decision log (ADR)', 'Every architecture decision and its status.', '#/adr'],
-          ['gaps', 'Gaps & quality', 'Known defects, code gaps, security and performance findings.', '#/gaps'],
-          ['security', 'Security', 'Auth model, PHI handling and the security findings.', '#/security'],
-          ['product', 'Product (BRD / PRD)', 'Vision, journeys and the existing / new / future feature set.', '#/product']
-        ].map(([i, t, d, r]) => `<a class="card" href="${r}"><div class="card__top"><div class="card__ico">${ico(i, '')}</div><h3>${t}</h3></div><p>${d}</p></a>`).join('')}
+        ${overviewCards().map(([i, t, d, r]) => `<a class="card" href="${r}"><div class="card__top"><div class="card__ico">${ico(i, '')}</div><h3>${t}</h3></div><p>${d}</p></a>`).join('')}
       </div>
       <p class="footer-note">${esc(o.footer || '')}</p>`;
     $$('.card__ico svg').forEach(s => { s.setAttribute('viewBox', '0 0 24 24'); });
@@ -242,7 +238,7 @@
       <h4>${esc(it.title)}</h4>
       ${it.summary ? `<p>${esc(it.summary)}</p>` : ''}
       <div class="meta">
-        ${it.party ? `<span class="party-chip p-${esc(it.party)}">${esc(partyLabel(it.party))}</span>` : ''}
+        ${it.party ? `<span class="party-chip p-${esc(it.party)}"${partyStyle(it.party)}>${esc(partyLabel(it.party))}</span>` : ''}
         ${it.milestone ? `<span class="badge b-new">${esc(it.milestone)}</span>` : ''}
         ${it.priority ? `<span class="badge b-low">${esc(it.priority)}</span>` : ''}
       </div></a>`;
@@ -260,21 +256,40 @@
         }).join('')}
       </div>`;
   }
-  function partyLabel(p) { return { patient: 'Patient', doctor: 'Doctor', establishment: 'Clinic', admin: 'Admin', cross: 'Platform' }[p] || p; }
+  // Parties (who/which area a feature belongs to) come from brand.json "parties":
+  // { "key": "Label" } or { "key": { "label": "Label", "color": "#hex" } }.
+  function parties() { return (window.__BRAND || {}).parties || {}; }
+  function partyLabel(p) { const v = parties()[p]; return (v && typeof v === 'object' ? v.label : v) || p; }
+  function partyStyle(p) { const v = parties()[p]; return v && v.color ? ` style="background:${esc(v.color)}"` : ''; }
+  function overviewCards() {
+    const o = DATA.overview || {};
+    const def = [
+      ['board', 'Roadmap board', 'What is shipped, in progress, next and on the horizon.', '#/roadmap'],
+      ['feature', 'Feature dossiers', 'Every feature with product view, plan, technical design and test cases.', '#/features'],
+      ['arch', 'Architecture', 'How the system is put together: services, data and flows.', '#/architecture'],
+      ['adr', 'Decision log (ADR)', 'Every architecture decision and its status.', '#/adr'],
+      ['gaps', 'Gaps & quality', 'Known defects, code gaps, security and performance findings.', '#/gaps'],
+      ['kb', 'Knowledge base', 'Every document behind this hub, readable in place.', '#/kb']
+    ];
+    const list = Array.isArray(o.cards) ? o.cards.map(c => [c.icon, c.title, c.text, c.route]) : def;
+    if (!Array.isArray(o.cards) && ((DATA.learning || {}).courses || []).length) list.unshift(['learn', 'Learning paths', 'Courses in sequence that take you from zero to working on the platform.', '#/learn']);
+    return list;
+  }
 
   /* ---------- FEATURES LIST ---------- */
   function renderFeatures(arg) {
     const f = DATA.features || [];
-    const parties = ['all', 'patient', 'doctor', 'establishment', 'admin', 'cross'];
+    const keys = Object.keys(parties()).length ? Object.keys(parties()) : Array.from(new Set(f.map(x => x.party).filter(Boolean)));
+    const partiesList = ['all', ...keys];
     const active = (sessionStorage.getItem('tb-feat-filter') || 'all');
     const list = active === 'all' ? f : f.filter(x => x.party === active);
     $('#content').innerHTML = `
       <div class="page-head"><p class="eyebrow">Features</p><h1>Feature dossiers</h1>
-      <p class="lede">Each existing feature has a full dossier: product view, planning, a branded UI mockup, technical design, implementation status and test cases.</p></div>
-      <div class="filterbar">${parties.map(p => `<button class="chip ${p === active ? 'active' : ''}" data-p="${p}">${p === 'all' ? 'All' : partyLabel(p)} ${p === 'all' ? `(${f.length})` : `(${f.filter(x => x.party === p).length})`}</button>`).join('')}</div>
+      <p class="lede">Each feature has a dossier: product view, planning, UX, technical design, implementation status and test cases.</p></div>
+      <div class="filterbar">${partiesList.map(p => `<button class="chip ${p === active ? 'active' : ''}" data-p="${p}">${p === 'all' ? 'All' : partyLabel(p)} ${p === 'all' ? `(${f.length})` : `(${f.filter(x => x.party === p).length})`}</button>`).join('')}</div>
       <div class="cards">
         ${list.map(x => `<a class="card" href="#/feature/${esc(x.id)}">
-          <div class="card__top"><span class="party-chip p-${esc(x.party)}">${esc(partyLabel(x.party))}</span></div>
+          <div class="card__top"><span class="party-chip p-${esc(x.party)}"${partyStyle(x.party)}>${esc(partyLabel(x.party))}</span></div>
           <h3>${esc(x.title)}</h3>
           <p>${esc(x.summary || '')}</p>
           <div class="meta" style="margin-top:12px;display:flex;gap:6px;flex-wrap:wrap">${statusBadge(x.status)}${x.milestone ? `<span class="badge b-new">${esc(x.milestone)}</span>` : ''}</div>
@@ -292,7 +307,7 @@
       <div class="breadcrumb"><a href="#/features">Features</a> › ${esc(x.title)}</div>
       <div class="page-head">
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
-          <span class="party-chip p-${esc(x.party)}">${esc(partyLabel(x.party))}</span>${statusBadge(x.status)}
+          <span class="party-chip p-${esc(x.party)}"${partyStyle(x.party)}>${esc(partyLabel(x.party))}</span>${statusBadge(x.status)}
           ${x.milestone ? `<span class="badge b-new">${esc(x.milestone)}</span>` : ''}${x.priority ? `<span class="badge b-low">${esc(x.priority)}</span>` : ''}
         </div>
         <h1>${esc(x.title)}</h1><p class="lede">${esc(x.summary || '')}</p>
@@ -360,7 +375,7 @@
         <tbody>${rows.map(r => {
           const [label, cls] = TSTATE[r.t.state] || TSTATE.none;
           return `<tr>
-            <td><a href="#/feature/${esc(r.id)}"><b>${esc(r.title)}</b></a> <span class="party-chip p-${esc(r.party)}" style="transform:scale(.85)">${esc(partyLabel(r.party))}</span></td>
+            <td><a href="#/feature/${esc(r.id)}"><b>${esc(r.title)}</b></a> <span class="party-chip p-${esc(r.party)}"${partyStyle(r.party)}>${esc(partyLabel(r.party))}</span></td>
             <td>${statusBadge(r.status)}</td>
             <td><span class="badge ${cls}">${esc(label || 'No code link')}</span></td>
             <td>${r.t.total ? `${r.t.files.filter(f => f.exists).length}/${r.t.total}` : '<span style="color:var(--text-muted)">add a path</span>'}</td>
@@ -385,7 +400,7 @@
           <td>${esc(r.summary || '')}</td>
         </tr>`).join('')}</tbody>
       </table></div>
-      <p class="footer-note">Source: <code>docs/adr/</code>. All records are currently <b>Proposed</b> pending team acceptance.</p>`;
+      <p class="footer-note">Source: <code>content/data/adrs.json</code>.</p>`;
   }
 
   /* ---------- GAPS ---------- */
@@ -398,7 +413,7 @@
     list.sort((a, b) => (sevRank[(a.severity || '').toLowerCase()] ?? 9) - (sevRank[(b.severity || '').toLowerCase()] ?? 9));
     $('#content').innerHTML = `
       <div class="page-head"><p class="eyebrow">Quality</p><h1>Gaps &amp; quality board</h1>
-      <p class="lede">Known code gaps, defects, and risks from the handover review, grouped by area and sorted by severity.</p></div>
+      <p class="lede">Known code gaps, defects and risks, grouped by area and sorted by severity.</p></div>
       ${ds ? `<div class="stat-row">
         <div class="stat"><div class="n">${ds.total}</div><div class="l">Total defects</div></div>
         <div class="stat"><div class="n" style="color:var(--tb-danger)">${ds.critical || 0}</div><div class="l">Critical</div></div>
@@ -418,9 +433,11 @@
           <td><code style="font-size:.78em">${esc(r.ref || '')}</code></td>
         </tr>`).join('')}</tbody>
       </table></div>
-      <p class="footer-note">Source: <code>docs/knowledge-base/code-gaps-register.md</code>, <code>defects.md</code>.</p>`;
+      <p class="footer-note">Source: <code>content/data/gaps.json</code>.</p>`;
     $$('.chip').forEach(c => c.addEventListener('click', () => { sessionStorage.setItem('tb-gap-filter', c.dataset.a); renderGaps(); }));
   }
+
+  function secLede(id, fb) { const s = (DATA.sections || []).find(x => x.id === id); return (s && s.lede) || fb; }
 
   /* ---------- SECURITY ---------- */
   async function renderSecurity() {
@@ -428,7 +445,7 @@
     const c = $('#content');
     c.innerHTML = `
       <div class="page-head"><p class="eyebrow">Security</p><h1>Security</h1>
-      <p class="lede">The authentication model, PHI handling, and the security findings from the handover review.</p></div>
+      <p class="lede">${esc(secLede('security', 'The security model and the security findings.'))}</p></div>
       ${s.length ? `<div class="tbl-wrap"><table class="data">
         <thead><tr><th>Finding</th><th>Severity</th><th>Status</th><th>Summary</th><th>Area</th></tr></thead>
         <tbody>${s.map(r => `<tr><td><b>${esc(r.title)}</b></td><td><span class="sev-dot sev-${esc((r.severity || '').toLowerCase())}"></span>${esc(r.severity || '')}</td><td>${statusBadge(r.status || 'open')}</td><td>${esc(r.summary || '')}</td><td><code style="font-size:.78em">${esc(r.ref || '')}</code></td></tr>`).join('')}</tbody>
@@ -443,7 +460,7 @@
     const c = $('#content');
     c.innerHTML = `
       <div class="page-head"><p class="eyebrow">Performance</p><h1>Performance</h1>
-      <p class="lede">Performance findings, budgets and the observability signals that track them.</p></div>
+      <p class="lede">${esc(secLede('performance', 'Performance findings, budgets and the signals that track them.'))}</p></div>
       ${p.length ? `<div class="tbl-wrap"><table class="data">
         <thead><tr><th>Finding</th><th>Severity</th><th>Status</th><th>Summary</th></tr></thead>
         <tbody>${p.map(r => `<tr><td><b>${esc(r.title)}</b></td><td><span class="sev-dot sev-${esc((r.severity || '').toLowerCase())}"></span>${esc(r.severity || '')}</td><td>${statusBadge(r.status || 'open')}</td><td>${esc(r.summary || '')}</td></tr>`).join('')}</tbody>
@@ -459,18 +476,27 @@
     kb.forEach(k => { (groups[k.group || 'Reference'] = groups[k.group || 'Reference'] || []).push(k); });
     $('#content').innerHTML = `
       <div class="page-head"><p class="eyebrow">Reference</p><h1>Knowledge base</h1>
-      <p class="lede">The deep reference material behind this hub — ${kb.length} documents in <code>docs/knowledge-base/</code>.</p></div>
-      ${Object.keys(groups).sort().map(g => `
+      <p class="lede">The reference material behind this hub: ${kb.length} documents, each readable in place.</p></div>
+      ${Object.keys(groups).map(g => `
         <h2 style="color:var(--heading);font-size:1.1rem;margin:22px 0 12px">${esc(g)}</h2>
-        <div class="cards">${groups[g].map(k => `<a class="card" href="#/doc/${esc(k.path)}"><h3>${esc(k.title)}</h3><p>${esc(k.summary || '')}</p><p style="margin-top:8px"><code style="font-size:.76em">${esc(k.path)}</code></p></a>`).join('')}</div>`).join('')}`;
+        <div class="cards">${groups[g].map(k => `<a class="card" href="#/doc/${esc(k.path)}"><div class="card__top"><span class="badge b-low">${esc((k.path.split('.').pop() || '').toUpperCase())}</span>${k.version ? `<span class="badge b-new">${esc(k.version)}</span>` : ''}</div><h3>${esc(k.title)}</h3><p>${esc(k.summary || '')}</p><p style="margin-top:8px"><code style="font-size:.76em">${esc(k.path)}</code></p></a>`).join('')}</div>`).join('')}`;
   }
 
   /* ---------- DOC VIEWER (renders any local markdown linked into the hub) ---------- */
   async function renderDoc(arg) {
     const c = $('#content');
-    c.innerHTML = `<div class="breadcrumb"><a href="#/kb">Knowledge base</a> › <code style="font-size:.9em">${esc(arg)}</code></div><div class="md" id="mdmount"><div class="loading"><span class="spinner"></span> Loading…</div></div>`;
-    try { renderMarkdown(await loadMD('content/kb-src/' + arg), $('#mdmount')); }
-    catch (e) { $('#mdmount').innerHTML = `<div class="callout warn"><b>Could not load</b> <code>${esc(arg)}</code>. It may be a binary or non-markdown file; see it in the repo.</div>`; }
+    const k = (DATA.kb || []).find(x => x.path === arg);
+    const src = 'content/kb-src/' + arg.split('/').map(encodeURIComponent).join('/');
+    c.innerHTML = `<div class="breadcrumb"><a href="#/kb">Knowledge base</a> › <code style="font-size:.9em">${esc(arg)}</code> · <a href="${src}" target="_blank" rel="noopener">open in a new tab</a></div><div id="mdmount" class="md"><div class="loading"><span class="spinner"></span> Loading…</div></div>`;
+    const mount = $('#mdmount');
+    if (/\.(html?|pdf)$/i.test(arg)) {
+      // HTML and PDF documents render as they were published, in a frame.
+      mount.className = '';
+      mount.innerHTML = `${k ? `<div class="page-head"><h1>${esc(k.title)}</h1>${k.summary ? `<p class="lede">${esc(k.summary)}</p>` : ''}</div>` : ''}<iframe class="docframe" title="${esc(k ? k.title : arg)}" src="${src}"></iframe>`;
+      return;
+    }
+    try { renderMarkdown(await loadMD(src), mount); }
+    catch (e) { mount.innerHTML = `<div class="callout warn"><b>Could not load</b> <code>${esc(arg)}</code>. It may be a binary file; see it in the repo.</div>`; }
   }
 
   /* ---------- GTM / production-readiness board ---------- */
@@ -482,7 +508,7 @@
     const done = items.filter(i => (i.status || '').toLowerCase() === 'done').length;
     $('#content').innerHTML = `
       <div class="page-head"><p class="eyebrow">Go to market</p><h1>Production readiness board</h1>
-      <p class="lede">Everything that must be done before Project goes to production, grouped by workstream. ${done} of ${items.length} complete.</p></div>
+      <p class="lede">Everything that must be done before ${esc((window.__BRAND || {}).name || 'the platform')} goes to production, grouped by workstream. ${done} of ${items.length} complete.</p></div>
       <div class="stat-row">
         <div class="stat"><div class="n">${items.length}</div><div class="l">Total actions</div></div>
         <div class="stat"><div class="n" style="color:var(--tb-danger)">${items.filter(i => (i.priority || '').toLowerCase() === 'blocker').length}</div><div class="l">Blockers</div></div>
@@ -510,6 +536,165 @@
     catch (e) { $('#mdmount').innerHTML = `<div class="callout warn">accounts.md not written yet.</div>`; }
   }
 
+  /* ---------- LEARNING PATHS (courses in sequence) ----------
+     Data: manifest.learning = { intro, paths:[{id,title,summary,steps:[courseId | "course/lesson"]}],
+     courses:[{id,code,title,level,goal,outcomes,prereqs,lessons:[{id,title,minutes,src,objectives,checks}]}] }.
+     Progress is per browser (localStorage), so it never needs a backend. */
+  const LKEY = () => 'hub-learn:' + ((window.__BRAND || {}).name || 'hub');
+  function lprog() { try { return JSON.parse(localStorage.getItem(LKEY()) || '{}'); } catch (_) { return {}; } }
+  function lsave(p) { try { localStorage.setItem(LKEY(), JSON.stringify(p)); } catch (_) {} }
+  function isDone(c, l) { return !!((lprog().done || {})[c + '/' + l]); }
+  function setDone(c, l, v) { const p = lprog(); p.done = p.done || {}; if (v) p.done[c + '/' + l] = new Date().toISOString().slice(0, 10); else delete p.done[c + '/' + l]; lsave(p); }
+  function setLast(c, l) { const p = lprog(); p.last = c + '/' + l; lsave(p); }
+  const L = () => DATA.learning || { paths: [], courses: [] };
+  const courseById = id => (L().courses || []).find(c => c.id === id);
+  function courseStats(c) {
+    const n = (c.lessons || []).length, d = (c.lessons || []).filter(l => isDone(c.id, l.id)).length;
+    const mins = (c.lessons || []).reduce((m, l) => m + (+l.minutes || 0), 0);
+    return { n, d, pct: n ? Math.round(d / n * 100) : 0, mins };
+  }
+  const hrs = m => m >= 60 ? `${Math.round(m / 6) / 10} h` : `${m} min`;
+  function nextLessonOf(c) { return (c.lessons || []).find(l => !isDone(c.id, l.id)) || (c.lessons || [])[0]; }
+  function bar(pct) { return `<div class="lbar"><i style="width:${pct}%"></i></div>`; }
+  function levelChip(lv) { return lv ? `<span class="badge b-${esc(lv)} lvl">${esc(lv)}</span>` : ''; }
+  // Expand a path's steps to an ordered list of {course, lesson|null}.
+  function pathSteps(p) {
+    return (p.steps || p.courses || []).map(s => {
+      const [cid, lid] = String(s).split('/');
+      const c = courseById(cid); if (!c) return null;
+      return { c, l: lid ? (c.lessons || []).find(x => x.id === lid) : null };
+    }).filter(Boolean);
+  }
+  function stepDone(s) { return s.l ? isDone(s.c.id, s.l.id) : courseStats(s.c).pct === 100; }
+
+  function renderLearn() {
+    const lr = L(), prog = lprog();
+    const total = (lr.courses || []).reduce((n, c) => n + c.lessons.length, 0);
+    const done = Object.keys(prog.done || {}).length;
+    let resume = '';
+    if (prog.last) {
+      const [cid, lid] = prog.last.split('/'); const c = courseById(cid); const l = c && c.lessons.find(x => x.id === lid);
+      if (c && l) resume = `<a class="resume" href="#/lesson/${esc(cid)}/${esc(lid)}"><span class="resume__k">Continue where you left off</span><b>${esc(c.code || '')} · ${esc(l.title)}</b></a>`;
+    }
+    $('#content').innerHTML = `
+      <div class="page-head"><p class="eyebrow">Learning</p><h1>${esc(lr.title || 'Learning paths')}</h1>
+      <p class="lede">${esc(lr.lede || 'Courses in a deliberate order. Each lesson assumes only the ones before it.')}</p></div>
+      <div class="stat-row">
+        <div class="stat"><div class="n">${(lr.courses || []).length}</div><div class="l">Courses</div></div>
+        <div class="stat"><div class="n">${total}</div><div class="l">Lessons</div></div>
+        <div class="stat"><div class="n">${done}</div><div class="l">Completed by you</div>${bar(total ? Math.round(done / total * 100) : 0)}</div>
+        <div class="stat"><div class="n">${hrs((lr.courses || []).reduce((m, c) => m + courseStats(c).mins, 0))}</div><div class="l">Total study time</div></div>
+      </div>
+      ${resume}
+      ${lr.intro ? `<div class="md" style="margin:4px 0 18px">${window.marked ? marked.parse(lr.intro) : esc(lr.intro)}</div>` : ''}
+      ${(lr.paths || []).map(p => {
+        const steps = pathSteps(p), d = steps.filter(stepDone).length;
+        return `<section class="lpath">
+          <div class="lpath__head"><div><h2>${esc(p.title)}</h2>${p.summary ? `<p>${esc(p.summary)}</p>` : ''}</div>
+          <span class="lpath__k">${d}/${steps.length} steps</span></div>
+          <ol class="lsteps">${steps.map((s, i) => {
+            const st = s.l ? null : courseStats(s.c), ok = stepDone(s);
+            const href = s.l ? `#/lesson/${esc(s.c.id)}/${esc(s.l.id)}` : `#/course/${esc(s.c.id)}`;
+            return `<li class="lstep ${ok ? 'done' : ''}"><a href="${href}">
+              <span class="lstep__n">${ok ? '&#10003;' : i + 1}</span>
+              <span class="lstep__body"><span class="lstep__code">${esc(s.c.code || s.c.id)}${s.l ? ' · lesson' : ''}</span>
+              <b>${esc(s.l ? s.l.title : s.c.title)}</b>
+              <span class="lstep__meta">${s.l ? `${esc(s.l.minutes || '')} min` : `${st.n} lessons · ${hrs(st.mins)} ${levelChip(s.c.level)}`}</span>
+              ${st ? bar(st.pct) : ''}</span></a></li>`;
+          }).join('')}</ol></section>`;
+      }).join('')}
+      <h2 style="color:var(--heading);font-size:1.1rem;margin:28px 0 12px">All courses</h2>
+      <div class="cards">${(lr.courses || []).map(c => { const st = courseStats(c); return `<a class="card" href="#/course/${esc(c.id)}">
+        <div class="card__top"><span class="lstep__code">${esc(c.code || c.id)}</span>${levelChip(c.level)}</div>
+        <h3>${esc(c.title)}</h3><p>${esc(c.goal || '')}</p>
+        <p style="margin-top:10px">${st.n} lessons · ${hrs(st.mins)} · ${st.pct}% done</p>${bar(st.pct)}</a>`; }).join('')}</div>
+      <p class="footer-note">Progress is saved in this browser only. <a href="#" id="lreset">Reset my progress</a></p>`;
+    $('#lreset')?.addEventListener('click', e => { e.preventDefault(); if (confirm('Clear your learning progress in this browser?')) { lsave({}); renderLearn(); } });
+  }
+
+  function renderCourse(id) {
+    const c = courseById(id);
+    if (!c) { $('#content').innerHTML = `<div class="callout danger">Unknown course: ${esc(id)}</div>`; return; }
+    const st = courseStats(c), nxt = nextLessonOf(c);
+    const pre = (c.prereqs || []).map(courseById).filter(Boolean);
+    const preOpen = pre.filter(p => courseStats(p).pct < 100);
+    $('#content').innerHTML = `
+      <div class="breadcrumb"><a href="#/learn">Learning</a> › ${esc(c.code || c.id)}</div>
+      <div class="page-head"><div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px"><span class="lstep__code">${esc(c.code || c.id)}</span>${levelChip(c.level)}<span class="badge b-low">${st.n} lessons · ${hrs(st.mins)}</span></div>
+        <h1>${esc(c.title)}</h1><p class="lede">${esc(c.goal || '')}</p></div>
+      ${preOpen.length ? `<div class="callout warn"><b>Take these first:</b> ${preOpen.map(p => `<a href="#/course/${esc(p.id)}">${esc(p.title)}</a>`).join(', ')}. The lessons here assume them.</div>` : ''}
+      <div class="lcourse">
+        <div>
+          ${(c.outcomes || []).length ? `<div class="lbox"><h3>By the end of this course you can</h3><ul>${c.outcomes.map(o => `<li>${esc(o)}</li>`).join('')}</ul></div>` : ''}
+          <ol class="llist">${c.lessons.map((l, i) => `<li class="${isDone(c.id, l.id) ? 'done' : ''}"><a href="#/lesson/${esc(c.id)}/${esc(l.id)}">
+            <span class="lstep__n">${isDone(c.id, l.id) ? '&#10003;' : String(i + 1).padStart(2, '0')}</span>
+            <span><b>${esc(l.title)}</b><span class="lstep__meta">${esc(l.minutes || '')} min${(l.objectives || [])[0] ? ` · ${esc(l.objectives[0])}` : ''}</span></span></a></li>`).join('')}</ol>
+        </div>
+        <aside class="lside">
+          <div class="lbox"><div class="n">${st.pct}%</div><div class="l">${st.d} of ${st.n} lessons done</div>${bar(st.pct)}
+          ${nxt ? `<a class="lbtn" href="#/lesson/${esc(c.id)}/${esc(nxt.id)}">${st.d ? 'Continue' : 'Start the course'}</a>` : ''}</div>
+          ${pre.length ? `<div class="lbox"><h3>Prerequisites</h3><ul class="plain">${pre.map(p => `<li>${courseStats(p).pct === 100 ? '&#10003;' : '&#9675;'} <a href="#/course/${esc(p.id)}">${esc(p.code || p.id)} ${esc(p.title)}</a></li>`).join('')}</ul></div>` : ''}
+        </aside>
+      </div>`;
+  }
+
+  async function renderLesson(arg) {
+    const [cid, lid] = arg.split('/');
+    const c = courseById(cid), i = c ? c.lessons.findIndex(l => l.id === lid) : -1;
+    if (i < 0) { $('#content').innerHTML = `<div class="callout danger">Unknown lesson: ${esc(arg)}</div>`; return; }
+    const l = c.lessons[i], prev = c.lessons[i - 1], next = c.lessons[i + 1];
+    setLast(cid, lid);
+    // the next course in the first path that contains this course
+    let nextCourse = null;
+    if (!next) for (const p of (L().paths || [])) { const ids = (p.steps || p.courses || []).map(s => String(s).split('/')[0]); const k = ids.indexOf(cid); if (k >= 0) { const nid = ids.slice(k + 1).find(x => x !== cid); if (nid) { nextCourse = courseById(nid); break; } } }
+    const isHtml = /\.html?$/i.test(l.src || '');
+    $('#content').innerHTML = `
+      <div class="breadcrumb"><a href="#/learn">Learning</a> › <a href="#/course/${esc(cid)}">${esc(c.code || cid)}</a> › Lesson ${i + 1} of ${c.lessons.length} · ${esc(l.minutes || '')} min</div>
+      <div class="ldots">${c.lessons.map((x, k) => `<a href="#/lesson/${esc(cid)}/${esc(x.id)}" class="${k === i ? 'cur' : ''} ${isDone(cid, x.id) ? 'done' : ''}" title="${esc(x.title)}"></a>`).join('')}</div>
+      ${!isHtml && (l.objectives || []).length ? `<div class="lbox lobj"><h3>After this lesson you can</h3><ul>${l.objectives.map(o => `<li>${esc(o)}</li>`).join('')}</ul></div>` : ''}
+      <div id="lmount" class="${isHtml ? '' : 'md'}"><div class="loading"><span class="spinner"></span> Loading…</div></div>
+      ${(l.checks || []).length ? `<div class="lchecks"><h2>Check your understanding</h2><p class="hint">Answer in your own words first, then open the answer.</p><ol>${l.checks.map(q => `<li><p>${esc(q.q)}</p><details><summary>Show the answer</summary><p>${esc(q.a)}</p></details></li>`).join('')}</ol></div>` : ''}
+      ${(l.sources || []).length ? `<p class="footer-note">Sources: ${l.sources.map(s => `<code>${esc(s)}</code>`).join(', ')}</p>` : ''}
+      <div class="lnav">
+        ${prev ? `<a class="lbtn ghost" href="#/lesson/${esc(cid)}/${esc(prev.id)}">&larr; ${esc(prev.title)}</a>` : `<a class="lbtn ghost" href="#/course/${esc(cid)}">&larr; Course outline</a>`}
+        <button class="lbtn ${isDone(cid, lid) ? 'ok' : ''}" id="ldone" type="button">${isDone(cid, lid) ? '&#10003; Completed' : 'Mark complete'}</button>
+        ${next ? `<a class="lbtn" href="#/lesson/${esc(cid)}/${esc(next.id)}" data-next>Next: ${esc(next.title)} &rarr;</a>`
+          : nextCourse ? `<a class="lbtn" href="#/course/${esc(nextCourse.id)}" data-next>Next course: ${esc(nextCourse.code || '')} ${esc(nextCourse.title)} &rarr;</a>`
+          : `<a class="lbtn" href="#/learn" data-next>Back to learning paths</a>`}
+      </div>`;
+    $('#ldone').addEventListener('click', () => { const v = !isDone(cid, lid); setDone(cid, lid, v); renderLesson(arg); });
+    // Moving on counts as finishing the lesson.
+    $('[data-next]')?.addEventListener('click', () => setDone(cid, lid, true));
+    const mount = $('#lmount');
+    if (isHtml) {
+      const f = document.createElement('iframe');
+      f.className = 'lframe'; f.title = l.title; f.src = l.src;
+      f.addEventListener('load', () => {
+        try {
+          const d = f.contentDocument, t = document.documentElement.getAttribute('data-theme');
+          if (t) d.documentElement.setAttribute('data-theme', t);
+          const fit = () => { f.style.height = (d.documentElement.scrollHeight + 4) + 'px'; };
+          fit(); setTimeout(fit, 400); setTimeout(fit, 1500);
+          $$('a[href^="http"]', d).forEach(a => { a.target = '_blank'; a.rel = 'noopener'; });
+          // The lesson's own relative links (previous / next / course index) point at files
+          // the hub may not carry: send them to the matching hub lesson, else the course page.
+          const bySrc = {};
+          (L().courses || []).forEach(cc => (cc.lessons || []).forEach(ll => { bySrc[new URL(ll.src, location.href).href] = `#/lesson/${cc.id}/${ll.id}`; }));
+          $$('a[href]', d).forEach(a => {
+            const h = a.getAttribute('href');
+            if (/^(https?:|mailto:|#)/i.test(h)) return;
+            const url = new URL(h, f.contentWindow.location.href).href;
+            a.target = '_top'; a.href = location.href.split('#')[0] + (bySrc[url] || `#/course/${cid}`);
+          });
+        } catch (_) { f.style.height = '80vh'; }
+      });
+      mount.innerHTML = ''; mount.appendChild(f);
+    } else {
+      try { renderMarkdown(await loadMD(l.src), mount); }
+      catch (e) { mount.innerHTML = `<div class="callout warn"><b>Lesson not written yet.</b> <code>${esc(l.src)}</code></div>`; }
+    }
+  }
+
   /* ---------- SEARCH ---------- */
   function initSearch() {
     const input = $('#globalSearch'), box = $('#searchResults');
@@ -517,7 +702,11 @@
     (DATA.features || []).forEach(f => idx.push({ kind: 'Feature', title: f.title, sub: f.summary, href: `#/feature/${f.id}` }));
     (DATA.adrs || []).forEach(a => idx.push({ kind: 'ADR', title: a.title, sub: a.summary, href: '#/adr' }));
     (DATA.gaps || []).forEach(g => idx.push({ kind: 'Gap', title: `${g.id} ${g.title}`, sub: g.summary, href: '#/gaps' }));
-    (DATA.kb || []).forEach(k => idx.push({ kind: 'Doc', title: k.title, sub: k.summary, href: '#/kb' }));
+    (DATA.kb || []).forEach(k => idx.push({ kind: 'Doc', title: k.title, sub: k.summary, href: '#/doc/' + k.path }));
+    ((DATA.learning || {}).courses || []).forEach(c => {
+      idx.push({ kind: 'Course', title: `${c.code || ''} ${c.title}`, sub: c.goal, href: '#/course/' + c.id });
+      (c.lessons || []).forEach(l => idx.push({ kind: 'Lesson', title: l.title, sub: (c.code || c.title) + ' ' + (l.objectives || []).join(' '), href: `#/lesson/${c.id}/${l.id}` }));
+    });
     (DATA.sections || []).forEach(s => idx.push({ kind: 'Section', title: s.title, sub: s.lede, href: '#/' + s.id }));
     (DATA.nav || []).forEach(g => g.items.forEach(it => idx.push({ kind: 'Page', title: it.title, sub: '', href: it.route })));
     const run = q => {

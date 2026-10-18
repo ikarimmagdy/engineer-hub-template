@@ -1,0 +1,9 @@
+{
+  "title": "Learning paths",
+  "lede": "Courses in a deliberate order. Each lesson assumes only the ones before it.",
+  "intro": "Replace this in `content/learning/paths.json`. Say who the paths are for and which one to start with.",
+  "courseOrder": ["intro"],
+  "paths": [
+    { "id": "start", "title": "Start here", "summary": "The first course every new team member takes.", "steps": ["intro"] }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "id": "intro", "code": "START", "track": "start", "level": "beginner",
+  "title": "Start here: the product in one picture",
+  "goal": "Explain what the product does, who uses it and how the parts connect.",
+  "outcomes": ["Name the users and what each one needs", "Draw the main parts of the system from memory"],
+  "prereqs": [],
+  "lessons": [
+    { "id": "01-what-we-build", "title": "What we build and for whom", "minutes": 15,
+      "src": "content/learning/intro/01-what-we-build.md",
+      "objectives": ["State the product in one sentence", "Name the main users"],
+      "checks": [ { "q": "A new client asks what the product does. Answer in two sentences.", "a": "Write the answer you would give, then compare it with the lesson's opening." } ],
+      "sources": ["docs/"] }
+  ]
+}

@@ -1,7 +1,7 @@
 # Engineering Hub, template
 
 A reusable, branded internal engineering portal. Drop it into any project to give the
-team one place for: an overview, a roadmap task-board, per-feature dossiers (product,
+team one place for: an overview, **learning paths** (courses in sequence), a roadmap task-board, per-feature dossiers (product,
 BRD, PRD, UX/mockup, technical, status, security/perf, tests), architecture,
 infrastructure, CI/CD, observability, an ADR log, a gaps/quality board, security,
 performance, a GTM / production-readiness board, and a knowledge base that links every
@@ -54,11 +54,45 @@ needed. The soft access passcode is `PASSCODE` near the top of `assets/js/hub.js
 | Security / performance | `content/data/security.json`, `content/data/performance.json` |
 | GTM / production readiness | `content/data/gtm.json` (items grouped by `workstream`) |
 | Section pages | `content/sections/*.md` (product, architecture, infra, cicd, observability, security, performance, accounts, changelog) |
-| Knowledge base | automatic: `build.mjs` scans `docsDir` and links every `.md` |
+| Knowledge base | automatic: `build.mjs` scans `docsDir` and links every `.md`. Add more folders (Markdown, HTML, PDF) with `kbRoots` in `brand.json`; versioned folders contribute only their latest `v<N>-<date>` file |
+| Learning paths | `content/learning/paths.json` (paths, each an ordered list of course ids or `course/lesson` refs) + one `content/learning/courses/<id>.json` per course + lesson files. See "Learning paths" below |
 | Navigation | `content/nav.json` |
 
 Then run `node build.mjs` and re-deploy. To keep it current automatically, run the
 build and sync in CI on merge to your main branch.
+
+## Learning paths
+
+Courses in a deliberate order, so a new person learns the platform step by step instead of
+reading documents at random. Three levels:
+
+- **Path**: an ordered list of steps (`"steps": ["intro", "core-1", "core-2/03-ledger"]`). A step
+  is a whole course or one lesson (`course/lesson`). Use several paths for different roles or a
+  fast track.
+- **Course** (`content/learning/courses/<id>.json`): `code`, `title`, `level`, `goal`, `outcomes`,
+  `prereqs` (course ids), and ordered `lessons`.
+- **Lesson**: `id`, `title`, `minutes`, `objectives`, `checks` (`[{ "q", "a" }]`, shown as
+  "Check your understanding" with reveal answers), `sources`, and either `src` (a Markdown file in
+  this folder) or `from` (an existing HTML lesson anywhere in the repo, relative to `repoRoot`;
+  the build copies it into `content/learning-src/` and embeds it).
+
+The hub shows each path as numbered steps with progress, a course page with outcomes,
+prerequisites and a lesson list, and a lesson page with objectives, content, checkpoints,
+mark complete and previous / next (the last lesson links to the next course in the path).
+Progress is kept per browser in `localStorage`. The lesson shape that works best: The idea,
+A concrete case, How it works in the platform, What goes wrong, The vocabulary, Where to look.
+
+## Config reference (`brand.json`)
+
+| Key | Meaning |
+|---|---|
+| `name`, `logo`, `primary*`, `font` | brand |
+| `passcode` | soft-gate passcode (default `changeme`) |
+| `repoRoot` | project root relative to this folder (default `../..`) |
+| `docsDir` | Markdown docs folder scanned into the knowledge base |
+| `kbRoots` | extra knowledge-base folders: `{ dir, group, types, latestOnly, exclude }` |
+| `parties` | feature owners/areas: `{ "key": { "label", "color" } }` (filter chips and card chips) |
+| `repoBase`, `codeDir`, `repos` | traceability to code clones |
 
 ## File map
 
@@ -74,7 +108,9 @@ content/data/*.json    features, adrs, gaps, security, performance, gtm, summary
 content/features/*.md  one dossier per feature (8 sections)
 content/mockups/*.html one branded mockup per feature
 content/sections/*.md  the long-form section pages
+content/learning/      paths.json, courses/*.json, lesson markdown
 content/kb-src/        (generated) your repo docs, copied in so they render in the hub
+content/learning-src/  (generated) HTML lessons copied in from elsewhere in the repo
 ```
 
 Also included: `content/comments-config.json`, `assets/js/comments.js` (comment widget),
