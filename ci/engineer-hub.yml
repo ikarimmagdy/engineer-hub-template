@@ -1,0 +1,72 @@
+# ============================================================
+# Engineering Hub, build + deploy (TEMPLATE).
+# Copy this file to your project's .github/workflows/engineer-hub.yml
+# and adjust the paths, the code-repo list and the deploy step for
+# your host. On push to your main branch it rebuilds the hub
+# (manifest, linked docs, code traceability) and deploys it.
+#
+# Settings > Secrets and variables > Actions:
+#   secret  AWS_DEPLOY_ROLE_ARN   your OIDC deploy role (if deploying to AWS)
+#   secret  CODE_CLONE_TOKEN      (optional) token that can read your code repos,
+#                                 so traceability can run. Omit = build without it.
+#   var     HUB_BUCKET, HUB_CF, AWS_REGION   your target
+#
+# Assumes the hub lives at outputs/engineer-guide/ and your docs at docs/.
+# Change HUB_DIR / paths below if you place it elsewhere.
+# ============================================================
+name: Engineering Hub
+
+on:
+  push:
+    branches: [ main ]            # <-- your deploy branch
+    paths:
+      - 'outputs/engineer-guide/**'
+      - 'docs/**'
+  workflow_dispatch: {}
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  build-deploy:
+    runs-on: ubuntu-latest
+    env:
+      HUB_DIR: outputs/engineer-guide
+    steps:
+      - uses: actions/checkout@v4
+
+      # Optional: clone your code repos into code/ so traceability can verify
+      # the dossiers' cited paths. Replace ORG and the repo list with yours.
+      - name: Clone code repos (optional)
+        if: ${{ secrets.CODE_CLONE_TOKEN != '' }}
+        env:
+          GH_TOKEN: ${{ secrets.CODE_CLONE_TOKEN }}
+          ORG: your-org
+        run: |
+          for r in repo-a repo-b repo-c; do
+            git clone --depth 1 "https://x-access-token:${GH_TOKEN}@github.com/${ORG}/$r.git" "code/$r" || echo "skip $r"
+          done
+
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+
+      - name: Build hub
+        working-directory: ${{ env.HUB_DIR }}
+        run: node build.mjs
+
+      # --- deploy (AWS example; swap for Netlify/Pages/etc. as needed) ---
+      - name: Configure AWS credentials (OIDC)
+        if: ${{ secrets.AWS_DEPLOY_ROLE_ARN != '' }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION || 'us-east-2' }}
+
+      - name: Deploy
+        if: ${{ secrets.AWS_DEPLOY_ROLE_ARN != '' }}
+        working-directory: ${{ env.HUB_DIR }}
+        env:
+          HUB_BUCKET: ${{ vars.HUB_BUCKET }}
+          HUB_CF: ${{ vars.HUB_CF }}
+        run: ./sync.sh --deploy

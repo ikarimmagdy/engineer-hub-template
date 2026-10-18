@@ -29,6 +29,7 @@
     accounts: '<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/>',
     changelog: '<path d="M12 8v4l3 2"/><circle cx="12" cy="12" r="9"/>',
     gtm: '<path d="M4.5 16.5c-1.5 1.3-2 5-2 5s3.7-.5 5-2c.7-.8.7-2 0-2.8a2 2 0 0 0-3 0zM12 15l-3-3a12 12 0 0 1 8-8l3 .5.5 3a12 12 0 0 1-8 8zM15 9h.01"/>',
+    trace: '<path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1.5 1.5M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1.5-1.5"/>',
     ext: '<path d="M14 4h6v6M20 4l-9 9M19 13v6H5V5h6"/>'
   };
   const ico = (name, cls = 'nav-ico') => `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONS[name] || ICONS.overview}</svg>`;
@@ -137,7 +138,7 @@
     feature: renderFeature, product: md('product'), architecture: md('architecture'),
     infra: md('infra'), cicd: md('cicd'), adr: renderADR, gaps: renderGaps,
     security: renderSecurity, performance: renderPerformance, observability: md('observability'),
-    kb: renderKB, doc: renderDoc, gtm: renderGTM, accounts: renderAccounts, changelog: md('changelog')
+    kb: renderKB, doc: renderDoc, gtm: renderGTM, traceability: renderTrace, accounts: renderAccounts, changelog: md('changelog')
   };
   async function route() {
     if (!location.hash || location.hash === '#') { location.hash = '#/overview'; return; }
@@ -301,6 +302,7 @@
         <a href="#ux">UX &amp; UI</a><a href="#tech">Technical</a><a href="#impl">Status</a>
         <a href="#secperf">Security &amp; perf</a><a href="#test">Tests</a>
       </div>
+      ${traceCard(id)}
       <div class="md" id="mdmount"></div>`;
     let mdText;
     try { mdText = await loadMD(`content/features/${id}.md`); }
@@ -323,6 +325,49 @@
     frame.src = path;
     anchor.innerHTML = `<div class="mock-toolbar"><span class="mock-dot r"></span><span class="mock-dot y"></span><span class="mock-dot g"></span><span class="mock-url">${esc(anchor.dataset.url || 'app · mockup')}</span></div>`;
     anchor.appendChild(frame);
+  }
+
+  /* ---------- traceability (feature <-> code) ---------- */
+  const TSTATE = { linked: ['Code linked', 'b-fixed'], drift: ['Code drift', 'b-open'], unlinked: ['No code link', 'b-backlog'], none: ['', 'b-backlog'] };
+  function traceCard(id) {
+    const t = (DATA.traceability || {})[id];
+    if (!t) return '';
+    const [label, cls] = TSTATE[t.state] || TSTATE.none;
+    if (!t.total) return `<div class="trace-card"><span class="badge ${cls}">${esc(label || 'No code link')}</span> <span class="trace-hint">This dossier does not cite a specific source file yet. Add a repo-prefixed path such as <code>transactions-api/src/...</code> so it links to the implementation.</span></div>`;
+    const found = t.files.filter(f => f.exists).length;
+    return `<div class="trace-card">
+      <div class="trace-head"><span class="badge ${cls}">${esc(label)}</span><span class="trace-hint">${found}/${t.total} referenced files found in <code>code/</code></span></div>
+      <ul class="trace-files">${t.files.map(f => `<li>${f.exists ? '<span class="tf-ok">&#10003;</span>' : '<span class="tf-no">&#10007;</span>'} ${f.url ? `<a href="${esc(f.url)}" target="_blank" rel="noopener">${esc(f.path)}</a>` : `<code>${esc(f.path)}</code>`}</li>`).join('')}</ul>
+    </div>`;
+  }
+  function renderTrace() {
+    const tr = DATA.traceability || {}, feats = DATA.features || [];
+    const rows = feats.map(f => ({ ...f, t: tr[f.id] || { state: 'none', total: 0, files: [] } }));
+    const rank = { drift: 0, unlinked: 1, none: 1, linked: 2 };
+    rows.sort((a, b) => (rank[a.t.state] ?? 3) - (rank[b.t.state] ?? 3));
+    const n = s => rows.filter(r => r.t.state === s).length;
+    $('#content').innerHTML = `
+      <div class="page-head"><p class="eyebrow">Engineering</p><h1>Traceability</h1>
+      <p class="lede">Every feature checked against the real code in <code>code/</code>. "Linked" means the files the dossier cites exist; "drift" means a cited file is missing; "no link" means the dossier has not yet cited a source path. Run <code>node build.mjs</code> to refresh.</p></div>
+      <div class="stat-row">
+        <div class="stat"><div class="n" style="color:var(--tb-success)">${n('linked')}</div><div class="l">Linked to code</div></div>
+        <div class="stat"><div class="n" style="color:var(--tb-danger)">${n('drift')}</div><div class="l">Drift (file missing)</div></div>
+        <div class="stat"><div class="n" style="color:var(--text-muted)">${n('unlinked') + n('none')}</div><div class="l">No code link yet</div></div>
+        <div class="stat"><div class="n">${feats.length}</div><div class="l">Features</div></div>
+      </div>
+      <div class="tbl-wrap"><table class="data">
+        <thead><tr><th>Feature</th><th>Status</th><th>Code link</th><th>Files</th></tr></thead>
+        <tbody>${rows.map(r => {
+          const [label, cls] = TSTATE[r.t.state] || TSTATE.none;
+          return `<tr>
+            <td><a href="#/feature/${esc(r.id)}"><b>${esc(r.title)}</b></a> <span class="party-chip p-${esc(r.party)}" style="transform:scale(.85)">${esc(partyLabel(r.party))}</span></td>
+            <td>${statusBadge(r.status)}</td>
+            <td><span class="badge ${cls}">${esc(label || 'No code link')}</span></td>
+            <td>${r.t.total ? `${r.t.files.filter(f => f.exists).length}/${r.t.total}` : '<span style="color:var(--text-muted)">add a path</span>'}</td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table></div>
+      <p class="footer-note">Generated by <code>build.mjs</code> from the dossiers + the <code>code/</code> clones. Links point at each repo's current HEAD on GitHub.</p>`;
   }
 
   /* ---------- ADR ---------- */

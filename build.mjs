@@ -9,6 +9,7 @@
    Then re-sync the folder to S3.
    ============================================================ */
 import { readFileSync, writeFileSync, existsSync, readdirSync, mkdirSync, statSync, rmSync } from 'node:fs';
+import { execSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, relative } from 'node:path';
 
@@ -90,9 +91,44 @@ for (const f of features) {
   if (f.mockup && !existsSync(join(ROOT, f.mockup))) warns.push(`missing mockup: ${f.mockup}`);
 }
 
+/* ---- traceability: link each feature to the real code under code/, flag drift ---- */
+const CODE = join(REPO, brand.codeDir || 'code');
+// repo list: brand.repos allowlist if given (recommended, excludes dead clones),
+// else auto-derive from the directories present in code/ (generic default).
+const REPOS = Array.isArray(brand.repos) && brand.repos.length
+  ? brand.repos
+  : (existsSync(CODE) ? readdirSync(CODE).filter(d => { try { return statSync(join(CODE, d)).isDirectory(); } catch (_) { return false; } }) : []);
+const repoBase = brand.repoBase || '';
+const headCache = {};
+const repoHead = r => { if (r in headCache) return headCache[r]; let h = ''; try { h = execSync(`git -C "${join(CODE, r)}" rev-parse --short HEAD`, { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim(); } catch (_) {} return headCache[r] = h; };
+const refRe = new RegExp('(' + REPOS.join('|') + ')/[A-Za-z0-9._/-]+\\.(?:vue|ts|js)', 'g');
+const traceability = {};
+const drift = [];
+if (existsSync(CODE) && REPOS.length) {
+  for (const f of features) {
+    const p = join(C, 'features', `${f.id}.md`);
+    if (!existsSync(p)) continue;
+    const refs = Array.from(new Set(readFileSync(p, 'utf8').match(refRe) || []));
+    const files = refs.map(ref => {
+      const repo = ref.split('/')[0], rel = ref.slice(repo.length + 1);
+      const exists = existsSync(join(CODE, repo, rel));
+      const head = repoHead(repo);
+      return { path: ref, repo, exists, url: (repoBase && head) ? `${repoBase}/${repo}/blob/${head}/${rel}` : '' };
+    });
+    const missing = files.filter(x => !x.exists).length;
+    const built = ['built', 'partial'].includes((f.status || '').toLowerCase());
+    let state = 'none';
+    if (files.length) state = missing ? 'drift' : 'linked';
+    else if (built) state = 'unlinked';
+    traceability[f.id] = { files, total: files.length, missing, state, status: f.status };
+    if (state === 'drift') drift.push(`${f.id}: ${missing}/${files.length} referenced files not found in code/`);
+    else if (state === 'unlinked') drift.push(`${f.id}: status "${f.status}" but no code file referenced in the dossier`);
+  }
+}
+
 const manifest = {
   meta: { generated: new Date().toISOString().slice(0, 10), version: 'v1', brand: brand.name || '' },
-  overview, nav, sections, features, roadmapExtra, adrs, gaps, security, performance, gtm, kb,
+  overview, nav, sections, features, roadmapExtra, adrs, gaps, security, performance, gtm, kb, traceability,
   defectsSummary: { total: summary.defects?.total || 0, critical: summary.defects?.critical || 0, high: summary.defects?.high || 0, medium: summary.defects?.medium || 0, low: summary.defects?.low || 0 },
   counts: { gaps: summary.gaps || null, security: summary.security || null }
 };
@@ -101,3 +137,10 @@ writeFileSync(join(C, 'manifest.json'), JSON.stringify(manifest, null, 0));
 console.log(`manifest.json written — ${features.length} features, ${adrs.length} ADRs, ${gaps.length} gaps, ${security.length} security, ${gtm.length} GTM actions, ${kb.length} docs linked.`);
 if (warns.length) { console.log('\nWARNINGS:'); warns.forEach(w => console.log('  - ' + w)); }
 else console.log('All feature dossiers and mockups present.');
+if (existsSync(CODE) && REPOS.length) {
+  const linked = Object.values(traceability).filter(t => t.state === 'linked').length;
+  console.log(`code traceability: ${linked} features linked to code, ${drift.length} with drift or unlinked.`);
+  if (drift.length) { console.log('\nTRACEABILITY DRIFT (dossier vs code/):'); drift.forEach(d => console.log('  - ' + d)); }
+} else {
+  console.log('code traceability: skipped (no code/ clones found next to the hub).');
+}

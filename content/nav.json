@@ -11,7 +11,8 @@
     { "title": "Architecture", "icon": "arch", "route": "#/architecture" },
     { "title": "Infrastructure & AWS", "icon": "infra", "route": "#/infra" },
     { "title": "CI/CD", "icon": "cicd", "route": "#/cicd" },
-    { "title": "Observability", "icon": "obs", "route": "#/observability" }
+    { "title": "Observability", "icon": "obs", "route": "#/observability" },
+    { "title": "Traceability", "icon": "trace", "route": "#/traceability" }
   ]},
   { "label": "Decisions & quality", "items": [
     { "title": "Decision log (ADR)", "icon": "adr", "route": "#/adr" },

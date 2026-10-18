@@ -3,32 +3,26 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Engineering Hub: the single place the team reviews what is built, what is planned, the architecture, infrastructure, ADRs, gaps, security, and every feature dossier.">
+  <meta name="description" content="Engineering Hub: the single place the team reviews what is built, planned, the architecture, infrastructure, ADRs, gaps, security, and every feature dossier.">
   <meta name="robots" content="noindex">
   <base href="./">
   <title>Engineering Hub</title>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23006aa6'/%3E%3Cpath d='M9 16h14M16 9v14' stroke='white' stroke-width='3' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%232563eb'/%3E%3Cpath d='M9 16h14M16 9v14' stroke='white' stroke-width='3' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
 
   <link rel="stylesheet" href="assets/css/hub.css">
 </head>
 <body>
   <a class="skip-link" href="#content">Skip to content</a>
 
-  <!-- ===================================================================
-       Soft access gate. Client-side shared-passcode check only. This is
-       NOT real security (the passcode ships in hub.js and the bundle is
-       public on the CDN). It keeps the hub out of casual view during the
-       internal-review phase, matching the /occ console gate.
-       =================================================================== -->
   <div id="gate" class="gate" hidden>
     <form id="gateForm" class="gate__card" autocomplete="off">
       <div class="gate__mark" aria-hidden="true">
-        <svg viewBox="0 0 32 32"><rect width="32" height="32" rx="9" fill="#006aa6"/><path d="M9 16h14M16 9v14" stroke="#fff" stroke-width="3" stroke-linecap="round"/></svg>
+        <svg viewBox="0 0 32 32"><rect width="32" height="32" rx="9" fill="#2563eb"/><path d="M9 16h14M16 9v14" stroke="#fff" stroke-width="3" stroke-linecap="round"/></svg>
       </div>
       <h1>Engineering Hub</h1>
       <p>Internal engineering portal. This area is restricted to the team.</p>
@@ -42,14 +36,13 @@
     </form>
   </div>
 
-  <!-- app shell (hidden until the gate passes) -->
   <div id="app" hidden>
     <header class="topbar">
       <button id="menuToggle" class="menu-toggle" type="button" aria-label="Open menu" aria-controls="sidebar">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
       </button>
       <a class="topbar__brand" href="#/overview" aria-label="Engineering Hub home">
-        <img src="assets/img/logo.png" alt="" class="brand-logo" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'brand-sub',textContent:'Engineering Hub'}))">
+        <img src="assets/img/logo.png" alt="" class="brand-logo" onerror="this.remove()">
         <span class="brand-sub">Engineering Hub</span>
       </a>
       <div class="topbar__search">
@@ -72,10 +65,9 @@
     <div id="scrim" class="scrim" aria-hidden="true"></div>
   </div>
 
-  <!-- libraries (served from our own CDN origin, no artifact CSP here) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.9.1/mermaid.min.js"></script>
-
   <script src="assets/js/hub.js"></script>
+  <script src="assets/js/comments.js"></script>
 </body>
 </html>

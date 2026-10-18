@@ -1,0 +1,6 @@
+{
+  "enabled": true,
+  "apiUrl": "",
+  "reviewerPasscode": "changeme",
+  "_note": "Set apiUrl to the deployed comments API (see backend/comments/README.md). Empty = local demo mode (per-browser, not shared). Reviewer mode (accept/resolve/reply) is unlocked with reviewerPasscode."
+}
