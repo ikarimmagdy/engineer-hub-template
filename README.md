@@ -48,7 +48,10 @@ needed. The soft access passcode is `PASSCODE` near the top of `assets/js/hub.js
 | Thing | File(s) |
 |---|---|
 | A feature | add an entry to `content/data/features.json`, write `content/features/<id>.md` (copy `features/sample.md`, 8 sections) and `content/mockups/<id>.html` (copy `mockups/sample.html`) |
-| Roadmap board | feature `status` (built / partial / planned / next / future) drives the columns; extra non-feature items go in `content/data/roadmapExtra.json` |
+| Roadmap board | columns are the stages in `content/data/lifecycle.json`; each feature's `lifecycle` places it (features without one derive it from `status`). Cards show `fid`, `version`, `seq`, `wave`, `type`, `reopened` and a copyable branch name `feature/<fid>-<slug>`. Filters: run state, area, version, type, reopened, search |
+| Dispatch board | `#/dispatch`, computed from `lifecycle`, `dependsOn` (fids) and `repos` (`repo` locks a whole repo, `repo:area` only that area). Shows running, can-start-now (parallel-safe), waiting and why, plus a copyable Claude prompt per ticket. Same rules on the command line: `python3 tools/dispatch.py` |
+| Ticket prompt | every feature with a `fid` gets a Tracking card and a generated Claude prompt (scope from `promptScope`, base branch from `baseBranch`). Paths, work log, evidence folder and agent names come from `brand.json` `prompt` |
+| Client feedback | optional `content/data/feedback.json` (`batches`, `items` with `fid`, `client`, `today`, `analysis`, `defects`, `fixes`) turns the Changelog into a searchable feedback list, development sequence and fix log; without it the Changelog is the plain `changelog.md` |
 | Decisions | `content/data/adrs.json` |
 | Gaps / defects | `content/data/gaps.json` + `content/data/summary.json` |
 | Security / performance | `content/data/security.json`, `content/data/performance.json` |
@@ -92,7 +95,8 @@ A concrete case, How it works in the platform, What goes wrong, The vocabulary, 
 | `docsDir` | Markdown docs folder scanned into the knowledge base |
 | `kbRoots` | extra knowledge-base folders: `{ dir, group, types, latestOnly, exclude }` |
 | `parties` | feature owners/areas: `{ "key": { "label", "color" } }` (filter chips and card chips) |
-| `repoBase`, `codeDir`, `repos` | traceability to code clones |
+| `repoBase`, `codeDir`, `repos` | traceability to code clones (`codeDir` is also where `tools/dispatch.py` reads git state) |
+| `prompt` | `{ workspace, worklog, evidenceDir, deploy, agents: { validator, tests, behavior, uiux, review } }` used in generated ticket prompts |
 
 ## File map
 

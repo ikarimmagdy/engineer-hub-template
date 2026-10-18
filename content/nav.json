@@ -16,6 +16,11 @@
         "title": "Roadmap board",
         "icon": "board",
         "route": "#/roadmap"
+      },
+      {
+        "title": "Dispatch board",
+        "icon": "cicd",
+        "route": "#/dispatch"
       }
     ]
   },

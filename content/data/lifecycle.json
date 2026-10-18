@@ -1,0 +1,48 @@
+{
+  "stages": [
+    {
+      "key": "backlog",
+      "title": "Backlog",
+      "hint": "Requested, not started",
+      "mark": "var(--text-muted)"
+    },
+    {
+      "key": "in-progress",
+      "title": "In progress",
+      "hint": "Being built (Local)",
+      "mark": "var(--tb-warning-fill)"
+    },
+    {
+      "key": "dev-complete",
+      "title": "Dev complete",
+      "hint": "Code done, awaiting verification",
+      "mark": "var(--tb-blue-500)"
+    },
+    {
+      "key": "verified",
+      "title": "Verified",
+      "hint": "Behaviour and UI review passed",
+      "mark": "var(--tb-blue-700)"
+    },
+    {
+      "key": "deployed-dev",
+      "title": "Deployed: Dev",
+      "hint": "Live on Dev",
+      "mark": "#46c79a"
+    },
+    {
+      "key": "deployed-prod",
+      "title": "Deployed: Prod",
+      "hint": "Live in Production",
+      "mark": "var(--tb-success)"
+    }
+  ],
+  "environments": [
+    "Local",
+    "Dev",
+    "Prod"
+  ],
+  "promotion": "Local -> Dev -> Prod",
+  "doneStage": "dev-complete",
+  "_note": "Roadmap columns, promotion order and the Dispatch 'done' line come from this file. Features without a lifecycle field derive one from status (override with fromStatus)."
+}

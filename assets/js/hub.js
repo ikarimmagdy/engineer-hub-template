@@ -142,7 +142,7 @@
     feature: renderFeature, product: md('product'), architecture: md('architecture'),
     infra: md('infra'), cicd: md('cicd'), adr: renderADR, gaps: renderGaps,
     security: renderSecurity, performance: renderPerformance, observability: md('observability'),
-    kb: renderKB, doc: renderDoc, gtm: renderGTM, traceability: renderTrace, accounts: renderAccounts, changelog: md('changelog'),
+    kb: renderKB, doc: renderDoc, gtm: renderGTM, traceability: renderTrace, accounts: renderAccounts, changelog: renderChangelog, dispatch: renderDispatch,
     learn: renderLearn, course: renderCourse, lesson: renderLesson
   };
   async function route() {
@@ -152,6 +152,7 @@
     const arg = parts.slice(1).join('/');
     const fn = ROUTES[key] || renderOverview;
     setActive();
+    $('#content').classList.toggle('main--wide', key === 'roadmap' || key === 'dispatch');
     $('#content').scrollTop = 0; window.scrollTo(0, 0);
     $('#content').innerHTML = `<div class="loading"><span class="spinner"></span> Loading…</div>`;
     try { await fn(arg); } catch (e) { $('#content').innerHTML = `<div class="callout danger"><b>Render error.</b> ${esc(e.message)}</div>`; }
@@ -192,6 +193,220 @@
     };
   }
 
+  /* ---------- CHANGELOG: client feedback list + fix log + sequence ---------- */
+  const FB = { q: '', batch: 'all', type: 'all', priority: 'all', stage: 'all', fixed: 'all', sort: 'newest', open: new Set() };
+  const PRIO = { P0: 0, P1: 1, P2: 2, P3: 3 };
+  function fbRows() {
+    const fb = DATA.feedback || { items: [] };
+    const stages = (DATA.lifecycle && DATA.lifecycle.stages) || [];
+    return (fb.items || []).map(it => {
+      const f = (DATA.features || []).find(x => x.fid === it.fid) || {};
+      const st = stages.find(s => s.key === (f.lifecycle || 'backlog'));
+      return { ...it, f, type: f.type || '', priority: f.priority || '', seq: f.seq || 0, version: f.version || '', party: f.party || '',
+        stage: f.lifecycle || 'backlog', stageTitle: st ? st.title : (f.lifecycle || 'backlog'), fixes: it.fixes || [] };
+    });
+  }
+  async function renderChangelog() {
+    const fb = DATA.feedback || { batches: [], items: [] };
+    if (!(fb.items || []).length) return md('changelog')();
+    const rows = fbRows();
+    const uniq = k => ['all', ...Array.from(new Set(rows.map(r => r[k]).filter(Boolean))).sort()];
+    const stages = (DATA.lifecycle && DATA.lifecycle.stages) || [];
+    const chips = (k, vals, label, fmt) => `<div class="rm-group"><span class="rm-lbl">${label}</span>${vals.map(v => `<button class="chip ${FB[k] === v ? 'active' : ''}" data-fb="${k}" data-v="${esc(v)}">${v === 'all' ? 'All' : esc(fmt ? fmt(v) : v)}</button>`).join('')}</div>`;
+    const batchLbl = id => { const b = (fb.batches || []).find(x => x.id === id); return b ? `${b.date} · ${b.title}` : id; };
+    const stageVals = ['all', ...stages.map(s => s.key).filter(k => rows.some(r => r.stage === k))];
+    $('#content').innerHTML = `
+      <div class="page-head"><p class="eyebrow">Reference</p><h1>Changelog &amp; client feedback</h1>
+      <p class="lede">Every client report, what the code showed when it was reported, what we found, the order we build it in, and what was fixed for it. Click a report to expand it.</p></div>
+      <div class="rm-toolbar">
+        <div class="rm-group"><input id="fbSearch" class="rm-search" type="search" placeholder="Search feedback, analysis, ID…" value="${esc(FB.q)}">
+          <span class="rm-lbl">Sort</span><select id="fbSort" class="rm-select">
+            ${[['newest', 'Newest first'], ['oldest', 'Oldest first'], ['seq', 'Dev sequence'], ['priority', 'Priority'], ['fid', 'Feature ID']].map(([v, l]) => `<option value="${v}" ${FB.sort === v ? 'selected' : ''}>${l}</option>`).join('')}
+          </select>
+          <button class="chip" id="fbExpand" type="button">Expand all</button><button class="chip" id="fbCollapse" type="button">Collapse all</button></div>
+        ${chips('batch', uniq('batch'), 'Batch', batchLbl)}
+        ${chips('type', uniq('type'), 'Type')}
+        ${chips('priority', uniq('priority'), 'Priority')}
+        ${chips('stage', stageVals, 'Status', k => (stages.find(s => s.key === k) || {}).title || k)}
+        ${chips('fixed', ['all', 'fixed', 'not-fixed'], 'Fixes', v => v === 'fixed' ? 'Has fixes' : 'No fix yet')}
+      </div>
+      <p class="hint" id="fbCount"></p>
+      <div id="fbList" class="fb-list"></div>
+      <h2 class="fb-h2">Development sequence</h2>
+      <div id="fbSeq"></div>
+      <h2 class="fb-h2">Fix log</h2>
+      <div id="fbFixes"></div>
+      <div class="md" id="mdmount"></div>`;
+    paintFeedback();
+    paintSeqAndFixes();
+    $$('#content .chip[data-fb]').forEach(b => b.addEventListener('click', () => { FB[b.dataset.fb] = b.dataset.v; renderChangelog(); }));
+    $('#fbSort').addEventListener('change', e => { FB.sort = e.target.value; paintFeedback(); });
+    const si = $('#fbSearch'); si.addEventListener('input', () => { FB.q = si.value; paintFeedback(); });
+    $('#fbExpand').addEventListener('click', () => { fbFiltered().forEach(r => FB.open.add(r.id)); paintFeedback(); });
+    $('#fbCollapse').addEventListener('click', () => { FB.open.clear(); paintFeedback(); });
+    const sec = (DATA.sections || []).find(s => s.id === 'changelog') || { doc: 'content/sections/changelog.md' };
+    try { renderMarkdown(await loadMD(sec.doc), $('#mdmount')); } catch (e) { /* optional */ }
+  }
+  function fbFiltered() {
+    const q = FB.q.trim().toLowerCase();
+    let list = fbRows();
+    ['batch', 'type', 'priority', 'stage'].forEach(k => { if (FB[k] !== 'all') list = list.filter(r => r[k] === FB[k]); });
+    if (FB.fixed === 'fixed') list = list.filter(r => r.fixes.length);
+    if (FB.fixed === 'not-fixed') list = list.filter(r => !r.fixes.length);
+    if (q) list = list.filter(r => [r.id, r.fid, r.title, r.client, r.feedback, r.today, r.analysis, (r.defects || []).join(' '), r.reported,
+      r.fixes.map(x => [x.what, x.commit, (x.closes || []).join(' ')].join(' ')).join(' ')].join(' ').toLowerCase().includes(q));
+    const by = {
+      newest: (a, b) => (b.reported || '').localeCompare(a.reported || '') || a.id.localeCompare(b.id),
+      oldest: (a, b) => (a.reported || '').localeCompare(b.reported || '') || a.id.localeCompare(b.id),
+      seq: (a, b) => (a.seq || 999) - (b.seq || 999),
+      priority: (a, b) => (PRIO[a.priority] ?? 9) - (PRIO[b.priority] ?? 9) || (a.seq || 999) - (b.seq || 999),
+      fid: (a, b) => a.fid.localeCompare(b.fid)
+    };
+    return list.sort(by[FB.sort] || by.newest);
+  }
+  function paintFeedback() {
+    const fb = DATA.feedback || { batches: [] };
+    const list = fbFiltered();
+    const total = (fb.items || []).length;
+    $('#fbCount').textContent = `${list.length} of ${total} reports`;
+    const groupByBatch = FB.sort === 'newest' || FB.sort === 'oldest';
+    let html = '', lastBatch = null;
+    list.forEach(r => {
+      if (groupByBatch && r.batch !== lastBatch) {
+        lastBatch = r.batch;
+        const b = (fb.batches || []).find(x => x.id === r.batch) || { id: r.batch };
+        const n = list.filter(x => x.batch === r.batch).length;
+        html += `<details class="fb-batch"><summary><span class="fb-date">${esc(b.date || '')}</span><b>${esc(b.title || b.id)}</b><span class="rm-lbl">${n} report${n === 1 ? '' : 's'}</span><span class="fb-more">batch notes</span></summary>
+          <div class="fb-body">
+            ${b.source ? `<p><b>Source:</b> ${esc(b.source)}</p>` : ''}${b.summary ? `<p>${esc(b.summary)}</p>` : ''}
+            ${(b.security || []).length ? `<p><b>Security issues to raise with the client</b></p><ul>${b.security.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
+            ${(b.questions || []).length ? `<p><b>Open questions for the client</b></p><ul>${b.questions.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
+            ${(b.reopened || []).length ? `<p><b>Reopened:</b> ${b.reopened.map(x => `<code>${esc(x)}</code>`).join(' ')}${b.newDefects ? ` · <b>New defects:</b> ${esc(b.newDefects)}` : ''}</p>` : ''}
+          </div></details>`;
+      }
+      const fixed = r.fixes.length;
+      html += `<details class="fb-item" data-id="${esc(r.id)}" ${FB.open.has(r.id) ? 'open' : ''}>
+        <summary>
+          <code class="fid">${esc(r.fid)}</code>
+          <span class="fb-title">${esc(r.title)}</span>
+          <span class="fb-tags">
+            ${r.type ? `<span class="badge ${TYPE_BADGE[r.type] || 'b-low'}">${esc(r.type)}</span>` : ''}
+            ${r.priority ? `<span class="badge ${r.priority === 'P0' ? 'b-critical' : 'b-high'}">${esc(r.priority)}</span>` : ''}
+            ${r.seq ? `<span class="vbadge">seq ${r.seq}</span>` : ''}
+            <span class="vbadge">${esc(r.stageTitle)}</span>
+            <span class="badge ${fixed ? 'b-fixed' : 'b-backlog'}">${fixed ? fixed + ' fix' + (fixed > 1 ? 'es' : '') : 'no fix yet'}</span>
+            <span class="fb-date">${esc(r.reported)}</span>
+          </span>
+        </summary>
+        <div class="fb-body">
+          <p class="fb-quote">“${esc(r.client)}”</p>
+          <table><tbody>
+            <tr><td><b>Report</b></td><td><code>${esc(r.id)}</code> · ${esc(r.reported)} · ${esc(r.version)}</td></tr>
+            <tr><td><b>Today in the code</b></td><td>${esc(r.today)}</td></tr>
+            <tr><td><b>Analysis</b></td><td>${esc(r.analysis)}</td></tr>
+            <tr><td><b>Defects</b></td><td>${(r.defects || []).map(d => `<a href="#/gaps"><code>${esc(d)}</code></a>`).join(' ') || 'none'}</td></tr>
+            <tr><td><b>Depends on</b></td><td>${(r.f.dependsOn || []).map(d => `<code>${esc(d)}</code>`).join(' ') || 'none'}</td></tr>
+          </tbody></table>
+          <p style="margin:10px 0 4px"><b>Fix record</b></p>
+          ${fixed ? `<table><thead><tr><th>Date</th><th>What was fixed</th><th>Closes</th><th>Commit</th><th>Env</th><th>Verified by</th></tr></thead><tbody>${r.fixes.map(x => `<tr><td>${esc(x.date || '')}</td><td>${esc(x.what || '')}</td><td>${(x.closes || []).map(c => `<code>${esc(c)}</code>`).join(' ')}</td><td><code>${esc(x.commit || '')}</code></td><td>${esc(x.env || '')}</td><td>${esc(x.verifiedBy || '')}</td></tr>`).join('')}</tbody></table>` : '<p class="hint">None yet.</p>'}
+          <p style="margin-top:10px"><a href="#/feature/${esc(r.feature)}">Open the full dossier and its Claude prompt →</a></p>
+        </div>
+      </details>`;
+    });
+    $('#fbList').innerHTML = html || '<p class="hint">No reports match these filters.</p>';
+    $$('#fbList .fb-item').forEach(d => d.addEventListener('toggle', () => { d.open ? FB.open.add(d.dataset.id) : FB.open.delete(d.dataset.id); }));
+  }
+  function paintSeqAndFixes() {
+    const seq = (DATA.features || []).filter(f => f.seq).sort((a, b) => a.seq - b.seq);
+    $('#fbSeq').innerHTML = seq.length ? `<p class="hint">Build in this order. Sort the roadmap board by Dev sequence to see the same order, or copy a ticket's prompt from the Dispatch board.</p>
+      <table><thead><tr><th>Seq</th><th>FID</th><th>Item</th><th>Status</th><th>Depends on</th><th>Why this position</th></tr></thead><tbody>
+      ${seq.map(f => { const st = ((DATA.lifecycle || {}).stages || []).find(s => s.key === f.lifecycle); return `<tr><td><b>${f.seq}</b></td><td><a href="#/feature/${esc(f.id)}"><code>${esc(f.fid)}</code></a></td><td>${esc(f.title)}</td><td>${esc(st ? st.title : f.lifecycle)}</td><td>${(f.dependsOn || []).map(d => `<code>${esc(d)}</code>`).join(' ') || 'none'}</td><td>${esc(f.seqNote || '')}</td></tr>`; }).join('')}
+      </tbody></table>` : '<p class="hint">No sequenced items.</p>';
+    const fixes = fbRows().flatMap(r => r.fixes.map(x => ({ ...x, fid: r.fid, fb: r.id, feature: r.feature }))).sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+    $('#fbFixes').innerHTML = `<table><thead><tr><th>Date</th><th>What was fixed</th><th>For</th><th>Closes</th><th>Commit</th><th>Env</th><th>Verified by</th></tr></thead><tbody>
+      ${fixes.map(x => `<tr><td>${esc(x.date || '')}</td><td>${esc(x.what || '')}</td><td><a href="#/feature/${esc(x.feature)}"><code>${esc(x.fid)}</code></a> <code>${esc(x.fb)}</code></td><td>${(x.closes || []).map(c => `<code>${esc(c)}</code>`).join(' ')}</td><td><code>${esc(x.commit || '')}</code></td><td>${esc(x.env || '')}</td><td>${esc(x.verifiedBy || '')}</td></tr>`).join('') || '<tr><td colspan="7" class="hint">No fixes recorded yet.</td></tr>'}
+      </tbody></table>`;
+  }
+
+  /* ---------- DISPATCH: what to run next, what can run in parallel ---------- */
+  // Stage order comes from content/data/lifecycle.json; this is only the fallback.
+  const STAGE_ORDER = ['backlog', 'in-progress', 'dev-complete', 'verified', 'deployed-dev', 'deployed-demo', 'deployed-prod'];
+  const stageKeys = () => { const s = (DATA.lifecycle || {}).stages; return s && s.length ? s.map(x => x.key) : STAGE_ORDER; };
+  const stageRank = k => { const ks = stageKeys(), i = ks.indexOf(k || 'backlog'); return i < 0 ? 0 : i; };
+  // "Done" = at or past dev-complete (or past the doneStage set in lifecycle.json).
+  const doneRank = () => stageRank((DATA.lifecycle || {}).doneStage || 'dev-complete');
+  function dispatchState() {
+    const F = DATA.features || [];
+    const byFid = Object.fromEntries(F.map(f => [f.fid, f]));
+    const tickets = F.filter(f => f.seq || (f.repos && f.repos.length));
+    const running = F.filter(f => f.lifecycle === 'in-progress');
+    const held = {};
+    running.forEach(f => (f.repos || []).forEach(r => { (held[r] = held[r] || []).push(f.fid); }));
+    // "repo:area" locks only that area; a bare "repo" locks the whole repo
+    const split = x => { const i = x.indexOf(':'); return i > 0 && !x.startsWith('aws:') ? [x.slice(0, i), x.slice(i + 1)] : [x, '']; };
+    const clashes = (a, b) => { const [ra, aa] = split(a), [rb, ab] = split(b); return ra === rb && (!aa || !ab || aa === ab); };
+    const holdersOf = x => Object.entries(held).filter(([k]) => clashes(k, x)).flatMap(([k, v]) => v.map(h => [h, k]));
+    const rows = tickets.map(f => {
+      const r = { f, repos: f.repos || [], stage: f.lifecycle || 'backlog' };
+      if (r.stage === 'in-progress') { r.state = 'running'; r.label = 'Running now'; }
+      else if (f.paused && stageRank(r.stage) < doneRank()) { r.state = 'paused'; r.label = 'Paused (not offered)'; }
+      else if (stageRank(r.stage) >= doneRank()) { r.state = 'done'; r.label = 'Done: ' + r.stage; }
+      else {
+        const unmet = (f.dependsOn || []).filter(d => stageRank((byFid[d] || {}).lifecycle) < doneRank());
+        const byHolder = {}; r.repos.forEach(x => holdersOf(x).forEach(([h]) => { if (h !== f.fid) (byHolder[h] = byHolder[h] || []).push(x); }));
+        const clash = Object.entries(byHolder).map(([h, xs]) => `${h} (${xs.join(', ')})`);
+        if (unmet.length) { r.state = 'wait'; r.label = 'Wait: needs ' + unmet.join(', ') + ' dev-complete'; }
+        else if (clash.length) { r.state = 'wait'; r.label = 'Wait: repos in use by ' + clash.join('; '); }
+        else if (f.gate === 'cost-approval') { r.state = 'go-gated'; r.label = 'Yes, start now (stops at cost approval)'; }
+        else { r.state = 'go'; r.label = 'Yes, start now'; }
+      }
+      return r;
+    });
+    // runnable tickets that clash with each other: only one of them should start
+    const go = rows.filter(r => r.state.startsWith('go'));
+    go.forEach(a => { a.pairClash = go.filter(b => b !== a && b.repos.some(x => a.repos.some(y => clashes(x, y)))).map(b => b.f.fid); });
+    rows.forEach(r => { r.parallelWith = running.filter(x => x !== r.f && !(x.repos || []).some(rp => r.repos.some(y => clashes(rp, y)))).map(x => x.fid); });
+    rows.forEach(r => { r.sharedRepo = [...new Set(r.repos.map(x => split(x)).filter(([, a]) => a).map(([rp]) => rp))]; });
+    return { rows: rows.sort((a, b) => (a.f.seq || 999) - (b.f.seq || 999)), running, held };
+  }
+  function renderDispatch() {
+    const { rows, running, held } = dispatchState();
+    const badge = { running: 'b-in-progress', done: 'b-fixed', wait: 'b-backlog', go: 'b-new', 'go-gated': 'b-high', paused: 'b-low' };
+    const goNow = rows.filter(r => r.state.startsWith('go'));
+    $('#content').innerHTML = `
+      <div class="page-head"><p class="eyebrow">Delivery</p><h1>Dispatch board</h1>
+      <p class="lede">Which ticket to give Claude next, in sequence. Computed live from the roadmap: a ticket can start when its dependencies are dev-complete and none of its repos is held by a ticket in progress. Run each ticket in its <b>own</b> Claude Code session opened in ${esc(cfg().workspace || 'the project root')}; the session plans and fans out its own subagents.</p></div>
+      <div class="cards" style="margin-bottom:18px">
+        <div class="card"><h3>Running now (${running.length})</h3><p>${running.map(f => `<code>${esc(f.fid)}</code> ${esc(f.title)}`).join('<br>') || '-'}</p></div>
+        <div class="card"><h3>Start now in parallel (${goNow.length})</h3><p>${goNow.map(r => `<code>${esc(r.f.fid)}</code> ${esc(r.f.title)}${r.pairClash.length ? ` <span class="hint">(not together with ${r.pairClash.join(', ')})</span>` : ''}`).join('<br>') || 'Nothing free right now.'}</p></div>
+        <div class="card"><h3>Repos locked</h3><p>${Object.entries(held).map(([k, v]) => `<code>${esc(k)}</code> by ${v.join(', ')}`).join('<br>') || '-'}</p></div>
+      </div>
+      <div class="table-wrap"><table class="dispatch">
+        <thead><tr><th>Seq</th><th>Wave</th><th>Ticket</th><th>Status</th><th>Repos it holds</th><th>Depends on</th><th>Can run now?</th><th>Parallel with (running)</th><th>Text for Claude</th></tr></thead>
+        <tbody>${rows.map((r, i) => `<tr>
+          <td><b>${r.f.seq || '-'}</b></td>
+          <td>${r.f.wave || '-'}</td>
+          <td><a href="#/feature/${esc(r.f.id)}"><code class="fid">${esc(r.f.fid)}</code></a> ${esc(r.f.title)}</td>
+          <td><span class="badge ${badge[r.state]}">${esc(r.stage)}</span></td>
+          <td>${r.repos.map(x => `<code>${esc(x)}</code>`).join(' ')}${r.sharedRepo.length ? `<br><span class="hint">own worktree for ${esc(r.sharedRepo.join(', '))}</span>` : ''}</td>
+          <td>${(r.f.dependsOn || []).map(x => `<code>${esc(x)}</code>`).join(' ') || '-'}</td>
+          <td><span class="badge ${badge[r.state]}">${esc(r.label)}</span>${r.pairClash && r.pairClash.length ? `<br><span class="hint">only one of: ${esc([r.f.fid, ...r.pairClash].join(', '))}</span>` : ''}</td>
+          <td>${r.state === 'running' || r.state === 'done' ? '-' : (r.parallelWith.join(', ') || 'none')}</td>
+          <td>${r.state === 'go' || r.state === 'go-gated' || r.state === 'wait' ? `<button class="chip dp-copy" data-i="${i}" type="button">Copy prompt</button>` : '-'}</td>
+        </tr>`).join('')}</tbody></table></div>
+      <div class="callout" style="margin-top:18px"><b>How to use</b><ol style="margin:6px 0 0 18px">
+        <li>For every row that says <b>Yes, start now</b>: open a new Claude Code session in <code>${esc(cfg().workspace || 'the project root')}</code>, click <b>Copy prompt</b>, paste. One ticket per session.</li>
+        <li>The session marks the ticket in progress first, which locks its repos here; refresh this page before starting the next one.</li>
+        <li>When a ticket reaches dev-complete its repos unlock and waiting tickets turn to <b>Yes</b>.</li>
+        <li>Rows marked "only one of" share a repo area: start one, the other waits.</li>
+        <li><code>repo:area</code> locks only that area of the repo, so tickets in different areas run together; each such session works in its own git worktree (the prompt says how). A bare repo name locks the whole repo.</li>
+      </ol></div>`;
+    $$('.dp-copy').forEach(b => b.addEventListener('click', async () => {
+      const r = rows[+b.dataset.i];
+      try { await navigator.clipboard.writeText(kickoffPrompt(r.f)); const t = b.textContent; b.textContent = 'Copied ✓'; setTimeout(() => b.textContent = t, 1300); } catch (_) {}
+    }));
+  }
+
   /* ---------- OVERVIEW ---------- */
   function statusBadge(s) { const k = (s || '').toLowerCase().replace(/\s+/g, '-'); return `<span class="badge b-${k}">${esc(s)}</span>`; }
   async function renderOverview() {
@@ -223,42 +438,115 @@
   }
 
   /* ---------- ROADMAP BOARD ---------- */
+  const RM = { party: 'all', version: 'all', type: 'all', run: 'all', sort: 'fid', reopened: false, hideEmpty: true, q: '' };
+  const RUN_LBL = { running: 'Running', go: 'Can start now', 'go-gated': 'Can start (cost gate)', wait: 'Waiting', paused: 'Paused', done: 'Done' };
+  const RUN_BADGE = { running: 'b-in-progress', go: 'b-new', 'go-gated': 'b-high', wait: 'b-backlog', paused: 'b-low', done: 'b-fixed' };
+  let DS = null; const dsRow = fid => DS && DS.byFid[fid];
+  const TYPE_BADGE = { feature: 'b-new', bug: 'b-open', test: 'b-low', audit: 'b-backlog', change: 'b-new' };
+  const slugify = s => String(s || '').toLowerCase().replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
+  const branchName = it => it.fid ? `feature/${it.fid}-${slugify(it.title)}` : '';
+  // status -> lifecycle for data written before lifecycle.json existed (override in lifecycle.json "fromStatus")
+  function lifecycleOf(f) {
+    if (f.lifecycle) return f.lifecycle;
+    const m = Object.assign({ built: 'dev-complete', shipped: 'deployed-prod', partial: 'in-progress', planned: 'backlog', next: 'backlog', future: 'backlog' }, (DATA.lifecycle || {}).fromStatus || {});
+    return m[(f.status || '').toLowerCase()] || 'backlog';
+  }
+  function roadmapItems() {
+    return [
+      ...(DATA.features || []).map(f => ({ ...f, link: `#/feature/${f.id}`, lifecycle: lifecycleOf(f), version: f.version || 'V1' })),
+      ...(DATA.roadmapExtra || []).map(r => ({ ...r, link: r.link || '#/product', lifecycle: 'backlog', version: r.milestone || 'V3', concept: true }))
+    ];
+  }
   function renderRoadmap() {
-    const cols = [
-      { key: 'shipped', title: 'Shipped', hint: 'Live or built in the codebase', mark: 'var(--tb-success-fill)', match: s => ['built', 'shipped'].includes(s) },
-      { key: 'progress', title: 'In progress', hint: 'Partially built / being worked', mark: 'var(--tb-warning-fill)', match: s => ['partial', 'in-progress', 'progress'].includes(s) },
-      { key: 'next', title: 'Next', hint: 'Near-term plan (V1 / V2)', mark: 'var(--tb-blue-500)', match: s => ['new', 'next', 'planned'].includes(s) },
-      { key: 'future', title: 'Future', hint: 'North Star horizon (V3+)', mark: 'var(--text-muted)', match: s => ['future', 'backlog'].includes(s) }
-    ];
-    const items = [
-      ...(DATA.features || []).map(f => ({ ...f, link: `#/feature/${f.id}` })),
-      ...(DATA.roadmapExtra || []).map(r => ({ ...r, link: r.link || '#/product' }))
-    ];
-    const card = it => `<a class="tcard" href="${esc(it.link)}">
-      <h4>${esc(it.title)}</h4>
-      ${it.summary ? `<p>${esc(it.summary)}</p>` : ''}
-      <div class="meta">
-        ${it.party ? `<span class="party-chip p-${esc(it.party)}"${partyStyle(it.party)}>${esc(partyLabel(it.party))}</span>` : ''}
-        ${it.milestone ? `<span class="badge b-new">${esc(it.milestone)}</span>` : ''}
-        ${it.priority ? `<span class="badge b-low">${esc(it.priority)}</span>` : ''}
-      </div></a>`;
+    { const st = dispatchState(); DS = { ...st, byFid: Object.fromEntries(st.rows.map(r => [r.f.fid, r])) }; }
+    const stages = (DATA.lifecycle && DATA.lifecycle.stages && DATA.lifecycle.stages.length) ? DATA.lifecycle.stages
+      : [{ key: 'backlog', title: 'Backlog' }, { key: 'in-progress', title: 'In progress' }, { key: 'dev-complete', title: 'Dev complete' }, { key: 'verified', title: 'Verified' }, { key: 'deployed-dev', title: 'Deployed: Dev' }, { key: 'deployed-demo', title: 'Deployed: Demo' }, { key: 'deployed-prod', title: 'Deployed: Prod' }];
+    const all = roadmapItems();
+    const versions = Array.from(new Set(all.map(i => i.version))).filter(Boolean).sort();
+    const partyKeys = Object.keys(parties()).length ? Object.keys(parties()) : Array.from(new Set(all.map(i => i.party).filter(Boolean)));
+    const types = Array.from(new Set(all.map(i => i.type).filter(Boolean))).sort();
+    const ids = k => DS.rows.filter(r => k.includes(r.state)).map(r => r.f.fid);
+    const runOpts = [['all', 'All', all.length, ''], ['running', 'Running', ids(['running']).length, ids(['running'])], ['go', 'Can start now', ids(['go', 'go-gated']).length, ids(['go', 'go-gated'])],
+      ['active', 'Running + can start', ids(['running', 'go', 'go-gated']).length, ''], ['wait', 'Waiting', ids(['wait']).length, ids(['wait'])], ['paused', 'Paused', ids(['paused']).length, ids(['paused'])], ['done', 'Done', ids(['done']).length, ids(['done'])]];
+    const sel = (id, cur, opts, allLbl) => `<select id="${id}" class="rm-select">${[['all', allLbl], ...opts].map(([v, l]) => `<option value="${esc(v)}" ${cur === v ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
     $('#content').innerHTML = `
-      <div class="page-head"><p class="eyebrow">Delivery</p><h1>Roadmap board</h1>
-      <p class="lede">What is done, what is moving, and what is on the North Star horizon. Cards link to the feature dossier or product view.</p></div>
-      <div class="board">
-        ${cols.map(c => {
-          const list = items.filter(i => c.match((i.status || '').toLowerCase()));
-          return `<div class="board__col">
-            <h2><span class="colmark" style="background:${c.mark}"></span>${c.title}<span class="k">${list.length}</span></h2>
-            <p class="colhint">${c.hint}</p>
-            ${list.map(card).join('') || '<p class="colhint">Nothing here yet.</p>'}
-          </div>`;
-        }).join('')}
-      </div>`;
+      <div class="rm-head"><h1>Roadmap board</h1><span class="hint">${esc((DATA.lifecycle && DATA.lifecycle.promotion) || 'Local -> Dev -> Prod')} · click a card for its dossier and Claude prompt</span><a class="rm-link" href="#/dispatch">Dispatch board →</a></div>
+      <div class="rm-toolbar rm-compact">
+        <div class="rm-seg" role="tablist">${runOpts.map(([v, l, n, list]) => `<button class="rm-segbtn ${RM.run === v ? 'active' : ''}" data-run="${v}" title="${esc(Array.isArray(list) ? (list.join(', ') || 'none') : '')}">${l}<b>${n}</b></button>`).join('')}</div>
+        <div class="rm-row">
+          ${sel('rmParty', RM.party, partyKeys.map(p => [p, partyLabel(p)]), 'All areas')}
+          ${sel('rmVersion', RM.version, versions.map(v => [v, v]), 'All versions')}
+          ${types.length ? sel('rmType', RM.type, types.map(t => [t, t]), 'All types') : ''}
+          <select id="rmSort" class="rm-select" title="Sort">
+            ${[['fid', 'Sort: Feature ID'], ['seq', 'Sort: Dev sequence'], ['run', 'Sort: Dispatch status'], ['party', 'Sort: Party'], ['title', 'Sort: Title'], ['version', 'Sort: Version']].map(([v, l]) => `<option value="${v}" ${RM.sort === v ? 'selected' : ''}>${l}</option>`).join('')}
+          </select>
+          <label class="rm-chk"><input type="checkbox" id="rmReopen" ${RM.reopened ? 'checked' : ''}> Reopened</label>
+          <label class="rm-chk"><input type="checkbox" id="rmHide" ${RM.hideEmpty ? 'checked' : ''}> Hide empty columns</label>
+          <input id="rmSearch" class="rm-search" type="search" placeholder="Search text, ID, repo…" value="${esc(RM.q)}">
+          ${(RM.run !== 'all' || RM.party !== 'all' || RM.version !== 'all' || RM.type !== 'all' || RM.reopened || RM.q) ? '<button class="chip" id="rmReset" type="button">Reset</button>' : ''}
+        </div>
+      </div>
+      <div id="rmBoard" class="board"></div>`;
+    paintBoard(stages);
+    const set = (k, v) => { RM[k] = v; renderRoadmap(); };
+    $$('#content .rm-segbtn').forEach(b => b.addEventListener('click', () => set('run', b.dataset.run)));
+    $('#rmParty').addEventListener('change', e => set('party', e.target.value));
+    $('#rmVersion').addEventListener('change', e => set('version', e.target.value));
+    if ($('#rmType')) $('#rmType').addEventListener('change', e => set('type', e.target.value));
+    $('#rmReopen').addEventListener('change', e => set('reopened', e.target.checked));
+    $('#rmHide').addEventListener('change', e => set('hideEmpty', e.target.checked));
+    if ($('#rmReset')) $('#rmReset').addEventListener('click', () => { Object.assign(RM, { run: 'all', party: 'all', version: 'all', type: 'all', reopened: false, q: '' }); renderRoadmap(); });
+    $('#rmSort').addEventListener('change', e => { RM.sort = e.target.value; paintBoard(stages); wireCards(); });
+    const si = $('#rmSearch'); si.addEventListener('input', () => { RM.q = si.value; paintBoard(stages); wireCards(); });
+    wireCards();
+  }
+  function filteredItems() {
+    const q = RM.q.trim().toLowerCase();
+    let list = roadmapItems();
+    if (RM.party !== 'all') list = list.filter(i => i.party === RM.party);
+    if (RM.version !== 'all') list = list.filter(i => i.version === RM.version);
+    if (RM.type !== 'all') list = list.filter(i => i.type === RM.type);
+    if (RM.run !== 'all') list = list.filter(i => { const r = dsRow(i.fid); const st = r ? r.state : (i.lifecycle === 'in-progress' ? 'running' : ''); 
+      return RM.run === 'go' ? (st === 'go' || st === 'go-gated') : RM.run === 'active' ? ['running', 'go', 'go-gated'].includes(st) : st === RM.run; });
+    if (RM.reopened) list = list.filter(i => i.reopened);
+    if (q) list = list.filter(i => ((i.fid || '') + ' ' + i.title + ' ' + (i.summary || '') + ' ' + (i.source || '') + ' ' + (i.reported || '') + ' ' + (i.repos || []).join(' ')).toLowerCase().includes(q));
+    const by = { fid: (a, b) => (a.fid || 'zz').localeCompare(b.fid || 'zz'), party: (a, b) => (a.party || '').localeCompare(b.party || ''), title: (a, b) => a.title.localeCompare(b.title), version: (a, b) => (a.version || '').localeCompare(b.version || ''), seq: (a, b) => (a.seq || 999) - (b.seq || 999) || (a.fid || 'zz').localeCompare(b.fid || 'zz'), run: (a, b) => { const o = { running: 0, go: 1, 'go-gated': 2, wait: 3, paused: 4, done: 5 }; const sa = (dsRow(a.fid) || {}).state, sb = (dsRow(b.fid) || {}).state; return (o[sa] ?? 9) - (o[sb] ?? 9) || (a.seq || 999) - (b.seq || 999); } };
+    return list.sort(by[RM.sort] || by.fid);
+  }
+  function paintBoard(stages) {
+    const items = filteredItems();
+    const cols = stages.map(c => ({ c, list: items.filter(i => i.lifecycle === c.key) })).filter(x => !RM.hideEmpty || x.list.length);
+    const board = $('#rmBoard');
+    board.style.gridTemplateColumns = `repeat(${Math.max(cols.length, 1)},minmax(240px,1fr))`;
+    board.classList.toggle('board--few', cols.length <= 2);
+    board.innerHTML = cols.map(({ c, list }) => `<div class="board__col">
+        <h2 title="${esc(c.hint || '')}"><span class="colmark" style="background:${c.mark || 'var(--text-muted)'}"></span>${esc(c.title)}<span class="k">${list.length}</span></h2>
+        ${list.map(rmCard).join('') || '<p class="colhint">-</p>'}
+      </div>`).join('') || '<p class="hint">No tickets match these filters.</p>';
+  }
+  function rmCard(it) {
+    const br = branchName(it);
+    const r = dsRow(it.fid);
+    const why = !r ? '' : r.state === 'wait' ? r.label.replace(/^Wait: /, '') : (r.state === 'go' || r.state === 'go-gated') ? (r.pairClash && r.pairClash.length ? 'not together with ' + r.pairClash.join(', ') : 'parallel-safe with running tickets') : '';
+    return `<a class="tcard" href="${esc(it.link)}">
+      <div class="tcard-top">${it.fid ? `<code class="fid">${esc(it.fid)}</code>` : '<span class="fid fid--concept">concept</span>'}${r ? `<span class="badge ${RUN_BADGE[r.state]}" style="font-size:.58rem">${esc(RUN_LBL[r.state])}</span>` : ''}<span class="vbadge">${esc(it.version || '')}</span>${it.seq ? `<span class="vbadge" title="Development sequence">#${it.seq}</span>` : ''}${it.wave ? `<span class="vbadge">w${it.wave}</span>` : ''}${it.type ? `<span class="badge ${TYPE_BADGE[it.type] || 'b-low'}" style="font-size:.58rem">${esc(it.type)}</span>` : ''}${it.reopened ? '<span class="badge b-open" style="font-size:.58rem">reopened</span>' : ''}</div>
+      <h4>${esc(it.title)}</h4>
+      ${why ? `<p class="tcard-why">${esc(why)}</p>` : (it.summary ? `<p>${esc(it.summary)}</p>` : '')}
+      <div class="meta">${it.party ? `<span class="party-chip p-${esc(it.party)}"${partyStyle(it.party)}>${esc(partyLabel(it.party))}</span>` : ''}${it.reported ? `<span class="rm-lbl" style="margin-left:6px">${esc(it.reported)}</span>` : ''}</div>
+      ${br ? `<button class="branch" type="button" data-branch="${esc(br)}" title="Copy branch name">${esc(br)}</button>` : ''}
+    </a>`;
+  }
+  function wireCards() {
+    $$('#rmBoard .branch').forEach(b => b.addEventListener('click', async e => {
+      e.preventDefault(); e.stopPropagation();
+      try { await navigator.clipboard.writeText(b.dataset.branch); const t = b.textContent; b.textContent = 'copied ✓'; setTimeout(() => b.textContent = t, 1200); } catch (_) {}
+    }));
   }
   // Parties (who/which area a feature belongs to) come from brand.json "parties":
   // { "key": "Label" } or { "key": { "label": "Label", "color": "#hex" } }.
   function parties() { return (window.__BRAND || {}).parties || {}; }
+  // Prompt / dispatch settings: brand.json "prompt": { workspace, worklog, evidenceDir, deploy, agents: { validator, tests, behavior, uiux, review } }
+  function cfg() { return (window.__BRAND || {}).prompt || {}; }
   function partyLabel(p) { const v = parties()[p]; return (v && typeof v === 'object' ? v.label : v) || p; }
   function partyStyle(p) { const v = parties()[p]; return v && v.color ? ` style="background:${esc(v.color)}"` : ''; }
   function overviewCards() {
@@ -317,6 +605,8 @@
         <a href="#ux">UX &amp; UI</a><a href="#tech">Technical</a><a href="#impl">Status</a>
         <a href="#secperf">Security &amp; perf</a><a href="#test">Tests</a>
       </div>
+      ${trackCard(x)}
+      ${promptCard(x)}
       ${traceCard(id)}
       <div class="md" id="mdmount"></div>`;
     let mdText;
@@ -340,6 +630,75 @@
     frame.src = path;
     anchor.innerHTML = `<div class="mock-toolbar"><span class="mock-dot r"></span><span class="mock-dot y"></span><span class="mock-dot g"></span><span class="mock-url">${esc(anchor.dataset.url || 'app · mockup')}</span></div>`;
     anchor.appendChild(frame);
+  }
+
+  /* ---------- tracking (type, report source, scope + version history) ---------- */
+  function trackCard(x) {
+    if (!x.type && !x.reported && !(x.scopeLog || []).length) return '';
+    const st = ((DATA.lifecycle && DATA.lifecycle.stages) || []).find(s => s.key === x.lifecycle);
+    const kv = [['Feature ID', x.fid ? `<code class="fid">${esc(x.fid)}</code>` : '-'], ['Type', x.type ? `<span class="badge ${TYPE_BADGE[x.type] || 'b-low'}">${esc(x.type)}</span>` : '-'],
+      ['Lifecycle', esc(st ? st.title : (x.lifecycle || 'backlog'))], ['Dev sequence', x.seq ? `<b>#${x.seq}</b>${x.seqNote ? ' · ' + esc(x.seqNote) : ''}` : '-'],
+      ['Depends on', (x.dependsOn || []).map(r => `<code>${esc(r)}</code>`).join(' ') || 'none'], ['Version', esc(x.version || '-')], ['Priority', esc(x.priority || '-')],
+      ['Reported', esc(x.reported || '-')], ['Source', esc(x.source || '-')], ['Related', (x.related || []).map(r => `<code>${esc(r)}</code>`).join(' ') || '-'],
+      ['Branch', x.fid ? `<code>${esc(branchName(x))}</code>` : '-']];
+    const log = (x.scopeLog || []).map(l => `<tr><td>${esc(l.date || '')}</td><td>${esc(l.version || '')}</td><td>${esc(l.event || '')}</td><td>${esc(l.change || '')}</td></tr>`).join('');
+    return `<div class="callout" style="margin:0 0 18px"><b>Tracking</b>
+      <table style="margin-top:8px"><tbody>${kv.map(([k, v]) => `<tr><td style="width:130px"><b>${k}</b></td><td>${v}</td></tr>`).join('')}</tbody></table>
+      ${log ? `<p style="margin:12px 0 4px"><b>Scope &amp; version history</b></p><table><thead><tr><th>Date</th><th>Version</th><th>Event</th><th>Change</th></tr></thead><tbody>${log}</tbody></table>` : ''}
+    </div>`;
+  }
+
+  /* ---------- Claude kickoff prompt (generated per ticket from its data) ---------- */
+  function kickoffPrompt(x) {
+    const fb = ((DATA.feedback || {}).items || []).find(i => i.fid === x.fid);
+    const deps = (x.dependsOn || []);
+    const L = [], c = cfg(), HUB = (DATA.meta || {}).hubDir || 'hub', EV = c.evidenceDir || 'evidence', AG = c.agents || {};
+    const ag = (k, fb) => AG[k] ? `${AG[k]}` : fb;
+    L.push(`Implement ${x.fid}: ${x.title}`);
+    L.push(`(${x.version || 'V1'}${x.seq ? `, development sequence #${x.seq}` : ''}${x.priority ? `, ${x.priority}` : ''}) per its Engineering Hub dossier:`);
+    L.push(`${HUB}/content/features/${x.id}.md and its entry in ${HUB}/content/data/features.json.`);
+    L.push('');
+    L.push('Scope:');
+    (x.promptScope && x.promptScope.length ? x.promptScope : ['Everything in the dossier PRD (section 3); fix the findings in section 6.']).forEach(l => L.push(`- ${l}`));
+    const areas = (x.repos && x.repos.length) ? x.repos : (x.services || []);
+    if (areas.length) L.push(`- Repos / areas you may touch (Dispatch locks): ${areas.join(', ')}.`);
+    L.push(deps.length ? `- Depends on: ${deps.join(', ')}. Check their lifecycle on the roadmap; do not start a gated part until its dependency is dev-complete or later.` : '- Depends on: none.');
+    L.push('');
+    L.push('How to work:');
+    L.push('- Treat this ticket as ONE GOAL and run it non-stop to completion: implemented, every section 8 test case passing in each environment in turn, hub updated. Do not pause for confirmation between steps.');
+    L.push('- Only stop for these hard gates: (a) creating any AWS resource or adding cost, (b) git push, (c) a dependency gate that is not met, (d) a destructive change to shared data. For any other open question, choose the safest option, record the assumption in the ticket scopeLog, and keep going.');
+    L.push('- Act as the orchestrator. Keep your own context for planning, integration and verification; delegate the work to subagents (Agent tool):');
+    L.push('  - Explore agents to map the code for each part before changing it (run them in parallel).');
+    L.push('  - One implementation subagent per repo under code/ (each clone is its own git repo, so parallel subagents in different repos never collide), launched in parallel; give each its repo path, exact files, the dossier section and the acceptance tests. If two parts must change the same repo, create a separate checkout first (git -C code/<repo> worktree add ../<repo>-<fid>-<part> <branch>) and give each subagent its own path. Do not rely on the Agent "worktree" isolation option: it copies the workspace, not the code/ clones.');
+    L.push(`  - ${ag('tests', 'a test-writing subagent')} for unit/e2e tests, then ${ag('behavior', 'a behaviour-testing subagent')} for the section 8 cases, ${ag('uiux', 'a UI/UX reviewer')} for any UI change, ${ag('review', 'a code reviewer and a security reviewer')} on the final diff, in parallel.`);
+    L.push('  - Merge any extra worktree branches into the ticket branch yourself, remove the worktrees, resolve conflicts, rerun the tests.');
+    L.push('- Do small, tightly coupled edits inline; never let two subagents edit the same file.');
+    L.push('- If something fails, diagnose and fix it, then continue. Report progress with short updates, not questions.');
+    L.push('');
+    L.push('Workflow:');
+    L.push(`1. ${AG.validator ? AG.validator + ': c' : 'C'}onfirm ${x.fid}, its lifecycle and dependencies. Open the hub Dispatch board (${HUB}, #/dispatch, or python3 ${HUB}/tools/dispatch.py): if it does not say this ticket can run now, stop and tell me why.`);
+    L.push('   Immediately after this check, set lifecycle to in-progress in features.json, add a scopeLog row "Picked up", rebuild + deploy the hub, so the Dispatch board locks your repos before you plan.');
+    L.push(`   Plan first: use a Plan agent (fed by parallel Explore agents) to write the implementation plan, split into parts per repo with owner subagent, files, tests and risks; save it to ${EV}/<date>/${x.fid.toLowerCase()}/plan.md and add a scopeLog row "Planned". Then execute the plan without waiting for approval.`);
+    L.push(`2. Branch ${branchName(x)} in each repo you change${x.baseBranch ? `, from ${x.baseBranch}` : ''}.`);
+    L.push('3. Confirm the ticket is in-progress (step 1) before touching any repo. Touch only the repos listed in this ticket ("repos" in features.json).');
+    L.push(`4. Plan the parts, fan out the subagents, integrate, then run every test case in dossier section 8 in each environment in turn (${(DATA.lifecycle || {}).promotion || 'Local -> Dev'}); save evidence under ${EV}/<date>/${x.fid.toLowerCase()}/.`);
+    L.push(`5. At dev-complete run the reviews (${[AG.behavior, AG.uiux, AG.review].filter(Boolean).join(', ') || 'behaviour, UI/UX if UI, code and security'}); fix what they find; advance lifecycle through the stages in lifecycle.json.`);
+    L.push(fb ? `6. After each fix append to ${fb.id}'s "fixes" in ${HUB}/content/data/feedback.json (date, what, closes, commit, env, verifiedBy) and close the matching DEFs in gaps.json.`
+              : '6. After each fix add a scopeLog row and close the matching DEFs in gaps.json.');
+    L.push('7. Hub data files are shared with other sessions: re-read features.json, feedback.json and gaps.json right before each edit, change only your own entries, keep the formatting, commit only your own files.');
+    L.push(`8. Update ${c.worklog || 'the work log'}, rebuild${c.deploy === false ? '' : ' + deploy'} the hub, commit locally only (no push without my approval). Finish with a short summary: what changed, test results, evidence path, anything left for me.`);
+    return L.join('\n');
+  }
+  function promptCard(x) {
+    if (!x.fid) return '';
+    const txt = kickoffPrompt(x);
+    setTimeout(() => {
+      const b = document.getElementById('kpCopy'); if (!b) return;
+      b.addEventListener('click', async () => { try { await navigator.clipboard.writeText(txt); b.textContent = 'Copied ✓'; setTimeout(() => b.textContent = 'Copy prompt', 1400); } catch (_) {} });
+    }, 0);
+    return `<details class="callout kp" style="margin:0 0 18px"><summary><b>Claude prompt</b> <span class="hint">paste into a new Claude Code session opened in ${esc(cfg().workspace || 'the project root')} to implement this ticket</span></summary>
+      <div style="display:flex;justify-content:flex-end;margin:8px 0"><button class="chip" id="kpCopy" type="button">Copy prompt</button></div>
+      <pre class="kp-pre">${esc(txt)}</pre></details>`;
   }
 
   /* ---------- traceability (feature <-> code) ---------- */

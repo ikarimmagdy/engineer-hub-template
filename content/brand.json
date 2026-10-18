@@ -36,5 +36,12 @@
       ],
       "latestOnly": true
     }
-  ]
+  ],
+  "prompt": {
+    "workspace": "the project root",
+    "worklog": "the work log",
+    "evidenceDir": "evidence",
+    "deploy": true,
+    "agents": {}
+  }
 }

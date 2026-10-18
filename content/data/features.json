@@ -11,6 +11,14 @@
   ],
   "deps": [],
   "mockup": "content/mockups/sample.html",
-  "gaps": []
+  "gaps": [],
+  "fid": "PRJ-001",
+  "lifecycle": "backlog",
+  "version": "V1",
+  "type": "feature",
+  "repos": [
+   "example-api:sample"
+  ],
+  "dependsOn": []
  }
 ]
