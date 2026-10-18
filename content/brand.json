@@ -1,0 +1,10 @@
+{
+  "name": "Your Project",
+  "logo": "assets/img/logo.png",
+  "primary": "#2563eb",
+  "primaryFill": "#3b82f6",
+  "primaryLight": "#93c5fd",
+  "primaryDark": "#1e3a8a",
+  "font": "'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
+  "docsDir": "docs"
+}

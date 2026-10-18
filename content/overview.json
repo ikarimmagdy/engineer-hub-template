@@ -1,0 +1,6 @@
+{
+  "title": "Engineering Hub",
+  "lede": "One place for the team to see what is built, what is planned, how the system is put together, and where the gaps are.",
+  "intro": "Replace this in content/overview.json. Describe your product in a sentence or two. This hub is generated from files under content/ and your docs, so it stays current when you edit the files and re-run the build.",
+  "footer": "Generated from the project repository. Internal engineering reference."
+}

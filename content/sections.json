@@ -1,0 +1,11 @@
+[
+  { "id": "product", "title": "Product (BRD / PRD)", "eyebrow": "Product", "lede": "The vision, the user journeys, and the existing, new and future feature set that the roadmap is built from.", "doc": "content/sections/product.md" },
+  { "id": "architecture", "title": "Architecture", "eyebrow": "Engineering", "lede": "The five services, how they connect, the data model, and how a booking travels through the platform.", "doc": "content/sections/architecture.md" },
+  { "id": "infra", "title": "Infrastructure & AWS", "eyebrow": "Engineering", "lede": "What runs in AWS today, the DNS and domains, and the recommended split into demo, dev and production.", "doc": "content/sections/infra.md" },
+  { "id": "cicd", "title": "CI/CD", "eyebrow": "Engineering", "lede": "How code reaches each environment: the pipelines, the branch strategy and the OIDC deploy roles.", "doc": "content/sections/cicd.md" },
+  { "id": "observability", "title": "Observability", "eyebrow": "Engineering", "lede": "Telemetry, the in-house analytics plan, OpenTelemetry and the /occ console.", "doc": "content/sections/observability.md" },
+  { "id": "security", "title": "Security", "eyebrow": "Security", "lede": "The authentication model, PHI handling and the security findings from the handover review.", "doc": "content/sections/security.md" },
+  { "id": "performance", "title": "Performance", "eyebrow": "Performance", "lede": "Performance findings, budgets and the signals that track them.", "doc": "content/sections/performance.md" },
+  { "id": "accounts", "title": "Accounts & access", "eyebrow": "Access", "lede": "Demo logins, environment URLs and third-party accounts.", "doc": "content/sections/accounts.md" },
+  { "id": "changelog", "title": "Changelog & how to update", "eyebrow": "Reference", "lede": "What changed, and exactly how to keep this hub current as the platform evolves.", "doc": "content/sections/changelog.md" }
+]

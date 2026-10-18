@@ -1,0 +1,3 @@
+[
+  { "id":"sample", "title":"Sample feature", "party":"patient", "status":"built", "milestone":"Live", "summary":"A sample dossier. Copy this pattern for each real feature.", "services":["example-api"], "deps":[], "mockup":"content/mockups/sample.html", "gaps":[] }
+]
