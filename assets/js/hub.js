@@ -32,6 +32,7 @@
     gtm: '<path d="M4.5 16.5c-1.5 1.3-2 5-2 5s3.7-.5 5-2c.7-.8.7-2 0-2.8a2 2 0 0 0-3 0zM12 15l-3-3a12 12 0 0 1 8-8l3 .5.5 3a12 12 0 0 1-8 8zM15 9h.01"/>',
     trace: '<path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1.5 1.5M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1.5-1.5"/>',
     ext: '<path d="M14 4h6v6M20 4l-9 9M19 13v6H5V5h6"/>',
+    partner: '<circle cx="8" cy="8" r="3"/><circle cx="16" cy="8" r="3"/><path d="M2 20c0-3 3-5 6-5s6 2 6 5M12 20c0-3 2-5 4-5s6 2 6 5"/>',
     story: '<path d="M4 5h16v14H4z"/><path d="M8 9h8M8 13h5"/><circle cx="17" cy="15" r="0"/>',
     learn: '<path d="M2 9l10-5 10 5-10 5z"/><path d="M6 11v5c3 2.5 9 2.5 12 0v-5M22 9v6"/>'
   };
@@ -121,6 +122,7 @@
       '#/gaps': (DATA.gaps || []).length,
       '#/security': (DATA.security || []).length,
       '#/kb': (DATA.kb || []).length,
+      '#/vendors': (DATA.vendors || []).length,
       '#/stories': (DATA.features || []).reduce((n, f) => n + (f.stories || []).length, 0),
       '#/learn': ((DATA.learning || {}).courses || []).reduce((n, c) => n + (c.lessons || []).length, 0)
     };
@@ -144,7 +146,7 @@
     feature: renderFeature, product: md('product'), architecture: md('architecture'),
     infra: md('infra'), cicd: md('cicd'), adr: renderADR, gaps: renderGaps,
     security: renderSecurity, performance: renderPerformance, observability: md('observability'),
-    kb: renderKB, doc: renderDoc, gtm: renderGTM, traceability: renderTrace, accounts: renderAccounts, changelog: renderChangelog, dispatch: renderDispatch, stories: renderStories,
+    kb: renderKB, doc: renderDoc, gtm: renderGTM, traceability: renderTrace, accounts: renderAccounts, changelog: renderChangelog, dispatch: renderDispatch, stories: renderStories, vendors: renderVendors,
     learn: renderLearn, course: renderCourse, lesson: renderLesson
   };
   async function route() {
@@ -705,6 +707,48 @@
   }
 
 
+
+  /* ---------- THIRD PARTIES: vendors and partners under evaluation (content/data/vendors.json) ---------- */
+  const VP = { adopt: 'b-fixed', pilot: 'b-new', evaluate: 'b-progress', hold: 'b-backlog', reject: 'b-open' };
+  function renderVendors(arg) {
+    const V = DATA.vendors || [];
+    if (arg) {
+      const v = V.find(x => x.id === arg);
+      if (!v) { $('#content').innerHTML = `<div class="callout danger">Unknown third party: ${esc(arg)}</div>`; return; }
+      const list = (t, a) => (a || []).length ? `<h2>${t}</h2><ul>${a.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : '';
+      $('#content').innerHTML = `<div class="breadcrumb"><a href="#/vendors">Third parties</a> › ${esc(v.name)}</div>
+        <div class="page-head"><div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px"><span class="badge ${VP[(v.position || '').toLowerCase()] || 'b-low'}">${esc(v.position || '')}</span><span class="badge b-low">${esc(v.category || '')}</span>${v.status ? `<span class="badge b-backlog">${esc(v.status)}</span>` : ''}</div>
+        <h1>${esc(v.name)}</h1><p class="lede">${esc(v.role || '')}</p></div>
+        <div class="md">
+          ${v.positionWhy ? `<div class="callout"><b>Our position:</b> ${esc(v.positionWhy)}</div>` : ''}
+          ${(v.capabilities || []).length ? `<h2>Capabilities and where its adapter sits</h2><p>${v.capabilities.map(c => `<code>${esc(c)}</code>`).join(' ')}</p>${v.adapter ? `<p>${esc(v.adapter)}</p>` : ''}` : ''}
+          ${list('Strengths', v.strengths)}${list('Risks', v.risks)}
+          ${list('Questions to ask them', v.questions)}${list('Conflicts with our documents, decisions or code', v.conflicts)}
+          ${(v.decisions || []).length ? `<h2>Decisions</h2><p>${v.decisions.map(d => `<a href="#/adr"><code>${esc(d)}</code></a>`).join(' ')}</p>` : ''}
+          ${(v.features || []).length ? `<h2>Roadmap items</h2><p>${v.features.map(f => { const x = (DATA.features || []).find(y => y.fid === f); return x ? `<a href="#/feature/${esc(x.id)}"><code>${esc(f)}</code> ${esc(x.title)}</a>` : `<code>${esc(f)}</code>`; }).join('<br>')}</p>` : ''}
+          ${list('Source documents', v.docs)}
+          ${v.updated ? `<p class="footer-note">Last evaluated ${esc(v.updated)}.</p>` : ''}
+        </div>`;
+      return;
+    }
+    const cats = Array.from(new Set(V.map(v => v.category || 'Other')));
+    const open = V.reduce((n, v) => n + (v.questions || []).length, 0), conf = V.reduce((n, v) => n + (v.conflicts || []).length, 0);
+    $('#content').innerHTML = `<div class="page-head"><p class="eyebrow">Partners</p><h1>Third parties</h1>
+      <p class="lede">Every provider, vendor and partner we use or are evaluating: its role, where its adapter sits, our position, the questions to ask them and the conflicts to resolve.</p></div>
+      <div class="stat-row"><div class="stat"><div class="n">${V.length}</div><div class="l">Third parties</div></div>
+        <div class="stat"><div class="n">${V.filter(v => (v.position || '').toLowerCase() === 'adopt').length}</div><div class="l">Adopted</div></div>
+        <div class="stat"><div class="n">${V.filter(v => ['pilot', 'evaluate'].includes((v.position || '').toLowerCase())).length}</div><div class="l">Piloting or evaluating</div></div>
+        <div class="stat"><div class="n">${open}</div><div class="l">Open questions</div></div>
+        <div class="stat"><div class="n" style="color:var(--tb-danger)">${conf}</div><div class="l">Conflicts</div></div></div>
+      <div class="md" id="vendorIntro"></div>
+      ${cats.map(c => `<h2 style="color:var(--heading);font-size:1.1rem;margin:22px 0 12px">${esc(c)}</h2><div class="cards">${V.filter(v => (v.category || 'Other') === c).map(v => `<a class="card" href="#/vendors/${esc(v.id)}">
+        <div class="card__top"><span class="badge ${VP[(v.position || '').toLowerCase()] || 'b-low'}">${esc(v.position || '')}</span>${v.status ? `<span class="badge b-backlog">${esc(v.status)}</span>` : ''}</div>
+        <h3>${esc(v.name)}</h3><p>${esc(v.role || '')}</p>
+        <p style="margin-top:8px">${(v.questions || []).length} questions · ${(v.conflicts || []).length} conflicts</p></a>`).join('')}</div>`).join('')}`;
+    // optional write-up: content/sections/third-parties.md (how we evaluate, positions, top questions)
+    loadMD('content/sections/third-parties.md').then(t => renderMarkdown(t, $('#vendorIntro'))).catch(() => {});
+  }
+
   /* ---------- USER STORIES (content/stories/<feature>.json, merged by build.mjs) ---------- */
   const US = { q: '', persona: 'all', phase: 'all', status: 'all', priority: 'all', feature: 'all' };
   const US_BADGE = { done: 'b-fixed', partial: 'b-progress', todo: 'b-backlog' };
@@ -1131,6 +1175,7 @@
     (DATA.adrs || []).forEach(a => idx.push({ kind: 'ADR', title: a.title, sub: a.summary, href: '#/adr' }));
     (DATA.gaps || []).forEach(g => idx.push({ kind: 'Gap', title: `${g.id} ${g.title}`, sub: g.summary, href: '#/gaps' }));
     (DATA.kb || []).forEach(k => idx.push({ kind: 'Doc', title: k.title, sub: k.summary, href: '#/doc/' + k.path }));
+    (DATA.vendors || []).forEach(v => idx.push({ kind: 'Third party', title: v.name, sub: v.role, href: '#/vendors/' + v.id }));
     (DATA.features || []).forEach(f => (f.stories || []).forEach(x => idx.push({ kind: 'Story', title: `${x.id} ${x.iWant}`, sub: `${f.fid || ''} ${x.persona || ''}`, href: '#/feature/' + f.id })));
     ((DATA.learning || {}).courses || []).forEach(c => {
       idx.push({ kind: 'Course', title: `${c.code || ''} ${c.title}`, sub: c.goal, href: '#/course/' + c.id });

@@ -119,11 +119,25 @@ const overview = read(join(C, 'overview.json'));
 const sections = read(join(C, 'sections.json'));
 const features = read(join(D, 'features.json'));
 const roadmapExtra = readIf(join(D, 'roadmapExtra.json')) || [];
-const adrs = readIf(join(D, 'adrs.json')) || [];
+let adrs = readIf(join(D, 'adrs.json')) || [];
+// ADR files (docs/adr/NNNN-slug.md, the /adr command's format) win over adrs.json when present.
+const ADRDIR = join(REPO, brand.adrDir || 'docs/adr');
+if (existsSync(ADRDIR)) {
+  const fromFiles = readdirSync(ADRDIR).filter(n => /^\d{4}-.+\.md$/.test(n) && !n.startsWith('0000-')).sort().map(n => {
+    const t = readFileSync(join(ADRDIR, n), 'utf8');
+    const num = +n.slice(0, 4);
+    const field = k => ((t.match(new RegExp('\\*\\*' + k + ':\\*\\*\\s*(.+)')) || [])[1] || '').trim();
+    const title = ((t.match(/^#\s+\d{4}\s*[:.\-]?\s*(.+)$/m) || [])[1] || n).trim();
+    const sec = h => ((t.split(new RegExp('^## ' + h + '\\s*$', 'm'))[1] || '').split(/^## /m)[0] || '').trim().replace(/\s+/g, ' ');
+    return { id: 'ADR-' + String(num).padStart(3, '0'), title, status: field('Status') || 'Proposed', date: field('Date'), summary: (sec('Decision') || sec('Context')).slice(0, 420), file: relative(REPO, join(ADRDIR, n)).replace(/\\/g, '/') };
+  });
+  if (fromFiles.length) adrs = fromFiles;
+}
 const gaps = readIf(join(D, 'gaps.json')) || [];
 const security = readIf(join(D, 'security.json')) || [];
 const performance = readIf(join(D, 'performance.json')) || [];
 const gtm = readIf(join(D, 'gtm.json')) || [];
+const vendors = readIf(join(D, 'vendors.json')) || [];
 const summary = readIf(join(D, 'summary.json')) || { defects: {} };
 const lifecycle = readIf(join(D, 'lifecycle.json')) || { stages: [] };
 const feedback = readIf(join(D, 'feedback.json')) || { batches: [], items: [] };
@@ -232,7 +246,7 @@ if (existsSync(CODE) && REPOS.length) {
 
 const manifest = {
   meta: { generated: new Date().toISOString().slice(0, 10), version: 'v2', brand: brand.name || '', hubDir: relative(REPO, ROOT).replace(/\\/g, '/') || '.' },
-  overview, nav, sections, features, roadmapExtra, adrs, gaps, security, performance, gtm, lifecycle, kb, traceability, feedback, learning,
+  overview, nav, sections, features, roadmapExtra, adrs, gaps, security, performance, gtm, vendors, lifecycle, kb, traceability, feedback, learning,
   defectsSummary: { total: summary.defects?.total || 0, critical: summary.defects?.critical || 0, high: summary.defects?.high || 0, medium: summary.defects?.medium || 0, low: summary.defects?.low || 0 },
   counts: { gaps: summary.gaps || null, security: summary.security || null }
 };
