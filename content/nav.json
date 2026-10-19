@@ -8,6 +8,11 @@
         "route": "#/overview"
       },
       {
+        "title": "Questions",
+        "icon": "question",
+        "route": "#/questions"
+      },
+      {
         "title": "Learning paths",
         "icon": "learn",
         "route": "#/learn"

@@ -138,6 +138,7 @@ const security = readIf(join(D, 'security.json')) || [];
 const performance = readIf(join(D, 'performance.json')) || [];
 const gtm = readIf(join(D, 'gtm.json')) || [];
 const vendors = readIf(join(D, 'vendors.json')) || [];
+const questions = readIf(join(D, 'questions.json')) || [];
 const summary = readIf(join(D, 'summary.json')) || { defects: {} };
 const lifecycle = readIf(join(D, 'lifecycle.json')) || { stages: [] };
 const feedback = readIf(join(D, 'feedback.json')) || { batches: [], items: [] };
@@ -246,7 +247,7 @@ if (existsSync(CODE) && REPOS.length) {
 
 const manifest = {
   meta: { generated: new Date().toISOString().slice(0, 10), version: 'v2', brand: brand.name || '', hubDir: relative(REPO, ROOT).replace(/\\/g, '/') || '.' },
-  overview, nav, sections, features, roadmapExtra, adrs, gaps, security, performance, gtm, vendors, lifecycle, kb, traceability, feedback, learning,
+  overview, nav, sections, features, roadmapExtra, adrs, gaps, security, performance, gtm, vendors, questions, lifecycle, kb, traceability, feedback, learning,
   defectsSummary: { total: summary.defects?.total || 0, critical: summary.defects?.critical || 0, high: summary.defects?.high || 0, medium: summary.defects?.medium || 0, low: summary.defects?.low || 0 },
   counts: { gaps: summary.gaps || null, security: summary.security || null }
 };

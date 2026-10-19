@@ -32,6 +32,7 @@
     gtm: '<path d="M4.5 16.5c-1.5 1.3-2 5-2 5s3.7-.5 5-2c.7-.8.7-2 0-2.8a2 2 0 0 0-3 0zM12 15l-3-3a12 12 0 0 1 8-8l3 .5.5 3a12 12 0 0 1-8 8zM15 9h.01"/>',
     trace: '<path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1.5 1.5M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1.5-1.5"/>',
     ext: '<path d="M14 4h6v6M20 4l-9 9M19 13v6H5V5h6"/>',
+    question: '<circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6V14M12 17v.5"/>',
     partner: '<circle cx="8" cy="8" r="3"/><circle cx="16" cy="8" r="3"/><path d="M2 20c0-3 3-5 6-5s6 2 6 5M12 20c0-3 2-5 4-5s6 2 6 5"/>',
     story: '<path d="M4 5h16v14H4z"/><path d="M8 9h8M8 13h5"/><circle cx="17" cy="15" r="0"/>',
     learn: '<path d="M2 9l10-5 10 5-10 5z"/><path d="M6 11v5c3 2.5 9 2.5 12 0v-5M22 9v6"/>'
@@ -123,6 +124,7 @@
       '#/security': (DATA.security || []).length,
       '#/kb': (DATA.kb || []).length,
       '#/vendors': (DATA.vendors || []).length,
+      '#/questions': (DATA.questions || []).filter(x => (x.status || 'open') === 'open').length,
       '#/stories': (DATA.features || []).reduce((n, f) => n + (f.stories || []).length, 0),
       '#/learn': ((DATA.learning || {}).courses || []).reduce((n, c) => n + (c.lessons || []).length, 0)
     };
@@ -146,7 +148,7 @@
     feature: renderFeature, product: md('product'), architecture: md('architecture'),
     infra: md('infra'), cicd: md('cicd'), adr: renderADR, gaps: renderGaps,
     security: renderSecurity, performance: renderPerformance, observability: md('observability'),
-    kb: renderKB, doc: renderDoc, gtm: renderGTM, traceability: renderTrace, accounts: renderAccounts, changelog: renderChangelog, dispatch: renderDispatch, stories: renderStories, vendors: renderVendors,
+    kb: renderKB, doc: renderDoc, gtm: renderGTM, traceability: renderTrace, accounts: renderAccounts, changelog: renderChangelog, dispatch: renderDispatch, stories: renderStories, vendors: renderVendors, questions: renderQuestions,
     learn: renderLearn, course: renderCourse, lesson: renderLesson
   };
   async function route() {
@@ -708,6 +710,83 @@
 
 
 
+
+  /* ---------- QUESTIONS: what to ask whom, for the daily standup (content/data/questions.json) ----------
+     A question: { id, question, askWho, category, priority: P0|P1|P2, status: open|asked|answered|closed,
+     why, ifYes, ifNo, blocks: [fid | ADR-xxx], vendor, source, raised, answer, answeredOn }.
+     Marks made during a standup (asked / answered + note) stay in this browser; "Export my marks"
+     gives JSON to record the answers in the data file. */
+  const QK = () => 'hub-q:' + ((window.__BRAND || {}).name || 'hub');
+  const qmarks = () => { try { return JSON.parse(localStorage.getItem(QK()) || '{}'); } catch (_) { return {}; } };
+  const qsave = m => { try { localStorage.setItem(QK(), JSON.stringify(m)); } catch (_) {} };
+  const QF = { view: 'today', who: 'all', priority: 'all', status: 'open', q: '' };
+  const QB = { open: 'b-new', asked: 'b-progress', answered: 'b-fixed', closed: 'b-backlog' };
+  function qState(x, m) { return (m[x.id] && m[x.id].status) || x.status || 'open'; }
+  function qLinks(x) {
+    return (x.blocks || []).map(b => { const f = (DATA.features || []).find(y => y.fid === b);
+      return f ? `<a href="#/feature/${esc(f.id)}"><code>${esc(b)}</code></a>` : (/^ADR/.test(b) ? `<a href="#/adr"><code>${esc(b)}</code></a>` : `<code>${esc(b)}</code>`); }).join(' ');
+  }
+  function qText(list) { return list.map((x, i) => `${i + 1}. ${x.question}${x.why ? `\n   Why: ${x.why}` : ''}`).join('\n'); }
+  function renderQuestions() {
+    const Q = DATA.questions || [], m = qmarks();
+    const whos = Array.from(new Set(Q.map(x => x.askWho).filter(Boolean))).sort();
+    const st = k => Q.filter(x => qState(x, m) === k).length;
+    $('#content').innerHTML = `<div class="page-head"><p class="eyebrow">Daily standup</p><h1>Questions</h1>
+      <p class="lede">What we need to ask, of whom, and why it matters. "Ask today" shows the open P0 questions grouped by who answers them; copy a group into your message. Marks you make here stay in this browser until they are recorded.</p></div>
+      <div class="stat-row"><div class="stat"><div class="n">${Q.length}</div><div class="l">Questions</div></div>
+        <div class="stat"><div class="n">${st('open')}</div><div class="l">Open</div></div>
+        <div class="stat"><div class="n" style="color:var(--tb-warning)">${st('asked')}</div><div class="l">Asked, waiting</div></div>
+        <div class="stat"><div class="n" style="color:var(--tb-success)">${st('answered')}</div><div class="l">Answered</div></div>
+        <div class="stat"><div class="n" style="color:var(--tb-danger)">${Q.filter(x => x.priority === 'P0' && qState(x, m) === 'open').length}</div><div class="l">Open P0</div></div></div>
+      <div class="rm-toolbar rm-compact"><div class="rm-seg">${[['today', 'Ask today'], ['all', 'All questions'], ['marked', 'My marks']].map(([v, l]) => `<button class="rm-segbtn ${QF.view === v ? 'active' : ''}" data-qv="${v}">${l}</button>`).join('')}</div>
+        <div class="rm-row">
+          <select id="qWho" class="rm-select"><option value="all">Everyone</option>${whos.map(w => `<option ${QF.who === w ? 'selected' : ''}>${esc(w)}</option>`).join('')}</select>
+          <select id="qPri" class="rm-select"><option value="all">All priorities</option>${['P0', 'P1', 'P2'].map(w => `<option ${QF.priority === w ? 'selected' : ''}>${w}</option>`).join('')}</select>
+          <select id="qSt" class="rm-select">${[['open', 'Open'], ['asked', 'Asked'], ['answered', 'Answered'], ['all', 'Any status']].map(([v, l]) => `<option value="${v}" ${QF.status === v ? 'selected' : ''}>${l}</option>`).join('')}</select>
+          <input id="qSearch" class="rm-search" type="search" placeholder="Search questions, features, ADRs…" value="${esc(QF.q)}">
+          <button class="chip" id="qExport" type="button">Export my marks</button>
+        </div></div>
+      <div id="qList"></div>`;
+    const paint = () => {
+      const mm = qmarks(), q = QF.q.trim().toLowerCase();
+      let list = Q.filter(x => (QF.who === 'all' || x.askWho === QF.who) && (QF.priority === 'all' || x.priority === QF.priority)
+        && (QF.status === 'all' || qState(x, mm) === QF.status)
+        && (!q || [x.id, x.question, x.why, x.askWho, x.category, (x.blocks || []).join(' ')].join(' ').toLowerCase().includes(q)));
+      if (QF.view === 'today') list = list.filter(x => x.priority === 'P0' && qState(x, mm) === 'open');
+      if (QF.view === 'marked') list = Q.filter(x => mm[x.id]);
+      const groups = {}; list.forEach(x => { (groups[x.askWho || 'Unassigned'] = groups[x.askWho || 'Unassigned'] || []).push(x); });
+      const order = { P0: 0, P1: 1, P2: 2 };
+      $('#qList').innerHTML = Object.keys(groups).sort().map(w => { const g = groups[w].sort((a, b) => (order[a.priority] ?? 9) - (order[b.priority] ?? 9));
+        return `<section class="lpath"><div class="lpath__head"><div><h2>Ask ${esc(w)}</h2><p>${g.length} question${g.length === 1 ? '' : 's'}</p></div>
+          <button class="chip q-copy" data-who="${esc(w)}" type="button">Copy as message</button></div>
+          ${g.map(x => { const mk = mm[x.id] || {}; const stt = qState(x, mm); return `<details class="fb-item q-item">
+            <summary><code class="fid">${esc(x.id)}</code><span class="fb-title">${esc(x.question)}</span><span class="fb-tags">
+              <span class="badge ${x.priority === 'P0' ? 'b-critical' : x.priority === 'P1' ? 'b-high' : 'b-low'}">${esc(x.priority || '')}</span>
+              <span class="badge ${QB[stt] || 'b-low'}">${esc(stt)}</span>${x.category ? `<span class="vbadge">${esc(x.category)}</span>` : ''}</span></summary>
+            <div class="fb-body">
+              ${x.why ? `<p><b>Why it matters.</b> ${esc(x.why)}</p>` : ''}
+              ${x.ifYes ? `<p><b>If yes:</b> ${esc(x.ifYes)}</p>` : ''}${x.ifNo ? `<p><b>If no:</b> ${esc(x.ifNo)}</p>` : ''}
+              ${(x.blocks || []).length ? `<p><b>Blocks:</b> ${qLinks(x)}</p>` : ''}
+              ${x.vendor ? `<p><b>Third party:</b> <a href="#/vendors/${esc(x.vendor)}">${esc(x.vendor)}</a></p>` : ''}
+              ${x.answer ? `<p class="fb-quote"><b>Answer${x.answeredOn ? ` (${esc(x.answeredOn)})` : ''}:</b> ${esc(x.answer)}</p>` : ''}
+              ${x.source ? `<p class="hint">Source: ${esc(x.source)}</p>` : ''}
+              <div class="q-mark"><button class="chip" data-mark="asked" data-id="${esc(x.id)}">Mark asked</button><button class="chip" data-mark="answered" data-id="${esc(x.id)}">Mark answered</button><button class="chip" data-mark="clear" data-id="${esc(x.id)}">Clear</button>
+                <input class="rm-search q-note" data-id="${esc(x.id)}" placeholder="Note or answer (saved in this browser)" value="${esc(mk.note || '')}"></div>
+            </div></details>`; }).join('')}</section>`; }).join('') || '<p class="hint">Nothing here. Change the filters or switch to "All questions".</p>';
+      $$('#qList .q-copy').forEach(b => b.addEventListener('click', async e => { e.preventDefault(); const g = groups[b.dataset.who] || [];
+        try { await navigator.clipboard.writeText(`Questions for ${b.dataset.who}:\n` + qText(g)); b.textContent = 'Copied'; setTimeout(() => b.textContent = 'Copy as message', 1300); } catch (_) {} }));
+      $$('#qList [data-mark]').forEach(b => b.addEventListener('click', () => { const mm2 = qmarks(); const id = b.dataset.id;
+        if (b.dataset.mark === 'clear') delete mm2[id]; else mm2[id] = { ...(mm2[id] || {}), status: b.dataset.mark, on: new Date().toISOString().slice(0, 10) };
+        qsave(mm2); renderQuestions(); }));
+      $$('#qList .q-note').forEach(i => i.addEventListener('change', () => { const mm2 = qmarks(); mm2[i.dataset.id] = { ...(mm2[i.dataset.id] || { status: 'asked' }), note: i.value }; qsave(mm2); }));
+    };
+    paint();
+    $$('[data-qv]').forEach(b => b.addEventListener('click', () => { QF.view = b.dataset.qv; renderQuestions(); }));
+    [['qWho', 'who'], ['qPri', 'priority'], ['qSt', 'status']].forEach(([id, k]) => $('#' + id).addEventListener('change', e => { QF[k] = e.target.value; paint(); }));
+    const si = $('#qSearch'); si.addEventListener('input', () => { QF.q = si.value; paint(); });
+    $('#qExport').addEventListener('click', async () => { try { await navigator.clipboard.writeText(JSON.stringify(qmarks(), null, 2)); $('#qExport').textContent = 'Copied as JSON'; } catch (_) {} });
+  }
+
   /* ---------- THIRD PARTIES: vendors and partners under evaluation (content/data/vendors.json) ---------- */
   const VP = { adopt: 'b-fixed', pilot: 'b-new', evaluate: 'b-progress', hold: 'b-backlog', reject: 'b-open' };
   function renderVendors(arg) {
@@ -1175,6 +1254,7 @@
     (DATA.adrs || []).forEach(a => idx.push({ kind: 'ADR', title: a.title, sub: a.summary, href: '#/adr' }));
     (DATA.gaps || []).forEach(g => idx.push({ kind: 'Gap', title: `${g.id} ${g.title}`, sub: g.summary, href: '#/gaps' }));
     (DATA.kb || []).forEach(k => idx.push({ kind: 'Doc', title: k.title, sub: k.summary, href: '#/doc/' + k.path }));
+    (DATA.questions || []).forEach(x => idx.push({ kind: 'Question', title: `${x.id} ${x.question}`, sub: x.askWho, href: '#/questions' }));
     (DATA.vendors || []).forEach(v => idx.push({ kind: 'Third party', title: v.name, sub: v.role, href: '#/vendors/' + v.id }));
     (DATA.features || []).forEach(f => (f.stories || []).forEach(x => idx.push({ kind: 'Story', title: `${x.id} ${x.iWant}`, sub: `${f.fid || ''} ${x.persona || ''}`, href: '#/feature/' + f.id })));
     ((DATA.learning || {}).courses || []).forEach(c => {
