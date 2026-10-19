@@ -581,3 +581,13 @@ table.dispatch .badge{white-space:normal;text-transform:none;letter-spacing:0;fo
 .board--few .board__col{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px;align-content:start}
 .board--few .board__col>h2,.board--few .board__col>.colhint{grid-column:1/-1}
 .board--few .board__col .tcard{margin:0}
+.md td:first-child{white-space:nowrap}
+
+/* user stories */
+.us-table td{vertical-align:top;font-size:.84rem}
+.us-table td:nth-child(4),.us-card .us-table td:nth-child(3){min-width:280px}
+.us-acc summary{cursor:pointer;color:var(--link);font-size:.78rem;margin-top:6px}
+.us-acc ul{margin:6px 0 0;padding-left:18px;font-size:.8rem}
+.us-card summary{cursor:pointer;list-style:none}
+.us-card summary::-webkit-details-marker{display:none}
+.us-table td:first-child{white-space:nowrap}

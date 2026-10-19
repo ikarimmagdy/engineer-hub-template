@@ -167,7 +167,30 @@ if (existsSync(join(LDIR, 'paths.json'))) {
   }
   learning = { ...lp, courses: all };
 }
+/* ---- user stories: content/stories/<feature-id>.json ----
+   { "codeStatus": { "status", "evidence": [paths], "notes" },
+     "stories": [{ id, persona, asA, iWant, soThat, acceptance: [], priority, phase, status, tests: [] }] }
+   Merged into each feature so stories, status and the dossier stay together. */
+const SDIR = join(C, 'stories');
+const STORY_STATUS = ['todo', 'partial', 'done'];
+let storyCount = 0;
 for (const f of features) {
+  const sp = join(SDIR, `${f.id}.json`);
+  if (!existsSync(sp)) continue;
+  let d; try { d = read(sp); } catch (e) { warns.push(`stories ${f.id}: invalid JSON (${e.message})`); continue; }
+  f.stories = (d.stories || []).map(x => ({ ...x, feature: f.id, fid: f.fid }));
+  if (d.codeStatus) f.codeStatus = d.codeStatus;
+  for (const x of f.stories) {
+    storyCount++;
+    if (!x.id || !x.iWant) warns.push(`stories ${f.id}: story without id or iWant`);
+    if (x.status && !STORY_STATUS.includes(x.status)) warns.push(`stories ${f.id}/${x.id}: status "${x.status}" not one of ${STORY_STATUS.join('/')}`);
+  }
+}
+const ids = new Set(); for (const f of features) for (const x of f.stories || []) { if (ids.has(x.id)) warns.push(`duplicate story id ${x.id}`); ids.add(x.id); }
+
+for (const f of features) {
+  // a mockup at content/mockups/<id>.html is picked up without listing it in features.json
+  if (!f.mockup && existsSync(join(C, 'mockups', `${f.id}.html`))) f.mockup = `content/mockups/${f.id}.html`;
   if (!existsSync(join(C, 'features', `${f.id}.md`))) warns.push(`missing dossier: content/features/${f.id}.md`);
   if (f.mockup && !existsSync(join(ROOT, f.mockup))) warns.push(`missing mockup: ${f.mockup}`);
 }
@@ -182,14 +205,14 @@ const REPOS = Array.isArray(brand.repos) && brand.repos.length
 const repoBase = brand.repoBase || '';
 const headCache = {};
 const repoHead = r => { if (r in headCache) return headCache[r]; let h = ''; try { h = execSync(`git -C "${join(CODE, r)}" rev-parse --short HEAD`, { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim(); } catch (_) {} return headCache[r] = h; };
-const refRe = new RegExp('(' + REPOS.join('|') + ')/[A-Za-z0-9._/-]+\\.(?:vue|ts|js)', 'g');
+const refRe = new RegExp('(' + REPOS.join('|') + ')/[A-Za-z0-9._/-]+\\.(?:vue|tsx|ts|jsx|mjs|json|js|sql)(?![A-Za-z0-9])', 'g');
 const traceability = {};
 const drift = [];
 if (existsSync(CODE) && REPOS.length) {
   for (const f of features) {
     const p = join(C, 'features', `${f.id}.md`);
     if (!existsSync(p)) continue;
-    const refs = Array.from(new Set(readFileSync(p, 'utf8').match(refRe) || []));
+    const refs = Array.from(new Set((readFileSync(p, 'utf8') + '\n' + JSON.stringify(f.codeStatus || {})).match(refRe) || []));
     const files = refs.map(ref => {
       const repo = ref.split('/')[0], rel = ref.slice(repo.length + 1);
       const exists = existsSync(join(CODE, repo, rel));
@@ -215,7 +238,7 @@ const manifest = {
 };
 writeFileSync(join(C, 'manifest.json'), JSON.stringify(manifest, null, 0));
 
-console.log(`manifest.json written: ${learning ? learning.courses.length + ' courses, ' + learning.courses.reduce((n, c) => n + c.lessons.length, 0) + ' lessons, ' : ''}${features.length} features, ${adrs.length} ADRs, ${gaps.length} gaps, ${security.length} security, ${gtm.length} GTM actions, ${kb.length} docs linked.`);
+console.log(`manifest.json written: ${storyCount ? storyCount + ' user stories, ' : ''}${learning ? learning.courses.length + ' courses, ' + learning.courses.reduce((n, c) => n + c.lessons.length, 0) + ' lessons, ' : ''}${features.length} features, ${adrs.length} ADRs, ${gaps.length} gaps, ${security.length} security, ${gtm.length} GTM actions, ${kb.length} docs linked.`);
 if (warns.length) { console.log('\nWARNINGS:'); warns.forEach(w => console.log('  - ' + w)); }
 else console.log('All feature dossiers and mockups present.');
 if (existsSync(CODE) && REPOS.length) {

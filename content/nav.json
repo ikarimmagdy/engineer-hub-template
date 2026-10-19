@@ -33,6 +33,11 @@
         "route": "#/features"
       },
       {
+        "title": "User stories",
+        "icon": "story",
+        "route": "#/stories"
+      },
+      {
         "title": "Product (BRD / PRD)",
         "icon": "product",
         "route": "#/product"

@@ -32,6 +32,7 @@
     gtm: '<path d="M4.5 16.5c-1.5 1.3-2 5-2 5s3.7-.5 5-2c.7-.8.7-2 0-2.8a2 2 0 0 0-3 0zM12 15l-3-3a12 12 0 0 1 8-8l3 .5.5 3a12 12 0 0 1-8 8zM15 9h.01"/>',
     trace: '<path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1.5 1.5M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1.5-1.5"/>',
     ext: '<path d="M14 4h6v6M20 4l-9 9M19 13v6H5V5h6"/>',
+    story: '<path d="M4 5h16v14H4z"/><path d="M8 9h8M8 13h5"/><circle cx="17" cy="15" r="0"/>',
     learn: '<path d="M2 9l10-5 10 5-10 5z"/><path d="M6 11v5c3 2.5 9 2.5 12 0v-5M22 9v6"/>'
   };
   const ico = (name, cls = 'nav-ico') => `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONS[name] || ICONS.overview}</svg>`;
@@ -120,6 +121,7 @@
       '#/gaps': (DATA.gaps || []).length,
       '#/security': (DATA.security || []).length,
       '#/kb': (DATA.kb || []).length,
+      '#/stories': (DATA.features || []).reduce((n, f) => n + (f.stories || []).length, 0),
       '#/learn': ((DATA.learning || {}).courses || []).reduce((n, c) => n + (c.lessons || []).length, 0)
     };
     $('#sidebar').innerHTML = (DATA.nav || []).map(g => `
@@ -142,7 +144,7 @@
     feature: renderFeature, product: md('product'), architecture: md('architecture'),
     infra: md('infra'), cicd: md('cicd'), adr: renderADR, gaps: renderGaps,
     security: renderSecurity, performance: renderPerformance, observability: md('observability'),
-    kb: renderKB, doc: renderDoc, gtm: renderGTM, traceability: renderTrace, accounts: renderAccounts, changelog: renderChangelog, dispatch: renderDispatch,
+    kb: renderKB, doc: renderDoc, gtm: renderGTM, traceability: renderTrace, accounts: renderAccounts, changelog: renderChangelog, dispatch: renderDispatch, stories: renderStories,
     learn: renderLearn, course: renderCourse, lesson: renderLesson
   };
   async function route() {
@@ -606,6 +608,7 @@
         <a href="#secperf">Security &amp; perf</a><a href="#test">Tests</a>
       </div>
       ${trackCard(x)}
+      ${storiesCard(x)}
       ${promptCard(x)}
       ${traceCard(id)}
       <div class="md" id="mdmount"></div>`;
@@ -699,6 +702,72 @@
     return `<details class="callout kp" style="margin:0 0 18px"><summary><b>Claude prompt</b> <span class="hint">paste into a new Claude Code session opened in ${esc(cfg().workspace || 'the project root')} to implement this ticket</span></summary>
       <div style="display:flex;justify-content:flex-end;margin:8px 0"><button class="chip" id="kpCopy" type="button">Copy prompt</button></div>
       <pre class="kp-pre">${esc(txt)}</pre></details>`;
+  }
+
+
+  /* ---------- USER STORIES (content/stories/<feature>.json, merged by build.mjs) ---------- */
+  const US = { q: '', persona: 'all', phase: 'all', status: 'all', priority: 'all', feature: 'all' };
+  const US_BADGE = { done: 'b-fixed', partial: 'b-progress', todo: 'b-backlog' };
+  function allStories() { return (DATA.features || []).flatMap(f => (f.stories || []).map(x => ({ ...x, f }))); }
+  function storyLine(x) { return `As ${x.asA || 'a user'}, I want ${x.iWant}${x.soThat ? `, so that ${x.soThat}` : ''}.`; }
+  function storyRows(list) {
+    return list.map(x => `<tr>
+      <td><code>${esc(x.id)}</code></td>
+      <td><a href="#/feature/${esc(x.f.id)}"><code class="fid">${esc(x.f.fid || x.f.id)}</code></a><br><span class="hint">${esc(x.f.title)}</span></td>
+      <td><b>${esc(x.persona || '')}</b></td>
+      <td>${esc(storyLine(x))}${(x.acceptance || []).length ? `<details class="us-acc"><summary>${x.acceptance.length} acceptance criteria</summary><ul>${x.acceptance.map(a => `<li>${esc(a)}</li>`).join('')}</ul></details>` : ''}</td>
+      <td>${esc(x.priority || '')}</td><td>${esc(x.phase || x.f.version || '')}</td>
+      <td><span class="badge ${US_BADGE[x.status] || 'b-backlog'}">${esc(x.status || 'todo')}</span></td>
+      <td>${(x.tests || []).map(t => `<code>${esc(t)}</code>`).join(' ')}</td></tr>`).join('');
+  }
+  function renderStories() {
+    const all = allStories();
+    const uniq = k => Array.from(new Set(all.map(k).filter(Boolean))).sort();
+    const sel = (id, cur, vals, lbl) => `<select id="${id}" class="rm-select"><option value="all">${lbl}</option>${vals.map(v => `<option value="${esc(v)}" ${cur === v ? 'selected' : ''}>${esc(v)}</option>`).join('')}</select>`;
+    const n = st => all.filter(x => (x.status || 'todo') === st).length;
+    const feats = (DATA.features || []).filter(f => (f.stories || []).length);
+    const missing = (DATA.features || []).filter(f => !(f.stories || []).length);
+    $('#content').innerHTML = `
+      <div class="page-head"><p class="eyebrow">Product</p><h1>User stories</h1>
+      <p class="lede">Every user story across the roadmap, with its persona, acceptance criteria, phase, status and the test cases that prove it. Each feature's stories also appear on its dossier.</p></div>
+      <div class="stat-row">
+        <div class="stat"><div class="n">${all.length}</div><div class="l">Stories</div></div>
+        <div class="stat"><div class="n" style="color:var(--tb-success)">${n('done')}</div><div class="l">Done</div>${bar(all.length ? Math.round(n('done') / all.length * 100) : 0)}</div>
+        <div class="stat"><div class="n" style="color:var(--tb-warning)">${n('partial')}</div><div class="l">Partial</div></div>
+        <div class="stat"><div class="n">${n('todo')}</div><div class="l">To do</div></div>
+        <div class="stat"><div class="n">${feats.length}/${(DATA.features || []).length}</div><div class="l">Features with stories</div></div>
+      </div>
+      ${missing.length ? `<div class="callout warn"><b>${missing.length} features have no stories yet:</b> ${missing.map(f => `<a href="#/feature/${esc(f.id)}"><code>${esc(f.fid || f.id)}</code></a>`).join(' ')}</div>` : ''}
+      <div class="rm-toolbar rm-compact"><div class="rm-row">
+        ${sel('usPersona', US.persona, uniq(x => x.persona), 'All personas')}
+        ${sel('usPhase', US.phase, uniq(x => x.phase || x.f.version), 'All phases')}
+        ${sel('usStatus', US.status, ['todo', 'partial', 'done'], 'All statuses')}
+        ${sel('usPriority', US.priority, uniq(x => x.priority), 'All priorities')}
+        ${sel('usFeature', US.feature, feats.map(f => f.fid || f.id), 'All features')}
+        <input id="usSearch" class="rm-search" type="search" placeholder="Search stories, criteria, ID…" value="${esc(US.q)}">
+      </div></div>
+      <p class="hint" id="usCount"></p>
+      <div class="tbl-wrap"><table class="data us-table"><thead><tr><th>ID</th><th>Feature</th><th>Persona</th><th>Story</th><th>Priority</th><th>Phase</th><th>Status</th><th>Tests</th></tr></thead><tbody id="usBody"></tbody></table></div>`;
+    const paint = () => {
+      const q = US.q.trim().toLowerCase();
+      const list = all.filter(x => (US.persona === 'all' || x.persona === US.persona) && (US.phase === 'all' || (x.phase || x.f.version) === US.phase)
+        && (US.status === 'all' || (x.status || 'todo') === US.status) && (US.priority === 'all' || x.priority === US.priority)
+        && (US.feature === 'all' || (x.f.fid || x.f.id) === US.feature)
+        && (!q || [x.id, x.f.fid, x.f.title, x.persona, storyLine(x), (x.acceptance || []).join(' ')].join(' ').toLowerCase().includes(q)));
+      $('#usCount').textContent = `${list.length} of ${all.length} stories`;
+      $('#usBody').innerHTML = storyRows(list) || '<tr><td colspan="8" class="hint">No stories match.</td></tr>';
+    };
+    paint();
+    [['usPersona', 'persona'], ['usPhase', 'phase'], ['usStatus', 'status'], ['usPriority', 'priority'], ['usFeature', 'feature']].forEach(([id, k]) => $('#' + id).addEventListener('change', e => { US[k] = e.target.value; paint(); }));
+    const si = $('#usSearch'); si.addEventListener('input', () => { US.q = si.value; paint(); });
+  }
+  function storiesCard(x) {
+    const st = x.stories || [], cs = x.codeStatus;
+    if (!st.length && !cs) return '';
+    return `<details class="callout us-card" open style="margin:0 0 18px"><summary><b>User stories</b> <span class="hint">${st.length} stories · ${st.filter(s => s.status === 'done').length} done · ${st.filter(s => s.status === 'partial').length} partial</span></summary>
+      ${cs ? `<p style="margin:10px 0 6px"><b>Status from the code:</b> <span class="badge ${({ built: 'b-fixed', partial: 'b-progress', planned: 'b-backlog' })[cs.status] || 'b-low'}">${esc(cs.status || '')}</span> ${esc(cs.notes || '')}${(cs.evidence || []).length ? `<br><span class="hint">Evidence: ${cs.evidence.map(e => `<code>${esc(e)}</code>`).join(' ')}</span>` : ''}</p>` : ''}
+      ${st.length ? `<div class="tbl-wrap"><table class="data us-table"><thead><tr><th>ID</th><th>Persona</th><th>Story</th><th>Priority</th><th>Phase</th><th>Status</th><th>Tests</th></tr></thead><tbody>${storyRows(st.map(s => ({ ...s, f: x }))).replace(/<td><a href="#\/feature[\s\S]*?<\/td>/g, '')}</tbody></table></div>` : ''}
+    </details>`;
   }
 
   /* ---------- traceability (feature <-> code) ---------- */
@@ -1062,6 +1131,7 @@
     (DATA.adrs || []).forEach(a => idx.push({ kind: 'ADR', title: a.title, sub: a.summary, href: '#/adr' }));
     (DATA.gaps || []).forEach(g => idx.push({ kind: 'Gap', title: `${g.id} ${g.title}`, sub: g.summary, href: '#/gaps' }));
     (DATA.kb || []).forEach(k => idx.push({ kind: 'Doc', title: k.title, sub: k.summary, href: '#/doc/' + k.path }));
+    (DATA.features || []).forEach(f => (f.stories || []).forEach(x => idx.push({ kind: 'Story', title: `${x.id} ${x.iWant}`, sub: `${f.fid || ''} ${x.persona || ''}`, href: '#/feature/' + f.id })));
     ((DATA.learning || {}).courses || []).forEach(c => {
       idx.push({ kind: 'Course', title: `${c.code || ''} ${c.title}`, sub: c.goal, href: '#/course/' + c.id });
       (c.lessons || []).forEach(l => idx.push({ kind: 'Lesson', title: l.title, sub: (c.code || c.title) + ' ' + (l.objectives || []).join(' '), href: `#/lesson/${c.id}/${l.id}` }));
