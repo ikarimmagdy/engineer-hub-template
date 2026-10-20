@@ -111,6 +111,7 @@
     buildNav();
     initSearch();
     initMobileNav();
+    initExport();
     window.addEventListener('hashchange', route);
     route();
   }
@@ -345,6 +346,8 @@
     const F = DATA.features || [];
     const byFid = Object.fromEntries(F.map(f => [f.fid, f]));
     const tickets = F.filter(f => f.seq || (f.repos && f.repos.length));
+    // Open P0 questions that name a ticket in "blocks": they stop it once its dependencies are built.
+    const p0 = fid => (DATA.questions || []).filter(q => (q.status || 'open') === 'open' && q.priority === 'P0' && (q.blocks || []).includes(fid)).map(q => q.id);
     const running = F.filter(f => f.lifecycle === 'in-progress');
     const held = {};
     running.forEach(f => (f.repos || []).forEach(r => { (held[r] = held[r] || []).push(f.fid); }));
@@ -353,7 +356,7 @@
     const clashes = (a, b) => { const [ra, aa] = split(a), [rb, ab] = split(b); return ra === rb && (!aa || !ab || aa === ab); };
     const holdersOf = x => Object.entries(held).filter(([k]) => clashes(k, x)).flatMap(([k, v]) => v.map(h => [h, k]));
     const rows = tickets.map(f => {
-      const r = { f, repos: f.repos || [], stage: f.lifecycle || 'backlog' };
+      const r = { f, repos: f.repos || [], stage: f.lifecycle || 'backlog', questions: p0(f.fid) };
       if (r.stage === 'in-progress') { r.state = 'running'; r.label = 'Running now'; }
       else if (f.paused && stageRank(r.stage) < doneRank()) { r.state = 'paused'; r.label = 'Paused (not offered)'; }
       else if (stageRank(r.stage) >= doneRank()) { r.state = 'done'; r.label = 'Done: ' + r.stage; }
@@ -361,8 +364,10 @@
         const unmet = (f.dependsOn || []).filter(d => stageRank((byFid[d] || {}).lifecycle) < doneRank());
         const byHolder = {}; r.repos.forEach(x => holdersOf(x).forEach(([h]) => { if (h !== f.fid) (byHolder[h] = byHolder[h] || []).push(x); }));
         const clash = Object.entries(byHolder).map(([h, xs]) => `${h} (${xs.join(', ')})`);
+        r.unmet = unmet; r.clashWith = clash;
         if (unmet.length) { r.state = 'wait'; r.label = 'Wait: needs ' + unmet.join(', ') + ' dev-complete'; }
         else if (clash.length) { r.state = 'wait'; r.label = 'Wait: repos in use by ' + clash.join('; '); }
+        else if (r.questions.length) { r.state = 'blocked'; r.label = 'Blocked: open P0 question ' + r.questions.join(', '); }
         else if (f.gate === 'cost-approval') { r.state = 'go-gated'; r.label = 'Yes, start now (stops at cost approval)'; }
         else { r.state = 'go'; r.label = 'Yes, start now'; }
       }
@@ -377,7 +382,7 @@
   }
   function renderDispatch() {
     const { rows, running, held } = dispatchState();
-    const badge = { running: 'b-in-progress', done: 'b-fixed', wait: 'b-backlog', go: 'b-new', 'go-gated': 'b-high', paused: 'b-low' };
+    const badge = { running: 'b-in-progress', done: 'b-fixed', wait: 'b-backlog', blocked: 'b-open', go: 'b-new', 'go-gated': 'b-high', paused: 'b-low' };
     const goNow = rows.filter(r => r.state.startsWith('go'));
     $('#content').innerHTML = `
       <div class="page-head"><p class="eyebrow">Delivery</p><h1>Dispatch board</h1>
@@ -444,9 +449,9 @@
   }
 
   /* ---------- ROADMAP BOARD ---------- */
-  const RM = { party: 'all', version: 'all', type: 'all', run: 'all', sort: 'fid', reopened: false, hideEmpty: true, q: '' };
-  const RUN_LBL = { running: 'Running', go: 'Can start now', 'go-gated': 'Can start (cost gate)', wait: 'Waiting', paused: 'Paused', done: 'Done' };
-  const RUN_BADGE = { running: 'b-in-progress', go: 'b-new', 'go-gated': 'b-high', wait: 'b-backlog', paused: 'b-low', done: 'b-fixed' };
+  const RM = { party: null, version: 'all', type: 'all', run: 'all', sort: 'fid', reopened: false, hideEmpty: true, q: '' };
+  const RUN_LBL = { running: 'Running', go: 'Ready to start', 'go-gated': 'Ready (cost gate)', wait: 'Waiting', blocked: 'Blocked', paused: 'Paused', done: 'Done' };
+  const RUN_BADGE = { running: 'b-in-progress', go: 'b-new', 'go-gated': 'b-high', wait: 'b-backlog', blocked: 'b-open', paused: 'b-low', done: 'b-fixed' };
   let DS = null; const dsRow = fid => DS && DS.byFid[fid];
   const TYPE_BADGE = { feature: 'b-new', bug: 'b-open', test: 'b-low', audit: 'b-backlog', change: 'b-new' };
   const slugify = s => String(s || '').toLowerCase().replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
@@ -464,6 +469,7 @@
     ];
   }
   function renderRoadmap() {
+    if (RM.party === null) RM.party = (window.__BRAND || {}).defaultParty || 'all';
     { const st = dispatchState(); DS = { ...st, byFid: Object.fromEntries(st.rows.map(r => [r.f.fid, r])) }; }
     const stages = (DATA.lifecycle && DATA.lifecycle.stages && DATA.lifecycle.stages.length) ? DATA.lifecycle.stages
       : [{ key: 'backlog', title: 'Backlog' }, { key: 'in-progress', title: 'In progress' }, { key: 'dev-complete', title: 'Dev complete' }, { key: 'verified', title: 'Verified' }, { key: 'deployed-dev', title: 'Deployed: Dev' }, { key: 'deployed-demo', title: 'Deployed: Demo' }, { key: 'deployed-prod', title: 'Deployed: Prod' }];
@@ -471,9 +477,11 @@
     const versions = Array.from(new Set(all.map(i => i.version))).filter(Boolean).sort();
     const partyKeys = Object.keys(parties()).length ? Object.keys(parties()) : Array.from(new Set(all.map(i => i.party).filter(Boolean)));
     const types = Array.from(new Set(all.map(i => i.type).filter(Boolean))).sort();
-    const ids = k => DS.rows.filter(r => k.includes(r.state)).map(r => r.f.fid);
-    const runOpts = [['all', 'All', all.length, ''], ['running', 'Running', ids(['running']).length, ids(['running'])], ['go', 'Can start now', ids(['go', 'go-gated']).length, ids(['go', 'go-gated'])],
-      ['active', 'Running + can start', ids(['running', 'go', 'go-gated']).length, ''], ['wait', 'Waiting', ids(['wait']).length, ids(['wait'])], ['paused', 'Paused', ids(['paused']).length, ids(['paused'])], ['done', 'Done', ids(['done']).length, ids(['done'])]];
+    // Counts follow the area filter, so the numbers always describe the cards on screen.
+    const inArea = r => RM.party === 'all' || r.f.party === RM.party;
+    const ids = k => DS.rows.filter(r => inArea(r) && k.includes(r.state)).map(r => r.f.fid);
+    const runOpts = [['all', 'All', all.filter(i => RM.party === 'all' || i.party === RM.party).length, ''], ['running', 'Running', ids(['running']).length, ids(['running'])], ['go', 'Ready to start', ids(['go', 'go-gated']).length, ids(['go', 'go-gated'])],
+      ['active', 'Running + ready', ids(['running', 'go', 'go-gated']).length, ''], ['wait', 'Waiting', ids(['wait']).length, ids(['wait'])], ['blocked', 'Blocked', ids(['blocked']).length, ids(['blocked'])], ['paused', 'Paused', ids(['paused']).length, ids(['paused'])], ['done', 'Done', ids(['done']).length, ids(['done'])]];
     const sel = (id, cur, opts, allLbl) => `<select id="${id}" class="rm-select">${[['all', allLbl], ...opts].map(([v, l]) => `<option value="${esc(v)}" ${cur === v ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
     $('#content').innerHTML = `
       <div class="rm-head"><h1>Roadmap board</h1><span class="hint">${esc((DATA.lifecycle && DATA.lifecycle.promotion) || 'Local -> Dev -> Prod')} · click a card for its dossier and Claude prompt</span><a class="rm-link" href="#/dispatch">Dispatch board →</a></div>
@@ -492,6 +500,7 @@
           ${(RM.run !== 'all' || RM.party !== 'all' || RM.version !== 'all' || RM.type !== 'all' || RM.reopened || RM.q) ? '<button class="chip" id="rmReset" type="button">Reset</button>' : ''}
         </div>
       </div>
+      ${blockedSummary()}
       <div id="rmBoard" class="board"></div>`;
     paintBoard(stages);
     const set = (k, v) => { RM[k] = v; renderRoadmap(); };
@@ -506,6 +515,16 @@
     const si = $('#rmSearch'); si.addEventListener('input', () => { RM.q = si.value; paintBoard(stages); wireCards(); });
     wireCards();
   }
+  // One line that explains the counts: what each run state means and what the blocked tickets wait for.
+  function blockedSummary() {
+    const rows = (DS && DS.rows) || [];
+    const by = {};
+    rows.filter(r => r.state === 'wait').forEach(r => (r.unmet && r.unmet.length ? r.unmet : ['repo lock']).forEach(d => { by[d] = (by[d] || 0) + 1; }));
+    const fidTitle = f => { const x = (DATA.features || []).find(y => y.fid === f); return x ? `${f} ${x.title}` : f; };
+    const top = Object.entries(by).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([d, n]) => `<b>${esc(fidTitle(d))}</b> (${n})`).join(' · ');
+    const chase = new Set(rows.filter(r => r.state !== 'done').flatMap(r => r.questions || [])).size;
+    return `<p class="hint rm-legend"><b>Running</b> = in progress now. <b>Ready to start</b> = every dependency is built and no running ticket holds its code area. <b>Waiting</b> = normal build order, a feature it depends on is not built yet${top ? `: ${top}` : ''}. <b>Blocked</b> = it could start, but an open P0 question stops it. ${chase ? `<a href="#/questions">${chase} open P0 question${chase === 1 ? '' : 's'}</a> touch features not yet done (chip <b>P0 Q</b> on a card); answer them before those features come up. ` : ''}Stages (columns) show the build itself.</p>`;
+  }
   function filteredItems() {
     const q = RM.q.trim().toLowerCase();
     let list = roadmapItems();
@@ -516,7 +535,7 @@
       return RM.run === 'go' ? (st === 'go' || st === 'go-gated') : RM.run === 'active' ? ['running', 'go', 'go-gated'].includes(st) : st === RM.run; });
     if (RM.reopened) list = list.filter(i => i.reopened);
     if (q) list = list.filter(i => ((i.fid || '') + ' ' + i.title + ' ' + (i.summary || '') + ' ' + (i.source || '') + ' ' + (i.reported || '') + ' ' + (i.repos || []).join(' ')).toLowerCase().includes(q));
-    const by = { fid: (a, b) => (a.fid || 'zz').localeCompare(b.fid || 'zz'), party: (a, b) => (a.party || '').localeCompare(b.party || ''), title: (a, b) => a.title.localeCompare(b.title), version: (a, b) => (a.version || '').localeCompare(b.version || ''), seq: (a, b) => (a.seq || 999) - (b.seq || 999) || (a.fid || 'zz').localeCompare(b.fid || 'zz'), run: (a, b) => { const o = { running: 0, go: 1, 'go-gated': 2, wait: 3, paused: 4, done: 5 }; const sa = (dsRow(a.fid) || {}).state, sb = (dsRow(b.fid) || {}).state; return (o[sa] ?? 9) - (o[sb] ?? 9) || (a.seq || 999) - (b.seq || 999); } };
+    const by = { fid: (a, b) => (a.fid || 'zz').localeCompare(b.fid || 'zz'), party: (a, b) => (a.party || '').localeCompare(b.party || ''), title: (a, b) => a.title.localeCompare(b.title), version: (a, b) => (a.version || '').localeCompare(b.version || ''), seq: (a, b) => (a.seq || 999) - (b.seq || 999) || (a.fid || 'zz').localeCompare(b.fid || 'zz'), run: (a, b) => { const o = { running: 0, go: 1, 'go-gated': 2, blocked: 3, wait: 4, paused: 5, done: 6 }; const sa = (dsRow(a.fid) || {}).state, sb = (dsRow(b.fid) || {}).state; return (o[sa] ?? 9) - (o[sb] ?? 9) || (a.seq || 999) - (b.seq || 999); } };
     return list.sort(by[RM.sort] || by.fid);
   }
   function paintBoard(stages) {
@@ -530,12 +549,14 @@
         ${list.map(rmCard).join('') || '<p class="colhint">-</p>'}
       </div>`).join('') || '<p class="hint">No tickets match these filters.</p>';
   }
+  // Status of an existing reference implementation (for example the code being ported), shown apart from the build stage.
+  function refChip(x) { return x.referenceStatus ? `<span class="vbadge" title="Status in the reference implementation">ref: ${esc(x.referenceStatus)}</span>` : ''; }
   function rmCard(it) {
     const br = branchName(it);
     const r = dsRow(it.fid);
-    const why = !r ? '' : r.state === 'wait' ? r.label.replace(/^Wait: /, '') : (r.state === 'go' || r.state === 'go-gated') ? (r.pairClash && r.pairClash.length ? 'not together with ' + r.pairClash.join(', ') : 'parallel-safe with running tickets') : '';
+    const why = !r ? '' : r.state === 'wait' ? r.label.replace(/^Wait: /, '') : r.state === 'blocked' ? r.label.replace(/^Blocked: /, '') : (r.state === 'go' || r.state === 'go-gated') ? (r.pairClash && r.pairClash.length ? 'not together with ' + r.pairClash.join(', ') : 'parallel-safe with running tickets') : '';
     return `<a class="tcard" href="${esc(it.link)}">
-      <div class="tcard-top">${it.fid ? `<code class="fid">${esc(it.fid)}</code>` : '<span class="fid fid--concept">concept</span>'}${r ? `<span class="badge ${RUN_BADGE[r.state]}" style="font-size:.58rem">${esc(RUN_LBL[r.state])}</span>` : ''}<span class="vbadge">${esc(it.version || '')}</span>${it.seq ? `<span class="vbadge" title="Development sequence">#${it.seq}</span>` : ''}${it.wave ? `<span class="vbadge">w${it.wave}</span>` : ''}${it.type ? `<span class="badge ${TYPE_BADGE[it.type] || 'b-low'}" style="font-size:.58rem">${esc(it.type)}</span>` : ''}${it.reopened ? '<span class="badge b-open" style="font-size:.58rem">reopened</span>' : ''}</div>
+      <div class="tcard-top">${it.fid ? `<code class="fid">${esc(it.fid)}</code>` : '<span class="fid fid--concept">concept</span>'}${r ? `<span class="badge ${RUN_BADGE[r.state]}" style="font-size:.58rem">${esc(RUN_LBL[r.state])}</span>` : ''}<span class="vbadge">${esc(it.version || '')}</span>${it.seq ? `<span class="vbadge" title="Development sequence">#${it.seq}</span>` : ''}${it.wave ? `<span class="vbadge">w${it.wave}</span>` : ''}${it.type ? `<span class="badge ${TYPE_BADGE[it.type] || 'b-low'}" style="font-size:.58rem">${esc(it.type)}</span>` : ''}${it.reopened ? '<span class="badge b-open" style="font-size:.58rem">reopened</span>' : ''}${refChip(it)}${r && r.state !== 'done' && r.questions && r.questions.length ? `<span class="badge b-open" style="font-size:.58rem" title="Open P0 questions: ${esc(r.questions.join(', '))}">${r.questions.length} P0 Q</span>` : ''}</div>
       <h4>${esc(it.title)}</h4>
       ${why ? `<p class="tcard-why">${esc(why)}</p>` : (it.summary ? `<p>${esc(it.summary)}</p>` : '')}
       <div class="meta">${it.party ? `<span class="party-chip p-${esc(it.party)}"${partyStyle(it.party)}>${esc(partyLabel(it.party))}</span>` : ''}${it.reported ? `<span class="rm-lbl" style="margin-left:6px">${esc(it.reported)}</span>` : ''}</div>
@@ -575,7 +596,7 @@
     const f = DATA.features || [];
     const keys = Object.keys(parties()).length ? Object.keys(parties()) : Array.from(new Set(f.map(x => x.party).filter(Boolean)));
     const partiesList = ['all', ...keys];
-    const active = (sessionStorage.getItem('tb-feat-filter') || 'all');
+    const active = (sessionStorage.getItem('tb-feat-filter') || (window.__BRAND || {}).defaultParty || 'all');
     const list = active === 'all' ? f : f.filter(x => x.party === active);
     $('#content').innerHTML = `
       <div class="page-head"><p class="eyebrow">Features</p><h1>Feature dossiers</h1>
@@ -586,7 +607,7 @@
           <div class="card__top"><span class="party-chip p-${esc(x.party)}"${partyStyle(x.party)}>${esc(partyLabel(x.party))}</span></div>
           <h3>${esc(x.title)}</h3>
           <p>${esc(x.summary || '')}</p>
-          <div class="meta" style="margin-top:12px;display:flex;gap:6px;flex-wrap:wrap">${statusBadge(x.status)}${x.milestone ? `<span class="badge b-new">${esc(x.milestone)}</span>` : ''}</div>
+          <div class="meta" style="margin-top:12px;display:flex;gap:6px;flex-wrap:wrap">${statusBadge(x.status)}${refChip(x)}${x.milestone ? `<span class="badge b-new">${esc(x.milestone)}</span>` : ''}</div>
         </a>`).join('') || '<p>No features in this group.</p>'}
       </div>`;
     $$('.chip').forEach(c => c.addEventListener('click', () => { sessionStorage.setItem('tb-feat-filter', c.dataset.p); renderFeatures(); }));
@@ -601,7 +622,7 @@
       <div class="breadcrumb"><a href="#/features">Features</a> › ${esc(x.title)}</div>
       <div class="page-head">
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
-          <span class="party-chip p-${esc(x.party)}"${partyStyle(x.party)}>${esc(partyLabel(x.party))}</span>${statusBadge(x.status)}
+          <span class="party-chip p-${esc(x.party)}"${partyStyle(x.party)}>${esc(partyLabel(x.party))}</span>${statusBadge(x.status)}${refChip(x)}
           ${x.milestone ? `<span class="badge b-new">${esc(x.milestone)}</span>` : ''}${x.priority ? `<span class="badge b-low">${esc(x.priority)}</span>` : ''}
         </div>
         <h1>${esc(x.title)}</h1><p class="lede">${esc(x.summary || '')}</p>
@@ -829,7 +850,7 @@
   }
 
   /* ---------- USER STORIES (content/stories/<feature>.json, merged by build.mjs) ---------- */
-  const US = { q: '', persona: 'all', phase: 'all', status: 'all', priority: 'all', feature: 'all' };
+  const US = { q: '', area: null, persona: 'all', phase: 'all', status: 'all', priority: 'all', feature: 'all' };
   const US_BADGE = { done: 'b-fixed', partial: 'b-progress', todo: 'b-backlog' };
   function allStories() { return (DATA.features || []).flatMap(f => (f.stories || []).map(x => ({ ...x, f }))); }
   function storyLine(x) { return `As ${x.asA || 'a user'}, I want ${x.iWant}${x.soThat ? `, so that ${x.soThat}` : ''}.`; }
@@ -844,12 +865,15 @@
       <td>${(x.tests || []).map(t => `<code>${esc(t)}</code>`).join(' ')}</td></tr>`).join('');
   }
   function renderStories() {
-    const all = allStories();
+    if (US.area === null) US.area = (window.__BRAND || {}).defaultParty || 'all';
+    const everything = allStories();
+    const all = US.area === 'all' ? everything : everything.filter(x => x.f.party === US.area);
     const uniq = k => Array.from(new Set(all.map(k).filter(Boolean))).sort();
     const sel = (id, cur, vals, lbl) => `<select id="${id}" class="rm-select"><option value="all">${lbl}</option>${vals.map(v => `<option value="${esc(v)}" ${cur === v ? 'selected' : ''}>${esc(v)}</option>`).join('')}</select>`;
     const n = st => all.filter(x => (x.status || 'todo') === st).length;
-    const feats = (DATA.features || []).filter(f => (f.stories || []).length);
-    const missing = (DATA.features || []).filter(f => !(f.stories || []).length);
+    const inArea = (DATA.features || []).filter(f => US.area === 'all' || f.party === US.area);
+    const feats = inArea.filter(f => (f.stories || []).length);
+    const missing = inArea.filter(f => !(f.stories || []).length);
     $('#content').innerHTML = `
       <div class="page-head"><p class="eyebrow">Product</p><h1>User stories</h1>
       <p class="lede">Every user story across the roadmap, with its persona, acceptance criteria, phase, status and the test cases that prove it. Each feature's stories also appear on its dossier.</p></div>
@@ -858,10 +882,11 @@
         <div class="stat"><div class="n" style="color:var(--tb-success)">${n('done')}</div><div class="l">Done</div>${bar(all.length ? Math.round(n('done') / all.length * 100) : 0)}</div>
         <div class="stat"><div class="n" style="color:var(--tb-warning)">${n('partial')}</div><div class="l">Partial</div></div>
         <div class="stat"><div class="n">${n('todo')}</div><div class="l">To do</div></div>
-        <div class="stat"><div class="n">${feats.length}/${(DATA.features || []).length}</div><div class="l">Features with stories</div></div>
+        <div class="stat"><div class="n">${feats.length}/${inArea.length}</div><div class="l">Features with stories</div></div>
       </div>
       ${missing.length ? `<div class="callout warn"><b>${missing.length} features have no stories yet:</b> ${missing.map(f => `<a href="#/feature/${esc(f.id)}"><code>${esc(f.fid || f.id)}</code></a>`).join(' ')}</div>` : ''}
       <div class="rm-toolbar rm-compact"><div class="rm-row">
+        <select id="usArea" class="rm-select"><option value="all">All areas</option>${Array.from(new Set(everything.map(x => x.f.party))).map(p => `<option value="${esc(p)}" ${US.area === p ? 'selected' : ''}>${esc(partyLabel(p))}</option>`).join('')}</select>
         ${sel('usPersona', US.persona, uniq(x => x.persona), 'All personas')}
         ${sel('usPhase', US.phase, uniq(x => x.phase || x.f.version), 'All phases')}
         ${sel('usStatus', US.status, ['todo', 'partial', 'done'], 'All statuses')}
@@ -881,6 +906,7 @@
       $('#usBody').innerHTML = storyRows(list) || '<tr><td colspan="8" class="hint">No stories match.</td></tr>';
     };
     paint();
+    $('#usArea').addEventListener('change', e => { US.area = e.target.value; US.feature = 'all'; renderStories(); });
     [['usPersona', 'persona'], ['usPhase', 'phase'], ['usStatus', 'status'], ['usPriority', 'priority'], ['usFeature', 'feature']].forEach(([id, k]) => $('#' + id).addEventListener('change', e => { US[k] = e.target.value; paint(); }));
     const si = $('#usSearch'); si.addEventListener('input', () => { US.q = si.value; paint(); });
   }
@@ -1274,6 +1300,107 @@
     input.addEventListener('focus', () => { if (input.value) run(input.value); });
     document.addEventListener('click', e => { if (!e.target.closest('.topbar__search')) box.hidden = true; });
     box.addEventListener('click', () => { box.hidden = true; input.value = ''; });
+  }
+
+
+  /* ---------- EXPORT PDF ----------
+     Uses the browser's print to PDF (text stays selectable, links stay clickable). Before printing: every collapsed
+     section is opened, a header with the hub, page and date is filled, and the document title becomes the file name.
+     Everything is restored afterwards. The print stylesheet in hub.css hides navigation and forces a light theme. */
+  function initExport() {
+    const btn = $('#exportPdf'); if (!btn) return;
+    let opened = [], prevTitle = '', header = null;
+    const localDate = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+    const pageTitle = () => (($('#content h1') || {}).textContent || 'Page').trim();
+    const fileBase = () => `${(window.__BRAND || {}).name || 'Hub'} - ${pageTitle()} - ${localDate()}`.replace(/[\\/:*?"<>|]+/g, ' ');
+    const prepare = () => {
+      const c = $('#content');
+      opened = $$('details:not([open])', c); opened.forEach(d => d.setAttribute('open', ''));
+      $$('.print-header', c).forEach(x => x.remove()); // idempotent: some engines fire beforeprint more than once
+      header = document.createElement('div'); header.className = 'print-header';
+      header.textContent = `${(window.__BRAND || {}).name || 'Engineering'} Engineering Hub · ${pageTitle()} · ${localDate()} · Confidential`;
+      c.prepend(header);
+      // Mockups and embedded lessons: load now (lazy frames off screen would print empty) and size to their content.
+      $$('iframe', c).forEach(f => { f.loading = 'eager'; try { const h = f.contentDocument.documentElement.scrollHeight; if (h) f.style.height = h + 'px'; } catch (_) {} });
+      prevTitle = document.title; document.title = fileBase();
+      runMermaid(c);
+    };
+    const restore = () => { opened.forEach(d => d.removeAttribute('open')); opened = []; if (header) header.remove(); header = null; if (prevTitle) document.title = prevTitle; };
+    window.addEventListener('beforeprint', prepare);
+    window.addEventListener('afterprint', restore);
+    const loadScript = src => new Promise((ok, no) => { if ($(`script[src="${src}"]`)) return ok(); const t = document.createElement('script'); t.src = src; t.onload = ok; t.onerror = no; document.head.appendChild(t); });
+    const menu = document.createElement('div'); menu.className = 'export-menu'; menu.hidden = true;
+    menu.innerHTML = `<button type="button" data-x="print">PDF: print or save as PDF</button><button type="button" data-x="pdf">PDF: download file</button><button type="button" data-x="xlsx">Excel: download .xlsx</button><p class="hint" id="xHint"></p>`;
+    btn.after(menu);
+    btn.addEventListener('click', e => { e.stopPropagation(); const rows = exportRows(); $('[data-x="xlsx"]', menu).disabled = !rows; $('#xHint').textContent = rows ? `${rows.rows.length} rows in Excel` : 'No table data on this page for Excel'; menu.hidden = !menu.hidden; });
+    document.addEventListener('click', e => { if (!e.target.closest('.export-menu')) menu.hidden = true; });
+    menu.addEventListener('click', async e => {
+      const x = e.target.closest('[data-x]'); if (!x) return; menu.hidden = true;
+      $$('#content iframe').forEach(f => { f.loading = 'eager'; });
+      if (x.dataset.x === 'print') { await new Promise(r => setTimeout(r, 400)); window.print(); return; }
+      if (x.dataset.x === 'pdf') {
+        // A real file download, for browsers and embedded views where the print dialog is not available.
+        await loadScript('https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js');
+        await new Promise(r => setTimeout(r, 400)); prepare(); document.documentElement.classList.add('pdf-export');
+        // Render a copy on a clean A4-width sheet at the top left: capturing the page in place would keep the sidebar
+        // offset and the column width. iframes cannot be drawn by the canvas engine, so they become a short note.
+        const sheet = document.createElement('div'); sheet.className = 'pdf-sheet';
+        sheet.innerHTML = $('#content').innerHTML;
+        $$('iframe', sheet).forEach(f => { const n = document.createElement('p'); n.className = 'hint'; n.textContent = '[Mockup or embedded page: open it in the hub, or use "PDF: print or save" to include it.]'; f.replaceWith(n); });
+        // html2pdf clones the sheet into its own container, so it is not added to the page (no flash, no layout shift).
+        try { await window.html2pdf().set({ margin: [10, 10, 12, 10], filename: fileBase() + '.pdf', image: { type: 'jpeg', quality: 0.92 },
+          html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' }, jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+          pagebreak: { mode: ['css', 'legacy'], avoid: ['tr', '.stat', '.tcard', '.card', 'svg', 'img'] } }).from(sheet).save(); }
+        finally { document.documentElement.classList.remove('pdf-export'); restore(); }
+        return;
+      }
+      if (x.dataset.x === 'xlsx') {
+        const data = exportRows(); if (!data) return;
+        await loadScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js');
+        const wb = window.XLSX.utils.book_new();
+        (data.sheets || [{ name: data.name, rows: data.rows }]).forEach(sh => {
+          const ws = window.XLSX.utils.json_to_sheet(sh.rows.length ? sh.rows : [{ note: 'No rows' }]);
+          const keys = Object.keys(sh.rows[0] || { note: '' });
+          ws['!cols'] = keys.map(k => ({ wch: Math.min(60, Math.max(10, k.length + 2, ...sh.rows.slice(0, 200).map(r => String(r[k] == null ? '' : r[k]).length * 0.6))) }));
+          window.XLSX.utils.book_append_sheet(wb, ws, sh.name.slice(0, 31));
+        });
+        window.XLSX.writeFile(wb, fileBase() + '.xlsx');
+      }
+    });
+  }
+
+  /* Excel rows for the current page, from the data (not the screen), so filters never hide a row. */
+  function exportRows() {
+    const [key, ...rest] = location.hash.replace(/^#\//, '').split('/'); const arg = rest.join('/');
+    const j = a => (a || []).join(', ');
+    const F = DATA.features || [];
+    const feat = f => ({ FID: f.fid || '', Feature: f.title, Area: partyLabel(f.party), Version: f.version || '', Wave: f.wave ?? '', Seq: f.seq ?? '',
+      Stage: (((DATA.lifecycle || {}).stages || []).find(s => s.key === f.lifecycle) || {}).title || f.lifecycle || '', Status: f.status || '',
+      Reference: f.referenceStatus || '', 'Depends on': j(f.dependsOn), 'Code areas': j(f.repos), Summary: f.summary || '',
+      Branch: f.fid ? branchName(f) : '', 'Why here': f.seqNote || '' });
+    const story = (x, f) => ({ ID: x.id, FID: f.fid || '', Feature: f.title, Persona: x.persona || '', Story: storyLine(x), Acceptance: (x.acceptance || []).join('\n'),
+      Priority: x.priority || '', Phase: x.phase || '', Status: x.status || '', Tests: j(x.tests) });
+    if (key === 'questions') { const m = qmarks(); return { name: 'Questions', rows: (DATA.questions || []).map(x => ({ ID: x.id, 'Ask who': x.askWho || '', Question: x.question,
+      Priority: x.priority || '', Status: qState(x, m), Category: x.category || '', 'Why it matters': x.why || '', 'If yes': x.ifYes || '', 'If no': x.ifNo || '',
+      Blocks: j(x.blocks), Answer: x.answer || (m[x.id] && m[x.id].note) || '', Answered: x.answeredOn || (m[x.id] && m[x.id].on) || '', Source: x.source || '', Raised: x.raised || '' })) }; }
+    if (key === 'stories') { const rows = F.flatMap(f => (f.stories || []).map(x => story(x, f))); return { name: 'User stories', rows }; }
+    if (key === 'roadmap' || key === 'features' || key === 'dispatch' || key === 'traceability') {
+      const st = dispatchState(); const by = Object.fromEntries(st.rows.map(r => [r.f.fid, r]));
+      return { name: 'Roadmap', rows: F.map(f => ({ ...feat(f), 'Run state': by[f.fid] ? RUN_LBL[by[f.fid].state] : '', 'Blocked by': by[f.fid] ? j(by[f.fid].unmet) : '' })) };
+    }
+    if (key === 'feature') { const f = F.find(x => x.id === arg); if (!f) return null;
+      return { name: f.fid || f.id, rows: (f.stories || []).map(x => story(x, f)), sheets: [{ name: 'Feature', rows: [feat(f)] }, { name: 'User stories', rows: (f.stories || []).map(x => story(x, f)) }] }; }
+    if (key === 'gaps') return { name: 'Gaps', rows: (DATA.gaps || []).map(g => ({ ID: g.id, Title: g.title, Area: g.area || '', Severity: g.severity || '', Status: g.status || '', Summary: g.summary || '', Reference: g.ref || '' })) };
+    if (key === 'gtm') return { name: 'Launch readiness', rows: (DATA.gtm || []).map(g => ({ Workstream: g.workstream || '', Action: g.title, Status: g.status || '', Priority: g.priority || '', Summary: g.summary || '', Reference: g.ref || '' })) };
+    if (key === 'adr') return { name: 'Decisions', rows: (DATA.adrs || []).map(a => ({ ID: a.id, Decision: a.title, Status: a.status || '', Date: a.date || '', Summary: a.summary || '', File: a.file || '' })) };
+    if (key === 'security' || key === 'performance') return { name: key === 'security' ? 'Security' : 'Performance', rows: (DATA[key] || []).map(x => ({ Finding: x.title, Severity: x.severity || '', Status: x.status || '', Summary: x.summary || '', Reference: x.ref || '' })) };
+    if (key === 'vendors') { const V = DATA.vendors || []; const one = arg ? V.filter(v => v.id === arg) : V;
+      return { name: 'Third parties', rows: one.map(v => ({ Name: v.name, Category: v.category || '', Position: v.position || '', Status: v.status || '', Role: v.role || '', 'Our position': v.positionWhy || '', Capabilities: j(v.capabilities), Strengths: (v.strengths || []).join('\n'), Risks: (v.risks || []).join('\n'), Questions: (v.questions || []).join('\n'), Conflicts: (v.conflicts || []).join('\n'), Decisions: j(v.decisions), Features: j(v.features) })),
+        sheets: [{ name: 'Third parties', rows: one.map(v => ({ Name: v.name, Category: v.category || '', Position: v.position || '', Status: v.status || '', Role: v.role || '', 'Our position': v.positionWhy || '' })) },
+          { name: 'Questions to ask', rows: one.flatMap(v => (v.questions || []).map(q => ({ 'Third party': v.name, Question: q }))) },
+          { name: 'Conflicts', rows: one.flatMap(v => (v.conflicts || []).map(q => ({ 'Third party': v.name, Conflict: q }))) }] }; }
+    if (key === 'kb') return { name: 'Knowledge base', rows: (DATA.kb || []).map(k => ({ Group: k.group || '', Title: k.title, Version: k.version || '', Path: k.path, Summary: k.summary || '' })) };
+    return null;
   }
 
   /* ---------- mobile nav ---------- */
