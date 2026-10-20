@@ -220,7 +220,7 @@ const REPOS = Array.isArray(brand.repos) && brand.repos.length
 const repoBase = brand.repoBase || '';
 const headCache = {};
 const repoHead = r => { if (r in headCache) return headCache[r]; let h = ''; try { h = execSync(`git -C "${join(CODE, r)}" rev-parse --short HEAD`, { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim(); } catch (_) {} return headCache[r] = h; };
-const refRe = new RegExp('(' + REPOS.join('|') + ')/[A-Za-z0-9._/-]+\\.(?:vue|tsx|ts|jsx|mjs|json|js|sql)(?![A-Za-z0-9])', 'g');
+const refRe = new RegExp('(' + REPOS.join('|') + ')/(?:[A-Za-z0-9._/-]+\\.(?:vue|tsx|ts|jsx|mjs|json|js|sql|kt|kts|java|py|go|swift|dart|yml|yaml|toml|gradle)|(?:[A-Za-z0-9._-]+/)*Dockerfile)(?![A-Za-z0-9])', 'g');
 const traceability = {};
 const drift = [];
 if (existsSync(CODE) && REPOS.length) {
