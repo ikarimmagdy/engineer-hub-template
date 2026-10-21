@@ -53,11 +53,12 @@ if (pl && !brand.parties) {
 }
 
 // sync.sh: deploy target defaults baked into the old script
-const bucket = (sync.match(/HUB_BUCKET:=([^}]+)\}/) || [])[1];
+// (only literal defaults: a v3 sync.sh reads brand.json and has nothing to migrate)
+const bucket = (sync.match(/HUB_BUCKET:=([^}$]+)\}/) || [])[1];
 if (bucket && !brand.deploy) {
   const d = { bucket };
   const pre = (sync.match(/s3:\/\/\$HUB_BUCKET\/([\w./-]+)"/) || [])[1]; if (pre) d.prefix = pre;
-  const cf = (sync.match(/HUB_CF:=([^}]+)\}/) || [])[1]; if (cf) d.cloudfront = cf;
+  const cf = (sync.match(/HUB_CF:=([^}$]+)\}/) || [])[1]; if (cf) d.cloudfront = cf;
   const url = (sync.match(/(https:\/\/[^\s"]+)/) || [])[1]; if (url) d.url = url;
   add('deploy', d);
 }
