@@ -61,7 +61,8 @@ def main():
             clash = [f"{h} ({', '.join(xs)})" for h, xs in hold.items()]
             if unmet: state, why = 'wait', 'needs ' + ', '.join(unmet) + ' dev-complete'
             elif clash: state, why = 'wait', 'repos in use by ' + '; '.join(clash)
-            elif p0(f['fid']): state, why = 'blocked', 'open P0 question ' + ', '.join(p0(f['fid']))
+            elif [q for q in p0(f['fid']) if q not in (f.get('startsWithout') or [])]:
+                state, why = 'blocked', 'open P0 question ' + ', '.join(q for q in p0(f['fid']) if q not in (f.get('startsWithout') or []))
             elif f.get('gate') == 'cost-approval': state, why = 'go', 'stops at cost approval'
             else: state, why = 'go', ''
         rows.append(dict(fid=f['fid'], seq=f.get('seq'), wave=f.get('wave'), title=f['title'], stage=st, state=state, why=why, repos=repos))

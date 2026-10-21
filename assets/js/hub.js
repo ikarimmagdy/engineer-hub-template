@@ -429,6 +429,9 @@
     const tickets = F.filter(f => f.seq || (f.repos && f.repos.length));
     // Open P0 questions that name a ticket in "blocks": they stop it once its dependencies are built.
     const p0 = fid => (DATA.questions || []).filter(q => (q.status || 'open') === 'open' && q.priority === 'P0' && (q.blocks || []).includes(fid)).map(q => q.id);
+    // A feature may list questions it can start without (e.g. built against a mock until the answer comes): they stay
+    // visible as P0 chips to chase but do not block the start.
+    const stoppers = f => p0(f.fid).filter(id => !(f.startsWithout || []).includes(id));
     const running = F.filter(f => f.lifecycle === 'in-progress');
     const held = {};
     running.forEach(f => (f.repos || []).forEach(r => { (held[r] = held[r] || []).push(f.fid); }));
@@ -448,7 +451,7 @@
         r.unmet = unmet; r.clashWith = clash;
         if (unmet.length) { r.state = 'wait'; r.label = 'Wait: needs ' + unmet.join(', ') + ' dev-complete'; }
         else if (clash.length) { r.state = 'wait'; r.label = 'Wait: repos in use by ' + clash.join('; '); }
-        else if (r.questions.length) { r.state = 'blocked'; r.label = 'Blocked: open P0 question ' + r.questions.join(', '); }
+        else if (stoppers(f).length) { r.state = 'blocked'; r.label = 'Blocked: open P0 question ' + stoppers(f).join(', '); }
         else if (f.gate === 'cost-approval') { r.state = 'go-gated'; r.label = 'Yes, start now (stops at cost approval)'; }
         else { r.state = 'go'; r.label = 'Yes, start now'; }
       }
