@@ -1,8 +1,9 @@
 /* ============================================================
-   Engineering Hub — single-page engine
+   Engineering Hub, single-page engine (template v3).
    Content is DATA: manifest.json + markdown under content/.
-   Edit the files, re-sync to S3, the hub updates. No rebuild
-   of this file is needed to change content.
+   Everything project-specific comes from content/brand.json and
+   content/*; this file is replaced by tools/hub-update.sh, so
+   never edit it inside a hub. Fix the template instead.
    ============================================================ */
 (() => {
   'use strict';
@@ -11,6 +12,8 @@
   const SKEY = 'tb-hub-ok';
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+  // a field that may be written as one string or a list
+  const arr = v => Array.isArray(v) ? v : (v == null || v === '' ? [] : [v]);
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
   const ICONS = {
@@ -72,7 +75,16 @@
       const next = isDark ? 'light' : 'dark';
       document.documentElement.setAttribute('data-theme', next);
       try { localStorage.setItem('tb-hub-theme', next); } catch (_) {}
+      syncLogo();
     });
+    matchMedia('(prefers-color-scheme:dark)').addEventListener?.('change', syncLogo);
+  }
+  // brand.json "logoDark": a reversed logo for dark mode
+  function syncLogo() {
+    const logo = $('.brand-logo'); if (!logo || !logo.dataset.dark) return;
+    const cur = document.documentElement.getAttribute('data-theme');
+    const dark = cur === 'dark' || (!cur && matchMedia('(prefers-color-scheme:dark)').matches);
+    logo.src = dark ? logo.dataset.dark : logo.dataset.light;
   }
   /* ---------- brand (template config) ---------- */
   async function applyBrand() {
@@ -85,7 +97,8 @@
     if (b.font) r.setProperty('--font', b.font);
     if (b.passcode) PASSCODE = b.passcode;
     if (b.name) { document.title = `${b.name} Engineering Hub`; const el = $('.brand-sub'); if (el) el.textContent = `${b.name} Engineering Hub`; }
-    const logo = $('.brand-logo'); if (logo && b.logo) logo.src = b.logo;
+    const logo = $('.brand-logo'); if (logo && b.logo && !logo.dataset.nologo) { logo.src = b.logo; logo.dataset.light = b.logo; if (b.logoDark) logo.dataset.dark = b.logoDark; syncLogo(); }
+    if (b.roadmapSort) RM.sort = b.roadmapSort;
     const gm = $('.gate__card h1'); if (gm && b.name) gm.textContent = `${b.name} Engineering Hub`;
     const gmk = $('.gate__mark svg rect'); if (gmk && b.primary) gmk.setAttribute('fill', b.primary);
     window.__BRAND = b;
@@ -106,7 +119,7 @@
       $('#content').innerHTML = `<div class="callout danger"><b>Could not load content.</b> manifest.json failed to load. If you are opening the file directly, serve the folder over HTTP (for example <code>python3 -m http.server</code>) so fetch works.</div>`;
       return;
     }
-    if (window.mermaid) mermaid.initialize({ startOnLoad: false, theme: mermaidTheme(), securityLevel: 'loose', flowchart: { useMaxWidth: true }, themeVariables: { fontFamily: 'var(--font), Montserrat, sans-serif' } });
+    if (window.mermaid) mermaid.initialize({ startOnLoad: false, theme: mermaidTheme(), securityLevel: 'loose', flowchart: { useMaxWidth: true }, themeVariables: { fontFamily: (getComputedStyle(document.documentElement).getPropertyValue('--font') || '').trim() || 'system-ui, sans-serif' } });
     if (window.marked) marked.setOptions({ breaks: false, gfm: true });
     buildNav();
     initSearch();
@@ -127,9 +140,11 @@
       '#/vendors': (DATA.vendors || []).length,
       '#/questions': (DATA.questions || []).filter(x => (x.status || 'open') === 'open').length,
       '#/stories': (DATA.features || []).reduce((n, f) => n + (f.stories || []).length, 0),
-      '#/learn': ((DATA.learning || {}).courses || []).reduce((n, c) => n + (c.lessons || []).length, 0)
+      '#/learn': ((DATA.learning || {}).courses || []).reduce((n, c) => n + (c.lessons || []).length, 0),
+      '#/releases': ((DATA.releases || {}).releases || []).length
     };
-    $('#sidebar').innerHTML = (DATA.nav || []).map(g => `
+    const nav = (DATA.nav || []).map(g => ({ ...g, items: (g.items || []).filter(it => moduleOn(routeKey(it.route))) })).filter(g => g.items.length);
+    $('#sidebar').innerHTML = nav.map(g => `
       <div class="nav-group">
         <div class="nav-group__label">${esc(g.label)}</div>
         ${g.items.map(it => `<a class="nav-link" data-route="${esc(it.route)}" href="${esc(it.route)}">
@@ -143,6 +158,25 @@
     $$('.nav-link').forEach(a => a.classList.toggle('active', a.getAttribute('data-route') === base));
   }
 
+  /* ---------- optional modules ----------
+     brand.json "modules": { "learn": false, "releases": true, ... } switches a page on or off.
+     Without a flag, a data-driven module is on when its data exists. */
+  const routeKey = r => String(r || '').replace(/^#\//, '').split('/')[0];
+  const MODULE_DATA = {
+    learn: () => ((DATA.learning || {}).courses || []).length, course: () => ((DATA.learning || {}).courses || []).length, lesson: () => ((DATA.learning || {}).courses || []).length,
+    releases: () => ((DATA.releases || {}).releases || []).length,
+    dispatch: () => (DATA.features || []).some(f => f.fid),
+    stories: () => (DATA.features || []).some(f => (f.stories || []).length),
+    vendors: () => (DATA.vendors || []).length || (DATA.sections || []).some(s => s.id === 'third-parties'),
+    questions: () => (DATA.questions || []).length
+  };
+  function moduleOn(key) {
+    const m = (window.__BRAND || {}).modules || {};
+    if (key in m) return m[key] !== false;
+    if (key === 'course' || key === 'lesson') return moduleOn('learn');
+    return MODULE_DATA[key] ? !!MODULE_DATA[key]() : true;
+  }
+
   /* ---------- router ---------- */
   const ROUTES = {
     overview: renderOverview, roadmap: renderRoadmap, features: renderFeatures,
@@ -150,14 +184,15 @@
     infra: md('infra'), cicd: md('cicd'), adr: renderADR, gaps: renderGaps,
     security: renderSecurity, performance: renderPerformance, observability: md('observability'),
     kb: renderKB, doc: renderDoc, gtm: renderGTM, traceability: renderTrace, accounts: renderAccounts, changelog: renderChangelog, dispatch: renderDispatch, stories: renderStories, vendors: renderVendors, questions: renderQuestions,
-    learn: renderLearn, course: renderCourse, lesson: renderLesson
+    learn: renderLearn, course: renderCourse, lesson: renderLesson, releases: renderReleases
   };
   async function route() {
     if (!location.hash || location.hash === '#') { location.hash = '#/overview'; return; }
     const parts = location.hash.replace(/^#\//, '').split('/');
     const key = parts[0] || 'overview';
     const arg = parts.slice(1).join('/');
-    const fn = ROUTES[key] || renderOverview;
+    // any section in sections.json without its own renderer (e.g. a Streams or Screens page) renders as markdown
+    const fn = (!moduleOn(key) && key !== 'overview') ? renderOverview : (ROUTES[key] || ((DATA && (DATA.sections || []).some(s => s.id === key)) ? md(key) : renderOverview));
     setActive();
     $('#content').classList.toggle('main--wide', key === 'roadmap' || key === 'dispatch');
     $('#content').scrollTop = 0; window.scrollTo(0, 0);
@@ -188,7 +223,10 @@
     if (!window.mermaid) return;
     const nodes = $$('.mermaid', scope).filter(n => !n.dataset.done);
     if (!nodes.length) return;
-    try { mermaid.run({ nodes }); nodes.forEach(n => n.dataset.done = '1'); } catch (e) { /* ignore */ }
+    nodes.forEach(n => n.dataset.done = '1');
+    // Mermaid sizes boxes by measuring text, so render only after the web font is ready or labels get clipped.
+    const go = () => { try { mermaid.run({ nodes }); } catch (e) { /* ignore */ } };
+    (document.fonts && document.fonts.ready) ? document.fonts.ready.then(go) : go();
   }
   function md(sectionId) {
     return async () => {
@@ -315,7 +353,7 @@
             <tr><td><b>Depends on</b></td><td>${(r.f.dependsOn || []).map(d => `<code>${esc(d)}</code>`).join(' ') || 'none'}</td></tr>
           </tbody></table>
           <p style="margin:10px 0 4px"><b>Fix record</b></p>
-          ${fixed ? `<table><thead><tr><th>Date</th><th>What was fixed</th><th>Closes</th><th>Commit</th><th>Env</th><th>Verified by</th></tr></thead><tbody>${r.fixes.map(x => `<tr><td>${esc(x.date || '')}</td><td>${esc(x.what || '')}</td><td>${(x.closes || []).map(c => `<code>${esc(c)}</code>`).join(' ')}</td><td><code>${esc(x.commit || '')}</code></td><td>${esc(x.env || '')}</td><td>${esc(x.verifiedBy || '')}</td></tr>`).join('')}</tbody></table>` : '<p class="hint">None yet.</p>'}
+          ${fixed ? `<table><thead><tr><th>Date</th><th>What was fixed</th><th>Closes</th><th>Commit</th><th>Env</th><th>Verified by</th></tr></thead><tbody>${r.fixes.map(x => `<tr><td>${esc(x.date || '')}</td><td>${esc(x.what || '')}</td><td>${arr(x.closes).map(c => `<code>${esc(c)}</code>`).join(' ')}</td><td><code>${esc(x.commit || '')}</code></td><td>${esc(x.env || '')}</td><td>${esc(x.verifiedBy || '')}</td></tr>`).join('')}</tbody></table>` : '<p class="hint">None yet.</p>'}
           <p style="margin-top:10px"><a href="#/feature/${esc(r.feature)}">Open the full dossier and its Claude prompt →</a></p>
         </div>
       </details>`;
@@ -331,8 +369,51 @@
       </tbody></table>` : '<p class="hint">No sequenced items.</p>';
     const fixes = fbRows().flatMap(r => r.fixes.map(x => ({ ...x, fid: r.fid, fb: r.id, feature: r.feature }))).sort((a, b) => (b.date || '').localeCompare(a.date || ''));
     $('#fbFixes').innerHTML = `<table><thead><tr><th>Date</th><th>What was fixed</th><th>For</th><th>Closes</th><th>Commit</th><th>Env</th><th>Verified by</th></tr></thead><tbody>
-      ${fixes.map(x => `<tr><td>${esc(x.date || '')}</td><td>${esc(x.what || '')}</td><td><a href="#/feature/${esc(x.feature)}"><code>${esc(x.fid)}</code></a> <code>${esc(x.fb)}</code></td><td>${(x.closes || []).map(c => `<code>${esc(c)}</code>`).join(' ')}</td><td><code>${esc(x.commit || '')}</code></td><td>${esc(x.env || '')}</td><td>${esc(x.verifiedBy || '')}</td></tr>`).join('') || '<tr><td colspan="7" class="hint">No fixes recorded yet.</td></tr>'}
+      ${fixes.map(x => `<tr><td>${esc(x.date || '')}</td><td>${esc(x.what || '')}</td><td><a href="#/feature/${esc(x.feature)}"><code>${esc(x.fid)}</code></a> <code>${esc(x.fb)}</code></td><td>${arr(x.closes).map(c => `<code>${esc(c)}</code>`).join(' ')}</td><td><code>${esc(x.commit || '')}</code></td><td>${esc(x.env || '')}</td><td>${esc(x.verifiedBy || '')}</td></tr>`).join('') || '<tr><td colspan="7" class="hint">No fixes recorded yet.</td></tr>'}
       </tbody></table>`;
+  }
+
+  /* ---------- RELEASES: content/data/releases.json { releases: [{ id, date, env, title, tickets, notes, platforms, build }] } ---------- */
+  const RL = { q: '', env: 'all' };
+  function renderReleases() {
+    const rel = ((DATA.releases || {}).releases || []).slice().reverse();
+    const F = Object.fromEntries((DATA.features || []).map(f => [f.fid, f]));
+    const envs = ['all', ...new Set(rel.map(r => r.env).filter(Boolean))];
+    const fidHint = Array.from(new Set((DATA.features || []).map(f => (f.fid || '').replace(/\d+$/, '')).filter(Boolean)))[0];
+    $('#content').innerHTML = `
+      <div class="rm-head"><h1>Releases</h1><span class="hint">What has been deployed, newest first. Each ticket card also shows its release.</span></div>
+      <div class="rm-toolbar rm-compact"><div class="rm-row">
+        <select id="rlEnv" class="rm-select">${envs.map(e => `<option value="${esc(e)}" ${RL.env === e ? 'selected' : ''}>${e === 'all' ? 'All environments' : esc(e)}</option>`).join('')}</select>
+        <input id="rlQ" class="rm-search" type="search" placeholder="Search release, ${fidHint ? esc(fidHint) + '###, ' : ''}text…" value="${esc(RL.q)}">
+      </div></div>
+      <div class="table-wrap"><table class="dispatch">
+        <thead><tr><th>Release</th><th>Date</th><th>Env</th><th>Platforms</th><th>Tickets</th><th>Description</th></tr></thead>
+        <tbody id="rlBody"></tbody></table></div>
+      <h2 class="fb-h2">Release notes</h2><div id="rlNotes"></div>`;
+    // platforms: [{platform, component, version, where, status}]: what shipped per platform and its version/build
+    const plats = r => r.platforms || [];
+    const tix = r => r.tickets || [];
+    const platChips = r => plats(r).length ? [...new Set(plats(r).map(p => p.platform))].map(p => `<span class="badge">${esc(p)}</span>`).join(' ') : '<span class="hint">-</span>';
+    const platTable = r => plats(r).length ? `<table style="margin-top:8px"><thead><tr><th>Platform</th><th>Component</th><th>Version / build</th><th>Where</th><th>Status</th></tr></thead><tbody>${plats(r).map(p => `<tr><td>${esc(p.platform)}</td><td>${esc(p.component || '')}</td><td><code>${esc(p.version || '')}</code></td><td>${esc(p.where || '')}</td><td>${esc(p.status || '')}</td></tr>`).join('')}</tbody></table>` : '';
+    // build: a string, or an object { component: "version / build" }
+    const buildText = b => !b ? '' : typeof b === 'string' ? esc(b) : Object.entries(b).map(([k, v]) => `<code>${esc(k)}</code> ${esc(typeof v === 'string' ? v : JSON.stringify(v))}`).join('<br>');
+    const paint = () => {
+      const q = RL.q.trim().toLowerCase();
+      const list = rel.filter(r => (RL.env === 'all' || r.env === RL.env) && (!q || [r.id, r.title, r.date, r.env, tix(r).join(' '), (r.notes || []).join(' '), JSON.stringify(r.build || ''), JSON.stringify(plats(r))].join(' ').toLowerCase().includes(q)));
+      $('#rlBody').innerHTML = list.map(r => `<tr>
+        <td><b>${esc(r.id)}</b></td><td>${esc(r.date || '')}</td><td>${r.env ? `<span class="badge b-fixed">${esc(r.env)}</span>` : ''}</td>
+        <td>${platChips(r)}</td>
+        <td>${tix(r).map(t => `<a href="#/feature/${esc((F[t] || {}).id || '')}"><code class="fid">${esc(t)}</code></a>`).join(' ')}<br><span class="hint">${tix(r).length} ticket${tix(r).length === 1 ? '' : 's'}</span></td>
+        <td><b>${esc(r.title || '')}</b></td></tr>`).join('') || '<tr><td colspan="6" class="hint">No releases match.</td></tr>';
+      $('#rlNotes').innerHTML = list.map(r => `<details class="fb-item" open><summary><code class="fid">${esc(r.id)}</code><span class="fb-title">${esc(r.title || '')}</span><span class="fb-tags"><span class="badge b-fixed">${esc(r.env || '')}</span><span class="fb-date">${esc(r.date || '')}</span></span></summary>
+        <div class="fb-body"><ul>${(r.notes || []).map(n => `<li>${esc(n)}</li>`).join('')}</ul>
+        ${platTable(r)}
+        <table><tbody>${tix(r).map(t => `<tr><td><a href="#/feature/${esc((F[t] || {}).id || '')}"><code>${esc(t)}</code></a></td><td>${esc((F[t] || {}).title || '')}</td></tr>`).join('')}</tbody></table>
+        ${r.build ? `<p class="hint" style="margin-top:8px"><b>Build:</b><br>${buildText(r.build)}</p>` : ''}</div></details>`).join('');
+    };
+    paint();
+    $('#rlEnv').addEventListener('change', e => { RL.env = e.target.value; paint(); });
+    $('#rlQ').addEventListener('input', e => { RL.q = e.target.value; paint(); });
   }
 
   /* ---------- DISPATCH: what to run next, what can run in parallel ---------- */
@@ -384,6 +465,7 @@
     const { rows, running, held } = dispatchState();
     const badge = { running: 'b-in-progress', done: 'b-fixed', wait: 'b-backlog', blocked: 'b-open', go: 'b-new', 'go-gated': 'b-high', paused: 'b-low' };
     const goNow = rows.filter(r => r.state.startsWith('go'));
+    const hasRel = rows.some(r => r.f.release);
     $('#content').innerHTML = `
       <div class="page-head"><p class="eyebrow">Delivery</p><h1>Dispatch board</h1>
       <p class="lede">Which ticket to give Claude next, in sequence. Computed live from the roadmap: a ticket can start when its dependencies are dev-complete and none of its repos is held by a ticket in progress. Run each ticket in its <b>own</b> Claude Code session opened in ${esc(cfg().workspace || 'the project root')}; the session plans and fans out its own subagents.</p></div>
@@ -392,11 +474,15 @@
         <div class="card"><h3>Start now in parallel (${goNow.length})</h3><p>${goNow.map(r => `<code>${esc(r.f.fid)}</code> ${esc(r.f.title)}${r.pairClash.length ? ` <span class="hint">(not together with ${r.pairClash.join(', ')})</span>` : ''}`).join('<br>') || 'Nothing free right now.'}</p></div>
         <div class="card"><h3>Repos locked</h3><p>${Object.entries(held).map(([k, v]) => `<code>${esc(k)}</code> by ${v.join(', ')}`).join('<br>') || '-'}</p></div>
       </div>
+      ${(() => { const open = rows.filter(r => r.f.wave && r.state !== 'done'); const waves = [...new Set(open.map(r => r.f.wave))].sort((x, y) => x - y);
+        return waves.length ? `<div class="callout" style="margin-bottom:16px"><b>Wave plan</b> <span class="hint">tickets in the same wave can run in parallel (different repos or areas); a wave starts when its dependencies are dev-complete</span>
+          <table style="margin-top:8px"><tbody>${waves.map(w => `<tr><td style="width:80px"><b>Wave ${esc(w)}</b></td><td>${open.filter(r => r.f.wave === w).map(r => `<a href="#/feature/${esc(r.f.id)}"><code class="fid">${esc(r.f.fid)}</code></a> <span class="badge ${badge[r.state]}" style="font-size:.58rem">${esc(r.state === 'paused' ? 'parked' : r.state === 'wait' ? 'waiting' : r.state === 'blocked' ? 'blocked' : r.state === 'running' ? 'running' : 'can start')}</span> ${esc(r.f.title.length > 48 ? r.f.title.slice(0, 48) + '…' : r.f.title)}`).join('<br>')}</td></tr>`).join('')}</tbody></table></div>` : ''; })()}
       <div class="table-wrap"><table class="dispatch">
-        <thead><tr><th>Seq</th><th>Wave</th><th>Ticket</th><th>Status</th><th>Repos it holds</th><th>Depends on</th><th>Can run now?</th><th>Parallel with (running)</th><th>Text for Claude</th></tr></thead>
+        <thead><tr><th>Seq</th><th>Wave</th>${hasRel ? '<th>Release</th>' : ''}<th>Ticket</th><th>Status</th><th>Repos it holds</th><th>Depends on</th><th>Can run now?</th><th>Parallel with (running)</th><th>Text for Claude</th></tr></thead>
         <tbody>${rows.map((r, i) => `<tr>
           <td><b>${r.f.seq || '-'}</b></td>
           <td>${r.f.wave || '-'}</td>
+          ${hasRel ? `<td>${r.f.release ? `<a href="#/releases"><code>${esc(r.f.release)}</code></a>` : '-'}</td>` : ''}
           <td><a href="#/feature/${esc(r.f.id)}"><code class="fid">${esc(r.f.fid)}</code></a> ${esc(r.f.title)}</td>
           <td><span class="badge ${badge[r.state]}">${esc(r.stage)}</span></td>
           <td>${r.repos.map(x => `<code>${esc(x)}</code>`).join(' ')}${r.sharedRepo.length ? `<br><span class="hint">own worktree for ${esc(r.sharedRepo.join(', '))}</span>` : ''}</td>
@@ -455,7 +541,8 @@
   let DS = null; const dsRow = fid => DS && DS.byFid[fid];
   const TYPE_BADGE = { feature: 'b-new', bug: 'b-open', test: 'b-low', audit: 'b-backlog', change: 'b-new' };
   const slugify = s => String(s || '').toLowerCase().replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
-  const branchName = it => it.fid ? `feature/${it.fid}-${slugify(it.title)}` : '';
+  // brand.json prompt.branchPattern (e.g. "<type>/<JIRA-KEY>-{slug}") overrides the default feature/{fid}-{slug}
+  const branchName = it => { if (!it.fid) return ''; const bp = cfg().branchPattern; return bp ? bp.replace('{fid}', it.fid).replace('{slug}', slugify(it.title)) : `feature/${it.fid}-${slugify(it.title)}`; };
   // status -> lifecycle for data written before lifecycle.json existed (override in lifecycle.json "fromStatus")
   function lifecycleOf(f) {
     if (f.lifecycle) return f.lifecycle;
@@ -556,7 +643,7 @@
     const r = dsRow(it.fid);
     const why = !r ? '' : r.state === 'wait' ? r.label.replace(/^Wait: /, '') : r.state === 'blocked' ? r.label.replace(/^Blocked: /, '') : (r.state === 'go' || r.state === 'go-gated') ? (r.pairClash && r.pairClash.length ? 'not together with ' + r.pairClash.join(', ') : 'parallel-safe with running tickets') : '';
     return `<a class="tcard" href="${esc(it.link)}">
-      <div class="tcard-top">${it.fid ? `<code class="fid">${esc(it.fid)}</code>` : '<span class="fid fid--concept">concept</span>'}${r ? `<span class="badge ${RUN_BADGE[r.state]}" style="font-size:.58rem">${esc(RUN_LBL[r.state])}</span>` : ''}<span class="vbadge">${esc(it.version || '')}</span>${it.seq ? `<span class="vbadge" title="Development sequence">#${it.seq}</span>` : ''}${it.wave ? `<span class="vbadge">w${it.wave}</span>` : ''}${it.type ? `<span class="badge ${TYPE_BADGE[it.type] || 'b-low'}" style="font-size:.58rem">${esc(it.type)}</span>` : ''}${it.reopened ? '<span class="badge b-open" style="font-size:.58rem">reopened</span>' : ''}${refChip(it)}${r && r.state !== 'done' && r.questions && r.questions.length ? `<span class="badge b-open" style="font-size:.58rem" title="Open P0 questions: ${esc(r.questions.join(', '))}">${r.questions.length} P0 Q</span>` : ''}</div>
+      <div class="tcard-top">${it.fid ? `<code class="fid">${esc(it.fid)}</code>` : '<span class="fid fid--concept">concept</span>'}${r ? `<span class="badge ${RUN_BADGE[r.state]}" style="font-size:.58rem">${esc(RUN_LBL[r.state])}</span>` : ''}<span class="vbadge">${esc(it.version || '')}</span>${it.seq ? `<span class="vbadge" title="Development sequence">#${it.seq}</span>` : ''}${it.wave ? `<span class="vbadge">w${it.wave}</span>` : ''}${it.release ? `<span class="vbadge" title="Release">r${esc(it.release)}</span>` : ''}${it.type ? `<span class="badge ${TYPE_BADGE[it.type] || 'b-low'}" style="font-size:.58rem">${esc(it.type)}</span>` : ''}${it.reopened ? '<span class="badge b-open" style="font-size:.58rem">reopened</span>' : ''}${refChip(it)}${r && r.state !== 'done' && r.questions && r.questions.length ? `<span class="badge b-open" style="font-size:.58rem" title="Open P0 questions: ${esc(r.questions.join(', '))}">${r.questions.length} P0 Q</span>` : ''}</div>
       <h4>${esc(it.title)}</h4>
       ${why ? `<p class="tcard-why">${esc(why)}</p>` : (it.summary ? `<p>${esc(it.summary)}</p>` : '')}
       <div class="meta">${it.party ? `<span class="party-chip p-${esc(it.party)}"${partyStyle(it.party)}>${esc(partyLabel(it.party))}</span>` : ''}${it.reported ? `<span class="rm-lbl" style="margin-left:6px">${esc(it.reported)}</span>` : ''}</div>
@@ -667,7 +754,7 @@
     const kv = [['Feature ID', x.fid ? `<code class="fid">${esc(x.fid)}</code>` : '-'], ['Type', x.type ? `<span class="badge ${TYPE_BADGE[x.type] || 'b-low'}">${esc(x.type)}</span>` : '-'],
       ['Lifecycle', esc(st ? st.title : (x.lifecycle || 'backlog'))], ['Dev sequence', x.seq ? `<b>#${x.seq}</b>${x.seqNote ? ' · ' + esc(x.seqNote) : ''}` : '-'],
       ['Depends on', (x.dependsOn || []).map(r => `<code>${esc(r)}</code>`).join(' ') || 'none'], ['Version', esc(x.version || '-')], ['Priority', esc(x.priority || '-')],
-      ['Reported', esc(x.reported || '-')], ['Source', esc(x.source || '-')], ['Related', (x.related || []).map(r => `<code>${esc(r)}</code>`).join(' ') || '-'],
+      ['Reported', esc(x.reported || '-')], ...(x.release ? [['Release', `<a href="#/releases"><code>${esc(x.release)}</code></a>`]] : []), ['Source', esc(x.source || '-')], ['Related', (x.related || []).map(r => `<code>${esc(r)}</code>`).join(' ') || '-'],
       ['Branch', x.fid ? `<code>${esc(branchName(x))}</code>` : '-']];
     const log = (x.scopeLog || []).map(l => `<tr><td>${esc(l.date || '')}</td><td>${esc(l.version || '')}</td><td>${esc(l.event || '')}</td><td>${esc(l.change || '')}</td></tr>`).join('');
     return `<div class="callout" style="margin:0 0 18px"><b>Tracking</b>
@@ -682,6 +769,12 @@
     const deps = (x.dependsOn || []);
     const L = [], c = cfg(), HUB = (DATA.meta || {}).hubDir || 'hub', EV = c.evidenceDir || 'evidence', AG = c.agents || {};
     const ag = (k, fb) => AG[k] ? `${AG[k]}` : fb;
+    const CODE = (window.__BRAND || {}).codeDir || 'code';
+    // brand.json prompt.howToWork / prompt.workflow replace the default blocks; placeholders below
+    const vars = { fid: x.fid, fidLower: x.fid.toLowerCase(), id: x.id, title: x.title, hub: HUB, evidence: EV, code: CODE, branch: branchName(x),
+      baseBranch: x.baseBranch ? `, from ${x.baseBranch}` : '', promotion: (DATA.lifecycle || {}).promotion || 'Local -> Dev', worklog: c.worklog || 'the work log',
+      deploy: c.deploy === false ? '' : ' + deploy', feedbackStep: fb ? `append to ${fb.id}'s "fixes" in ${HUB}/content/data/feedback.json (date, what, closes, commit, env, verifiedBy) and close the matching DEFs in gaps.json` : 'add a scopeLog row and close the matching DEFs in gaps.json' };
+    const fill = t => String(t).replace(/\{(\w+)\}/g, (m, k) => k in vars ? vars[k] : m);
     L.push(`Implement ${x.fid}: ${x.title}`);
     L.push(`(${x.version || 'V1'}${x.seq ? `, development sequence #${x.seq}` : ''}${x.priority ? `, ${x.priority}` : ''}) per its Engineering Hub dossier:`);
     L.push(`${HUB}/content/features/${x.id}.md and its entry in ${HUB}/content/data/features.json.`);
@@ -690,22 +783,28 @@
     (x.promptScope && x.promptScope.length ? x.promptScope : ['Everything in the dossier PRD (section 3); fix the findings in section 6.']).forEach(l => L.push(`- ${l}`));
     const areas = (x.repos && x.repos.length) ? x.repos : (x.services || []);
     if (areas.length) L.push(`- Repos / areas you may touch (Dispatch locks): ${areas.join(', ')}.`);
-    L.push(deps.length ? `- Depends on: ${deps.join(', ')}. Check their lifecycle on the roadmap; do not start a gated part until its dependency is dev-complete or later.` : '- Depends on: none.');
+    L.push(deps.length ? `- Depends on: ${deps.join(', ')}. Check their lifecycle ${c.depCheck || 'on the roadmap'}; do not start a gated part until its dependency is dev-complete or later.` : '- Depends on: none.');
     L.push('');
+    if (Array.isArray(c.howToWork) && c.howToWork.length) {
+      L.push(c.howToWorkTitle || 'How to work:');
+      c.howToWork.forEach(l => L.push(fill(l)));
+    } else {
     L.push('How to work:');
     L.push('- Treat this ticket as ONE GOAL and run it non-stop to completion: implemented, every section 8 test case passing in each environment in turn, hub updated. Do not pause for confirmation between steps.');
     L.push('- Only stop for these hard gates: (a) creating any AWS resource or adding cost, (b) git push, (c) a dependency gate that is not met, (d) a destructive change to shared data. For any other open question, choose the safest option, record the assumption in the ticket scopeLog, and keep going.');
     L.push('- Act as the orchestrator. Keep your own context for planning, integration and verification; delegate the work to subagents (Agent tool):');
     L.push('  - Explore agents to map the code for each part before changing it (run them in parallel).');
-    L.push('  - One implementation subagent per repo under code/ (each clone is its own git repo, so parallel subagents in different repos never collide), launched in parallel; give each its repo path, exact files, the dossier section and the acceptance tests. If two parts must change the same repo, create a separate checkout first (git -C code/<repo> worktree add ../<repo>-<fid>-<part> <branch>) and give each subagent its own path. Do not rely on the Agent "worktree" isolation option: it copies the workspace, not the code/ clones.');
+    L.push(`  - One implementation subagent per repo under ${CODE}/ (each clone is its own git repo, so parallel subagents in different repos never collide), launched in parallel; give each its repo path, exact files, the dossier section and the acceptance tests. If two parts must change the same repo, create a separate checkout first (git -C ${CODE}/<repo> worktree add ../<repo>-<fid>-<part> <branch>) and give each subagent its own path. Do not rely on the Agent "worktree" isolation option: it copies the workspace, not the ${CODE}/ clones.`);
     L.push(`  - ${ag('tests', 'a test-writing subagent')} for unit/e2e tests, then ${ag('behavior', 'a behaviour-testing subagent')} for the section 8 cases, ${ag('uiux', 'a UI/UX reviewer')} for any UI change, ${ag('review', 'a code reviewer and a security reviewer')} on the final diff, in parallel.`);
     L.push('  - Merge any extra worktree branches into the ticket branch yourself, remove the worktrees, resolve conflicts, rerun the tests.');
     L.push('- Do small, tightly coupled edits inline; never let two subagents edit the same file.');
     L.push('- If something fails, diagnose and fix it, then continue. Report progress with short updates, not questions.');
+    }
     L.push('');
     L.push('Workflow:');
+    if (Array.isArray(c.workflow) && c.workflow.length) { c.workflow.forEach(l => L.push(fill(l))); return L.join('\n'); }
     L.push(`1. ${AG.validator ? AG.validator + ': c' : 'C'}onfirm ${x.fid}, its lifecycle and dependencies. Open the hub Dispatch board (${HUB}, #/dispatch, or python3 ${HUB}/tools/dispatch.py): if it does not say this ticket can run now, stop and tell me why.`);
-    L.push('   Immediately after this check, set lifecycle to in-progress in features.json, add a scopeLog row "Picked up", rebuild + deploy the hub, so the Dispatch board locks your repos before you plan.');
+    L.push(`   Immediately after this check, set lifecycle to in-progress in features.json, add a scopeLog row "Picked up", rebuild${c.deploy === false ? '' : ' + deploy'} the hub, so the Dispatch board locks your repos before you plan.`);
     L.push(`   Plan first: use a Plan agent (fed by parallel Explore agents) to write the implementation plan, split into parts per repo with owner subagent, files, tests and risks; save it to ${EV}/<date>/${x.fid.toLowerCase()}/plan.md and add a scopeLog row "Planned". Then execute the plan without waiting for approval.`);
     L.push(`2. Branch ${branchName(x)} in each repo you change${x.baseBranch ? `, from ${x.baseBranch}` : ''}.`);
     L.push('3. Confirm the ticket is in-progress (step 1) before touching any repo. Touch only the repos listed in this ticket ("repos" in features.json).');

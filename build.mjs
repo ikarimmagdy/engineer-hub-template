@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 /* ============================================================
-   Engineering Hub — content build.
+   Engineering Hub, content build (template v3).
    - Copies every local doc into content/kb-src/ so the hub can
      render it (so ALL local files are linked and viewable).
    - Auto-generates the knowledge-base index from that scan.
    - Assembles content/manifest.json from the data + config files.
-   Run from outputs/engineer-guide/:  node build.mjs
-   Then re-sync the folder to S3.
+   - Brands index.html from content/brand.json (title, base href,
+     fonts, favicon, logo, optional content/brand.css).
+   Run from the hub folder:  node build.mjs   (or ./sync.sh)
    ============================================================ */
 import { readFileSync, writeFileSync, existsSync, readdirSync, mkdirSync, statSync, rmSync, copyFileSync } from 'node:fs';
 import { execSync } from 'node:child_process';
@@ -122,6 +123,8 @@ const roadmapExtra = readIf(join(D, 'roadmapExtra.json')) || [];
 let adrs = readIf(join(D, 'adrs.json')) || [];
 // ADR files (docs/adr/NNNN-slug.md, the /adr command's format) win over adrs.json when present.
 const ADRDIR = join(REPO, brand.adrDir || 'docs/adr');
+// keep the id width an existing adrs.json uses (ADR-0001 vs ADR-001)
+const adrPad = ((adrs.map(a => (String(a.id || '').match(/^ADR-(\d+)$/) || [])[1]).find(Boolean)) || '000').length;
 if (existsSync(ADRDIR)) {
   const fromFiles = readdirSync(ADRDIR).filter(n => /^\d{4}-.+\.md$/.test(n) && !n.startsWith('0000-')).sort().map(n => {
     const t = readFileSync(join(ADRDIR, n), 'utf8');
@@ -129,7 +132,7 @@ if (existsSync(ADRDIR)) {
     const field = k => ((t.match(new RegExp('\\*\\*' + k + ':\\*\\*\\s*(.+)')) || [])[1] || '').trim();
     const title = ((t.match(/^#\s+\d{4}\s*[:.\-]?\s*(.+)$/m) || [])[1] || n).trim();
     const sec = h => ((t.split(new RegExp('^## ' + h + '\\s*$', 'm'))[1] || '').split(/^## /m)[0] || '').trim().replace(/\s+/g, ' ');
-    return { id: 'ADR-' + String(num).padStart(3, '0'), title, status: field('Status') || 'Proposed', date: field('Date'), summary: (sec('Decision') || sec('Context')).slice(0, 420), file: relative(REPO, join(ADRDIR, n)).replace(/\\/g, '/') };
+    return { id: 'ADR-' + String(num).padStart(adrPad, '0'), title, status: field('Status') || 'Proposed', date: field('Date'), summary: (sec('Decision') || sec('Context')).slice(0, 420), file: relative(REPO, join(ADRDIR, n)).replace(/\\/g, '/') };
   });
   if (fromFiles.length) adrs = fromFiles;
 }
@@ -140,6 +143,7 @@ const gtm = readIf(join(D, 'gtm.json')) || [];
 const vendors = readIf(join(D, 'vendors.json')) || [];
 const questions = readIf(join(D, 'questions.json')) || [];
 const summary = readIf(join(D, 'summary.json')) || { defects: {} };
+const releases = readIf(join(D, 'releases.json'));
 const lifecycle = readIf(join(D, 'lifecycle.json')) || { stages: [] };
 const feedback = readIf(join(D, 'feedback.json')) || { batches: [], items: [] };
 
@@ -218,9 +222,13 @@ const REPOS = Array.isArray(brand.repos) && brand.repos.length
   ? brand.repos
   : (existsSync(CODE) ? readdirSync(CODE).filter(d => { try { return statSync(join(CODE, d)).isDirectory(); } catch (_) { return false; } }) : []);
 const repoBase = brand.repoBase || '';
+// repo web URL: brand.repoUrls[repo] if given ("" = no remote, no links), else repoBase + the last path segment
+// (so a repo listed as "mobile/code/app-android" maps to <repoBase>/app-android)
+const repoUrl = r => (brand.repoUrls && r in brand.repoUrls) ? brand.repoUrls[r] : (repoBase ? `${repoBase}/${String(r).split('/').pop()}` : '');
+const reEsc = x => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const headCache = {};
 const repoHead = r => { if (r in headCache) return headCache[r]; let h = ''; try { h = execSync(`git -C "${join(CODE, r)}" rev-parse --short HEAD`, { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim(); } catch (_) {} return headCache[r] = h; };
-const refRe = new RegExp('(' + REPOS.join('|') + ')/(?:[A-Za-z0-9._/-]+\\.(?:vue|tsx|ts|jsx|mjs|json|js|sql|kt|kts|java|py|go|swift|dart|yml|yaml|toml|gradle)|(?:[A-Za-z0-9._-]+/)*Dockerfile)(?![A-Za-z0-9])', 'g');
+const refRe = new RegExp('(' + REPOS.slice().sort((a, b) => b.length - a.length).map(reEsc).join('|') + ')/(?:[A-Za-z0-9._/-]+\\.(?:vue|tsx|ts|jsx|mjs|json|js|sql|kt|kts|java|py|go|swift|dart|cs|yml|yaml|toml|gradle)|(?:[A-Za-z0-9._-]+/)*Dockerfile)(?![A-Za-z0-9])', 'g');
 const traceability = {};
 const drift = [];
 if (existsSync(CODE) && REPOS.length) {
@@ -229,10 +237,10 @@ if (existsSync(CODE) && REPOS.length) {
     if (!existsSync(p)) continue;
     const refs = Array.from(new Set((readFileSync(p, 'utf8') + '\n' + JSON.stringify(f.codeStatus || {})).match(refRe) || []));
     const files = refs.map(ref => {
-      const repo = ref.split('/')[0], rel = ref.slice(repo.length + 1);
+      const repo = REPOS.filter(r => ref.startsWith(r + '/')).sort((x, y) => y.length - x.length)[0], rel = ref.slice(repo.length + 1);
       const exists = existsSync(join(CODE, repo, rel));
       const head = repoHead(repo);
-      return { path: ref, repo, exists, url: (repoBase && head) ? `${repoBase}/${repo}/blob/${head}/${rel}` : '' };
+      return { path: ref, repo, exists, url: (repoUrl(repo) && head) ? `${repoUrl(repo)}/blob/${head}/${rel}` : '' };
     });
     const missing = files.filter(x => !x.exists).length;
     const built = ['built', 'partial'].includes((f.status || '').toLowerCase());
@@ -246,12 +254,40 @@ if (existsSync(CODE) && REPOS.length) {
 }
 
 const manifest = {
-  meta: { generated: new Date().toISOString().slice(0, 10), version: 'v2', brand: brand.name || '', hubDir: relative(REPO, ROOT).replace(/\\/g, '/') || '.' },
-  overview, nav, sections, features, roadmapExtra, adrs, gaps, security, performance, gtm, vendors, questions, lifecycle, kb, traceability, feedback, learning,
+  meta: { generated: new Date().toISOString().slice(0, 10), version: 'v3', template: (existsSync(join(C, '.template-version')) ? readFileSync(join(C, '.template-version'), 'utf8').split(/\s+/)[0] : ''), brand: brand.name || '', hubDir: relative(REPO, ROOT).replace(/\\/g, '/') || '.' },
+  overview, nav, sections, features, roadmapExtra, adrs, gaps, security, performance, gtm, vendors, questions, lifecycle, kb, traceability, feedback, learning, releases,
   defectsSummary: { total: summary.defects?.total || 0, critical: summary.defects?.critical || 0, high: summary.defects?.high || 0, medium: summary.defects?.medium || 0, low: summary.defects?.low || 0 },
   counts: { gaps: summary.gaps || null, security: summary.security || null }
 };
 writeFileSync(join(C, 'manifest.json'), JSON.stringify(manifest, null, 0));
+
+/* ---- 3. brand index.html from brand.json (idempotent; index.html is an engine file) ----
+   name, baseHref ("./" default; "/hub/" when served under a path without a trailing slash),
+   fontsUrl (Google Fonts css2 URL), primary (favicon + gate mark), markStroke, markRadius,
+   logo, description. content/brand.css, if present, is linked after hub.css. */
+const IDX = join(ROOT, 'index.html');
+if (existsSync(IDX)) {
+  const ea = s => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+  const title = brand.name ? `${brand.name} Engineering Hub` : 'Engineering Hub';
+  const fill = brand.primary || '#2563eb', stroke = brand.markStroke || '#ffffff', rx = brand.markRadius ?? 8;
+  const mark = `<rect width="32" height="32" rx="${rx}" fill="${fill}"/><path d="M9 16h14M16 9v14" stroke="${stroke}" stroke-width="3" stroke-linecap="round"/>`;
+  const fav = 'data:image/svg+xml,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">${mark.replace('stroke-linecap', 'fill="none" stroke-linecap')}</svg>`).replace(/'/g, '%27');
+  let h = readFileSync(IDX, 'utf8'); const before = h;
+  h = h.replace(/<base href="[^"]*">/, `<base href="${ea(brand.baseHref || './')}">`)
+    .replace(/<title>[^<]*<\/title>/, `<title>${ea(title)}</title>`)
+    .replace(/<meta name="description" content="[^"]*">/, `<meta name="description" content="${ea(brand.description || title + ': the single place the team reviews what is built, planned, the architecture, infrastructure, ADRs, gaps, security, and every feature dossier.')}">`)
+    .replace(/<link rel="icon" href="[^"]*">/, `<link rel="icon" href="${fav}">`)
+    .replace(/(<div class="gate__mark"[^>]*>\s*<svg viewBox="0 0 32 32">)[\s\S]*?(<\/svg>)/, `$1${mark}$2`)
+    .replace(/(<form id="gateForm"[\s\S]*?<h1>)[^<]*(<\/h1>)/, `$1${ea(title)}$2`)
+    .replace(/aria-label="[^"]*Engineering Hub home"/, `aria-label="${ea(title)} home"`)
+    .replace(/<img (?:src="[^"]*" )?alt="" class="brand-logo"[^>]*>/, existsSync(join(ROOT, brand.logo || 'assets/img/logo.png'))
+      ? `<img src="${ea(brand.logo || 'assets/img/logo.png')}" alt="" class="brand-logo" onerror="this.remove()">`
+      : '<img alt="" class="brand-logo" data-nologo="1" hidden>');
+  if (brand.fontsUrl) h = h.replace(/<link href="https:\/\/fonts\.googleapis\.com\/css2[^"]*" rel="stylesheet">/, `<link href="${ea(brand.fontsUrl)}" rel="stylesheet">`);
+  h = h.replace(/\n\s*<link rel="stylesheet" href="content\/brand\.css"[^>]*>/, '');
+  if (existsSync(join(C, 'brand.css'))) h = h.replace(/(<link rel="stylesheet" href="assets\/css\/hub\.css">)/, '$1\n  <link rel="stylesheet" href="content/brand.css">');
+  if (h !== before) writeFileSync(IDX, h);
+}
 
 console.log(`manifest.json written: ${storyCount ? storyCount + ' user stories, ' : ''}${learning ? learning.courses.length + ' courses, ' + learning.courses.reduce((n, c) => n + c.lessons.length, 0) + ' lessons, ' : ''}${features.length} features, ${adrs.length} ADRs, ${gaps.length} gaps, ${security.length} security, ${gtm.length} GTM actions, ${kb.length} docs linked.`);
 if (warns.length) { console.log('\nWARNINGS:'); warns.forEach(w => console.log('  - ' + w)); }

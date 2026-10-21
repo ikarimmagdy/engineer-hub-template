@@ -43,5 +43,13 @@
     "evidenceDir": "evidence",
     "deploy": true,
     "agents": {}
+  },
+  "baseHref": "./",
+  "modules": {},
+  "deploy": {
+    "bucket": "",
+    "prefix": "engineer-guide",
+    "cloudfront": "",
+    "url": ""
   }
 }
