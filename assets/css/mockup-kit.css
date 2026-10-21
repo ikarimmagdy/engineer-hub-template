@@ -17,11 +17,12 @@
 html,body{margin:0}
 body{font-family:var(--font);background:#eef4f8;color:var(--body);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased;padding:18px}
 
-/* theme accents by party — set class on <body>: tb-patient / tb-doctor / tb-establishment / tb-admin */
-.tb-patient{--accent:var(--b7);--accent2:var(--b3);--accent-ink:var(--b9)}
-.tb-doctor{--accent:var(--green);--accent2:var(--green2);--accent-ink:#0f5e47}
-.tb-establishment{--accent:var(--pink);--accent2:var(--pink2);--accent-ink:#7a0f3e}
-.tb-admin{--accent:var(--admin);--accent2:#8575b8;--accent-ink:#3a2f5e}
+/* accent presets: set one class on <body>: tb-accent-1 (brand) / tb-accent-2 (green) / tb-accent-3 (pink) / tb-accent-4 (violet).
+   The older role-named classes on the same lines stay as aliases so existing mockups keep their colours. */
+.tb-accent-1,.tb-patient{--accent:var(--b7);--accent2:var(--b3);--accent-ink:var(--b9)}
+.tb-accent-2,.tb-doctor{--accent:var(--green);--accent2:var(--green2);--accent-ink:#0f5e47}
+.tb-accent-3,.tb-establishment{--accent:var(--pink);--accent2:var(--pink2);--accent-ink:#7a0f3e}
+.tb-accent-4,.tb-admin{--accent:var(--admin);--accent2:#8575b8;--accent-ink:#3a2f5e}
 body:not([class*="tb-"]){--accent:var(--b7);--accent2:var(--b3);--accent-ink:var(--b9)}
 
 /* ---- web app frame ---- */

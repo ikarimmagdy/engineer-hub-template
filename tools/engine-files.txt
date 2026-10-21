@@ -1,0 +1,19 @@
+# Engine files: hub-update.sh replaces exactly these in a hub, nothing else.
+# Never listed: content/ (brand.json, data, docs), assets/img/, README.md, .gitignore,
+# project deploy scripts (deploy-*.sh). Keep this list in the template only.
+index.html
+assets/js/hub.js
+assets/js/comments.js
+assets/css/hub.css
+assets/css/mockup-kit.css
+build.mjs
+sync.sh
+tools/dispatch.py
+tools/hub-update.sh
+tools/hub-migrate.mjs
+tools/engine-files.txt
+ci/engineer-hub.yml
+backend/comments/README.md
+backend/comments/handler.mjs
+backend/comments/package.json
+backend/comments/template.yaml

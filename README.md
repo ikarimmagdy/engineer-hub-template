@@ -1,4 +1,8 @@
-# Engineering Hub, template
+# Engineering Hub, template (v3)
+
+One engine, many hubs: the engine files come from this repo and are updated in place with
+`tools/hub-update.sh`; each project keeps only its content (`content/`, `assets/img/`).
+Never edit engine files inside a hub; fix them here, tag a release, and update the hubs.
 
 A reusable, branded internal engineering portal. Drop it into any project to give the
 team one place for: an overview, **learning paths** (courses in sequence), a roadmap task-board, per-feature dossiers (product,
@@ -38,10 +42,11 @@ manifest and copies your repo docs in so they are viewable in the hub.
 
 ## Rebrand
 
-Everything brand-specific is in `content/brand.json` (colours, logo, name, font) and
-`assets/img/logo.png`. The CSS reads brand colours at runtime, so no CSS edit is
-needed. The soft access passcode is `PASSCODE` near the top of `assets/js/hub.js`
-(change it, or remove the gate for an open site).
+Everything brand-specific is in `content/brand.json` (colours, logo, name, font,
+passcode) and `assets/img/`. The CSS reads brand colours at runtime and `build.mjs`
+writes the name, base href, fonts, favicon and logo into `index.html`, so no engine edit
+is needed. Extra project CSS goes in an optional `content/brand.css` (linked after the
+engine CSS when present).
 
 ## Add content
 
@@ -98,7 +103,23 @@ A concrete case, How it works in the platform, What goes wrong, The vocabulary, 
 | `kbRoots` | extra knowledge-base folders: `{ dir, group, types, latestOnly, exclude }` |
 | `parties` | feature owners/areas: `{ "key": { "label", "color" } }` (filter chips and card chips) |
 | `repoBase`, `codeDir`, `repos` | traceability to code clones (`codeDir` is also where `tools/dispatch.py` reads git state) |
-| `prompt` | `{ workspace, worklog, evidenceDir, deploy, agents: { validator, tests, behavior, uiux, review } }` used in generated ticket prompts |
+| `prompt` | `{ workspace, worklog, evidenceDir, deploy, agents: { validator, tests, behavior, uiux, review }, branchPattern, depCheck, howToWorkTitle, howToWork: [lines], workflow: [lines] }` used in generated ticket prompts. `howToWork` / `workflow` replace the default blocks; lines may use `{fid}`, `{fidLower}`, `{hub}`, `{evidence}`, `{code}`, `{branch}`, `{baseBranch}`, `{promotion}`, `{worklog}`, `{deploy}`, `{feedbackStep}` |
+| `logoDark` | logo for dark mode |
+| `baseHref` | `<base href>` (default `./`; use `/hub/` when served at a path without a trailing slash) |
+| `fontsUrl` | Google Fonts css2 URL for `font` |
+| `markRadius`, `markStroke` | favicon and gate mark shape and plus colour |
+| `repoUrls` | per-repo web URL overrides (`""` = no remote); repos may be nested paths such as `area/code/repo` |
+| `adrDir` | ADR markdown folder (default `docs/adr`); files win over `adrs.json` |
+| `defaultParty`, `roadmapSort` | initial roadmap / feature filter and sort (`fid`, `seq`, `run`, ...) |
+| `modules` | switch pages on or off: `{ "learn": false, "releases": true }`. Without a flag a data page (`learn`, `releases`, `dispatch`, `stories`, `vendors`, `questions`) shows only when its data exists |
+| `deploy` | `{ bucket, prefix, cloudfront, url }` read by `./sync.sh --deploy` |
+
+Optional data files switch modules on by being present: `content/learning/paths.json`
+(learning paths), `content/data/releases.json` (Releases page: `releases: [{ id, date, env,
+title, tickets, notes, platforms: [{ platform, component, version, where, status }], build }]`),
+`feedback.json` (client feedback changelog), `questions.json`, `vendors.json`,
+`content/stories/*.json`. Comments are on when `content/comments-config.json` has
+`"enabled": true`. Any `sections.json` entry without its own page renders as Markdown.
 
 ## File map
 
@@ -145,9 +166,27 @@ gated by `reviewerPasscode`.
 
 ## Automate (CI) and deploy
 
-`./sync.sh` rebuilds; `./sync.sh --deploy` rebuilds and deploys (set `HUB_BUCKET`, and
-`HUB_CF` for CloudFront; swap the deploy block for your host). Copy `ci/engineer-hub.yml`
+`./sync.sh` rebuilds; `./sync.sh --deploy` rebuilds and deploys to the S3 bucket, prefix
+and CloudFront distribution in `brand.json` `deploy` (env `HUB_BUCKET`, `HUB_PREFIX`,
+`HUB_CF` override). A hub with its own deploy script keeps it; the update never touches it. Copy `ci/engineer-hub.yml`
 to your project's `.github/workflows/` and set the repo/secrets noted at its top, so a
 push to your deploy branch rebuilds and ships the hub automatically.
 
 Libraries (marked, mermaid) load from cdnjs at runtime; everything else is local.
+
+## Update a hub to the latest template
+
+From the hub folder:
+
+```
+tools/hub-update.sh                 # latest main
+tools/hub-update.sh --ref v3.0.0    # a tagged version
+tools/hub-update.sh --dry-run       # list the engine files that would change
+```
+
+It clones this repo (`HUB_TEMPLATE_REPO` overrides the URL, `HUB_TEMPLATE_DIR` uses a local
+checkout), runs `tools/hub-migrate.mjs` (adds missing `brand.json` keys read from the old
+engine files, never overwrites content), replaces only the files in
+`tools/engine-files.txt`, records the version in `content/.template-version` and runs
+`node build.mjs`. A hub that predates v3 has no `tools/hub-update.sh`; run the template's
+copy once: `HUB_TEMPLATE_DIR=<checkout> <checkout>/tools/hub-update.sh <hub-dir>`.
