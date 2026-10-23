@@ -642,3 +642,13 @@ html.pdf-export .subnav,html.pdf-export .rm-toolbar,html.pdf-export .lnav,html.p
 .pdf-sheet .board,.pdf-sheet #rmBoard{display:block!important}
 .pdf-sheet .chip,.pdf-sheet .q-mark,.pdf-sheet .rm-toolbar,.pdf-sheet .subnav,.pdf-sheet .lnav,.pdf-sheet .branch,.pdf-sheet .kp{display:none!important}
 .pdf-sheet .print-header{display:block;font-size:9pt;color:#555;border-bottom:1px solid #ccc;padding-bottom:4pt;margin-bottom:10pt}
+/* per-environment status chips (features.json "env") */
+.envchips{display:flex;gap:4px;flex-wrap:wrap;margin:6px 0 4px}
+.envchip{font-size:.58rem;font-weight:700;letter-spacing:.3px;padding:1px 6px;border-radius:999px;border:1px solid transparent;white-space:nowrap}
+.envchip.es-not-started{background:transparent;color:var(--text-muted);border-color:var(--border-strong)}
+.envchip.es-built{background:rgba(0,164,241,.16);color:var(--tb-blue-700)}
+.envchip.es-partial{background:rgba(255,159,67,.2);color:var(--tb-warning)}
+.envchip.es-deployed{background:rgba(40,199,111,.16);color:var(--tb-success)}
+.envchip.es-verified{background:var(--tb-success-fill,#28c76f);color:#fff}
+.envchip.es-blocked{background:rgba(234,84,85,.16);color:var(--tb-danger)}
+.envchip.es-derived{border-style:dashed;border-color:currentColor;opacity:.75}

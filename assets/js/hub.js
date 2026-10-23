@@ -38,6 +38,7 @@
     question: '<circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6V14M12 17v.5"/>',
     partner: '<circle cx="8" cy="8" r="3"/><circle cx="16" cy="8" r="3"/><path d="M2 20c0-3 3-5 6-5s6 2 6 5M12 20c0-3 2-5 4-5s6 2 6 5"/>',
     story: '<path d="M4 5h16v14H4z"/><path d="M8 9h8M8 13h5"/><circle cx="17" cy="15" r="0"/>',
+    test: '<path d="M9 11l3 3 8-8"/><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9"/>',
     learn: '<path d="M2 9l10-5 10 5-10 5z"/><path d="M6 11v5c3 2.5 9 2.5 12 0v-5M22 9v6"/>'
   };
   const ico = (name, cls = 'nav-ico') => `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONS[name] || ICONS.overview}</svg>`;
@@ -538,7 +539,7 @@
   }
 
   /* ---------- ROADMAP BOARD ---------- */
-  const RM = { party: null, version: 'all', type: 'all', run: 'all', sort: 'fid', reopened: false, hideEmpty: true, q: '' };
+  const RM = { party: null, version: 'all', type: 'all', run: 'all', sort: 'fid', reopened: false, hideEmpty: true, q: '', env: 'all', envState: 'any' };
   const RUN_LBL = { running: 'Running', go: 'Ready to start', 'go-gated': 'Ready (cost gate)', wait: 'Waiting', blocked: 'Blocked', paused: 'Paused', done: 'Done' };
   const RUN_BADGE = { running: 'b-in-progress', go: 'b-new', 'go-gated': 'b-high', wait: 'b-backlog', blocked: 'b-open', paused: 'b-low', done: 'b-fixed' };
   let DS = null; const dsRow = fid => DS && DS.byFid[fid];
@@ -581,13 +582,15 @@
           ${sel('rmParty', RM.party, partyKeys.map(p => [p, partyLabel(p)]), 'All areas')}
           ${sel('rmVersion', RM.version, versions.map(v => [v, v]), 'All versions')}
           ${types.length ? sel('rmType', RM.type, types.map(t => [t, t]), 'All types') : ''}
+          ${sel('rmEnv', RM.env, envList().map(e => [e.key, 'Env: ' + e.label]), 'All environments')}
+          <select id="rmEnvState" class="rm-select" title="Environment state">${[['any', 'Any env state'], ...ENV_STATES.map(s => [s, ENV_LBL[s]])].map(([v, l]) => `<option value="${v}" ${RM.envState === v ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>
           <select id="rmSort" class="rm-select" title="Sort">
             ${[['fid', 'Sort: Feature ID'], ['seq', 'Sort: Dev sequence'], ['run', 'Sort: Dispatch status'], ['party', 'Sort: Party'], ['title', 'Sort: Title'], ['version', 'Sort: Version']].map(([v, l]) => `<option value="${v}" ${RM.sort === v ? 'selected' : ''}>${l}</option>`).join('')}
           </select>
           <label class="rm-chk"><input type="checkbox" id="rmReopen" ${RM.reopened ? 'checked' : ''}> Reopened</label>
           <label class="rm-chk"><input type="checkbox" id="rmHide" ${RM.hideEmpty ? 'checked' : ''}> Hide empty columns</label>
           <input id="rmSearch" class="rm-search" type="search" placeholder="Search text, ID, repo…" value="${esc(RM.q)}">
-          ${(RM.run !== 'all' || RM.party !== 'all' || RM.version !== 'all' || RM.type !== 'all' || RM.reopened || RM.q) ? '<button class="chip" id="rmReset" type="button">Reset</button>' : ''}
+          ${(RM.run !== 'all' || RM.party !== 'all' || RM.version !== 'all' || RM.type !== 'all' || RM.env !== 'all' || RM.envState !== 'any' || RM.reopened || RM.q) ? '<button class="chip" id="rmReset" type="button">Reset</button>' : ''}
         </div>
       </div>
       ${blockedSummary()}
@@ -600,7 +603,9 @@
     if ($('#rmType')) $('#rmType').addEventListener('change', e => set('type', e.target.value));
     $('#rmReopen').addEventListener('change', e => set('reopened', e.target.checked));
     $('#rmHide').addEventListener('change', e => set('hideEmpty', e.target.checked));
-    if ($('#rmReset')) $('#rmReset').addEventListener('click', () => { Object.assign(RM, { run: 'all', party: 'all', version: 'all', type: 'all', reopened: false, q: '' }); renderRoadmap(); });
+    if ($('#rmReset')) $('#rmReset').addEventListener('click', () => { Object.assign(RM, { run: 'all', party: 'all', version: 'all', type: 'all', env: 'all', envState: 'any', reopened: false, q: '' }); renderRoadmap(); });
+    $('#rmEnv').addEventListener('change', e => set('env', e.target.value));
+    $('#rmEnvState').addEventListener('change', e => set('envState', e.target.value));
     $('#rmSort').addEventListener('change', e => { RM.sort = e.target.value; paintBoard(stages); wireCards(); });
     const si = $('#rmSearch'); si.addEventListener('input', () => { RM.q = si.value; paintBoard(stages); wireCards(); });
     wireCards();
@@ -624,6 +629,9 @@
     if (RM.run !== 'all') list = list.filter(i => { const r = dsRow(i.fid); const st = r ? r.state : (i.lifecycle === 'in-progress' ? 'running' : ''); 
       return RM.run === 'go' ? (st === 'go' || st === 'go-gated') : RM.run === 'active' ? ['running', 'go', 'go-gated'].includes(st) : st === RM.run; });
     if (RM.reopened) list = list.filter(i => i.reopened);
+    if (RM.env !== 'all' || RM.envState !== 'any') list = list.filter(i => { if (i.concept) return false; const e = envOf(i);
+      if (RM.env === 'all') return Object.values(e).some(v => v.state === RM.envState);
+      const st = (e[RM.env] || {}).state || 'not-started'; return RM.envState === 'any' ? st !== 'not-started' : st === RM.envState; });
     if (q) list = list.filter(i => ((i.fid || '') + ' ' + i.title + ' ' + (i.summary || '') + ' ' + (i.source || '') + ' ' + (i.reported || '') + ' ' + (i.repos || []).join(' ')).toLowerCase().includes(q));
     const by = { fid: (a, b) => (a.fid || 'zz').localeCompare(b.fid || 'zz'), party: (a, b) => (a.party || '').localeCompare(b.party || ''), title: (a, b) => a.title.localeCompare(b.title), version: (a, b) => (a.version || '').localeCompare(b.version || ''), seq: (a, b) => (a.seq || 999) - (b.seq || 999) || (a.fid || 'zz').localeCompare(b.fid || 'zz'), run: (a, b) => { const o = { running: 0, go: 1, 'go-gated': 2, blocked: 3, wait: 4, paused: 5, done: 6 }; const sa = (dsRow(a.fid) || {}).state, sb = (dsRow(b.fid) || {}).state; return (o[sa] ?? 9) - (o[sb] ?? 9) || (a.seq || 999) - (b.seq || 999); } };
     return list.sort(by[RM.sort] || by.fid);
@@ -640,6 +648,35 @@
       </div>`).join('') || '<p class="hint">No tickets match these filters.</p>';
   }
   // Status of an existing reference implementation (for example the code being ported), shown apart from the build stage.
+  /* ---------- per-environment status ----------
+     features.json "env": { "local": { "state", "date", "ref", "note" }, "dev": {...}, "demo": {...}, "prod": {...} }.
+     Environments come from lifecycle.json "environments" (lower-cased keys). A ticket, or an environment,
+     without an entry gets a state derived from its lifecycle stage (deployed-<env> = deployed there and
+     in every earlier environment), shown dashed so it reads as an estimate, not a fact. */
+  const ENV_STATES = ['not-started', 'built', 'partial', 'deployed', 'verified', 'blocked'];
+  const ENV_LBL = { 'not-started': 'Not started', built: 'Built', partial: 'Partly deployed', deployed: 'Deployed', verified: 'Verified', blocked: 'Blocked' };
+  const ENV_BADGE = { 'not-started': 'b-backlog', built: 'b-new', partial: 'b-in-progress', deployed: 'b-built', verified: 'b-fixed', blocked: 'b-open' };
+  function envList() { return ((DATA.lifecycle || {}).environments || ['Local', 'Dev', 'Demo', 'Prod']).map(e => ({ key: String(e).toLowerCase(), label: String(e) })); }
+  function envOf(x) {
+    const envs = envList(), own = x.env || {}, derived = {};
+    const m = /^deployed-(.+)$/.exec(lifecycleOf(x));
+    if (m) { const idx = envs.findIndex(e => e.key === m[1]); envs.forEach((e, i) => { if (i <= idx) derived[e.key] = i === 0 ? 'built' : 'deployed'; }); }
+    else if (['dev-complete', 'verified'].includes(lifecycleOf(x)) && envs[0]) derived[envs[0].key] = 'built';
+    return Object.fromEntries(envs.map(e => [e.key, own[e.key] ? { ...own[e.key], state: own[e.key].state || 'not-started' } : { state: derived[e.key] || 'not-started', derived: true }]));
+  }
+  function envTip(label, v) { return `${label}: ${ENV_LBL[v.state] || v.state}${v.date ? ' · ' + v.date : ''}${v.ref ? ' · ' + v.ref : ''}${v.note ? ' · ' + v.note : ''}${v.derived ? ' (from lifecycle)' : ''}`; }
+  function envChips(x) {
+    if (x.concept) return '';
+    const e = envOf(x);
+    return `<div class="envchips">${envList().map(({ key, label }) => { const v = e[key]; return `<span class="envchip es-${esc(v.state)}${v.derived ? ' es-derived' : ''}" title="${esc(envTip(label, v))}">${esc(label)}</span>`; }).join('')}</div>`;
+  }
+  function envCard(x) {
+    const e = envOf(x);
+    const rows = envList().map(({ key, label }) => { const v = e[key];
+      return `<tr><td><b>${esc(label)}</b></td><td><span class="badge ${ENV_BADGE[v.state] || 'b-low'}">${esc(ENV_LBL[v.state] || v.state)}</span>${v.derived ? ' <span class="hint">from lifecycle</span>' : ''}</td><td style="white-space:nowrap">${esc(v.date || '-')}</td><td>${v.ref ? `<code>${esc(v.ref)}</code>` : '-'}</td><td>${esc(v.note || '')}</td></tr>`; }).join('');
+    return `<div class="callout" id="envs" style="margin:0 0 18px"><b>Environments</b>
+      <table style="margin-top:8px"><thead><tr><th>Environment</th><th>State</th><th>Date</th><th>Ref</th><th>Note</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  }
   function refChip(x) { return x.referenceStatus ? `<span class="vbadge" title="Status in the reference implementation">ref: ${esc(x.referenceStatus)}</span>` : ''; }
   function rmCard(it) {
     const br = branchName(it);
@@ -649,6 +686,7 @@
       <div class="tcard-top">${it.fid ? `<code class="fid">${esc(it.fid)}</code>` : '<span class="fid fid--concept">concept</span>'}${r ? `<span class="badge ${RUN_BADGE[r.state]}" style="font-size:.58rem">${esc(RUN_LBL[r.state])}</span>` : ''}<span class="vbadge">${esc(it.version || '')}</span>${it.seq ? `<span class="vbadge" title="Development sequence">#${it.seq}</span>` : ''}${it.wave ? `<span class="vbadge">w${it.wave}</span>` : ''}${it.release ? `<span class="vbadge" title="Release">r${esc(it.release)}</span>` : ''}${it.type ? `<span class="badge ${TYPE_BADGE[it.type] || 'b-low'}" style="font-size:.58rem">${esc(it.type)}</span>` : ''}${it.reopened ? '<span class="badge b-open" style="font-size:.58rem">reopened</span>' : ''}${refChip(it)}${r && r.state !== 'done' && r.questions && r.questions.length ? `<span class="badge b-open" style="font-size:.58rem" title="Open P0 questions: ${esc(r.questions.join(', '))}">${r.questions.length} P0 Q</span>` : ''}</div>
       <h4>${esc(it.title)}</h4>
       ${why ? `<p class="tcard-why">${esc(why)}</p>` : (it.summary ? `<p>${esc(it.summary)}</p>` : '')}
+      ${envChips(it)}
       <div class="meta">${it.party ? `<span class="party-chip p-${esc(it.party)}"${partyStyle(it.party)}>${esc(partyLabel(it.party))}</span>` : ''}${it.reported ? `<span class="rm-lbl" style="margin-left:6px">${esc(it.reported)}</span>` : ''}</div>
       ${br ? `<button class="branch" type="button" data-branch="${esc(br)}" title="Copy branch name">${esc(br)}</button>` : ''}
     </a>`;
@@ -719,9 +757,10 @@
       </div>
       <div class="subnav">
         <a href="#prod">Product</a><a href="#brd">BRD</a><a href="#prd">PRD</a>
-        <a href="#ux">UX &amp; UI</a><a href="#tech">Technical</a><a href="#impl">Status</a>
+        <a href="#ux">UX &amp; UI</a><a href="#tech">Technical</a><a href="#impl">Status</a><a href="#envs">Environments</a>
         <a href="#secperf">Security &amp; perf</a><a href="#test">Tests</a>
       </div>
+      ${envCard(x)}
       ${trackCard(x)}
       ${storiesCard(x)}
       ${promptCard(x)}
