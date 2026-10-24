@@ -113,7 +113,7 @@ A concrete case, How it works in the platform, What goes wrong, The vocabulary, 
 | `adrDir` | ADR markdown folder (default `docs/adr`); files win over `adrs.json` |
 | `defaultParty`, `roadmapSort` | initial roadmap / feature filter and sort (`fid`, `seq`, `run`, ...) |
 | `modules` | switch pages on or off: `{ "learn": false, "releases": true }`. Without a flag a data page (`learn`, `releases`, `dispatch`, `stories`, `vendors`, `questions`) shows only when its data exists |
-| `deploy` | `{ bucket, prefix, cloudfront, url }` read by `./sync.sh --deploy` |
+| `deploy` | `{ bucket, prefix, cloudfront, url }`, or a list of them each with a `name`, read by `./sync.sh --deploy [name]` (every target by default) |
 
 Optional data files switch modules on by being present: `content/learning/paths.json`
 (learning paths), `content/data/releases.json` (Releases page: `releases: [{ id, date, env,
@@ -168,7 +168,7 @@ gated by `reviewerPasscode`.
 ## Automate (CI) and deploy
 
 `./sync.sh` rebuilds; `./sync.sh --deploy` rebuilds and deploys to the S3 bucket, prefix
-and CloudFront distribution in `brand.json` `deploy` (env `HUB_BUCKET`, `HUB_PREFIX`,
+and CloudFront distribution of every target in `brand.json` `deploy` (`--deploy <name>` for one) (env `HUB_BUCKET`, `HUB_PREFIX`,
 `HUB_CF` override). A hub with its own deploy script keeps it; the update never touches it. Copy `ci/engineer-hub.yml`
 to your project's `.github/workflows/` and set the repo/secrets noted at its top, so a
 push to your deploy branch rebuilds and ships the hub automatically.
