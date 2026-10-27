@@ -14,6 +14,12 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
+# loop hubs (brand.json "workspace"): pull the specs and the agentic setup from the workspace first
+if node -e "process.exit(JSON.parse(require('fs').readFileSync('content/brand.json','utf8')).workspace?0:1)" 2>/dev/null; then
+  echo "==> reading the workspace (specs, findings, commands, agents, hooks)"
+  python3 tools/sync_loop.py
+  python3 tools/sync_agentic.py
+fi
 echo "==> building hub (manifest, docs, code traceability)"
 node build.mjs
 

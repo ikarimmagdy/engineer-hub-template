@@ -261,7 +261,7 @@ if (existsSync(CODE) && REPOS.length) {
 
 const manifest = {
   meta: { generated: new Date().toISOString().slice(0, 10), version: 'v4', template: (existsSync(join(C, '.template-version')) ? readFileSync(join(C, '.template-version'), 'utf8').split(/\s+/)[0] : ''), brand: brand.name || '', hubDir: relative(REPO, ROOT).replace(/\\/g, '/') || '.' },
-  overview, nav, sections, features, loop: readIf(join(D, 'loop.json')), loopConfig: readIf(join(D, 'loop-config.json')), roadmapExtra, adrs, gaps, security, performance, gtm, vendors, questions, lifecycle, kb, traceability, feedback, learning, releases,
+  overview, nav, sections, features, loop: readIf(join(D, 'loop.json')), loopConfig: readIf(join(D, 'loop-config.json')), agentic: readIf(join(D, 'agentic.json')), roadmapExtra, adrs, gaps, security, performance, gtm, vendors, questions, lifecycle, kb, traceability, feedback, learning, releases,
   defectsSummary: { total: summary.defects?.total || 0, critical: summary.defects?.critical || 0, high: summary.defects?.high || 0, medium: summary.defects?.medium || 0, low: summary.defects?.low || 0 },
   counts: { gaps: summary.gaps || null, security: summary.security || null }
 };
@@ -295,8 +295,11 @@ if (existsSync(IDX)) {
       ? `<img src="${ea(brand.logo || 'assets/img/logo.png')}" alt="" class="brand-logo" onerror="this.remove()">`
       : '<img alt="" class="brand-logo" data-nologo="1" hidden>');
   if (brand.fontsUrl) h = h.replace(/<link href="https:\/\/fonts\.googleapis\.com\/css2[^"]*" rel="stylesheet">/, `<link href="${ea(brand.fontsUrl)}" rel="stylesheet">`);
-  h = h.replace(/\n\s*<link rel="stylesheet" href="content\/brand\.css"[^>]*>/, '');
-  if (existsSync(join(C, 'brand.css'))) h = h.replace(/(<link rel="stylesheet" href="assets\/css\/hub\.css">)/, '$1\n  <link rel="stylesheet" href="content/brand.css">');
+  h = h.replace(/\n\s*<link rel="stylesheet" href="content\/brand\.css(?:\?v=\w+)?"[^>]*>/g, '');
+  if (existsSync(join(C, 'brand.css'))) h = h.replace(/(<link rel="stylesheet" href="assets\/css\/hub\.css(?:\?v=\w+)?">)/, '$1\n  <link rel="stylesheet" href="content/brand.css">');
+  // cache-bust engine and brand assets on every build, so a browser never runs an old hub.js against new content
+  const stamp = Date.now().toString(36);
+  h = h.replace(/((?:src|href)="(?:assets\/(?:js|css)\/[\w-]+\.(?:js|css)|content\/brand\.css))(?:\?v=[\w]+)?"/g, `$1?v=${stamp}"`);
   if (h !== before) writeFileSync(IDX, h);
 }
 

@@ -20,6 +20,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -61,10 +62,73 @@ def is_filled(path: Path, template: Path) -> bool:
     return any(l not in base for l in mine if not l.startswith("# "))
 
 
+def scope_css(css: str, scope: str) -> str:
+    """Prefix every rule of a document's stylesheet with a scope class so its figures can sit inside a hub page."""
+    css = re.sub(r"/\*.*?\*/", "", css, flags=re.S)
+    out = []
+    for sel, body in re.findall(r"([^{}]+)\{([^{}]*)\}", css):
+        sel = sel.strip()
+        if not sel or sel.startswith("@"):
+            continue
+        parts = [x.strip() for x in sel.split(",")]
+        parts = [f"{scope}" if x in (":root", "html", "body") else f"{scope} {x}" for x in parts]
+        out.append(f"{', '.join(parts)}{{{body.strip()}}}")
+    return "\n".join(out)
+
+
+def extract_figures() -> dict:
+    """loop-config "attachments" entries with "sections": copy those sections of a versioned HTML document
+    (text, tables, diagrams) with the document's CSS scoped, so each lands natively on the page it belongs to."""
+    cfg_p = C / "data" / "loop-config.json"
+    if not cfg_p.exists():
+        return {}
+    cfg = json.loads(cfg_p.read_text(encoding="utf-8"))
+    out = {}
+    for spec_dir, by_area in (cfg.get("attachments") or {}).items():
+        for area, docs in by_area.items():
+            for i, d in enumerate(docs):
+                if not d.get("sections"):
+                    continue
+                src = HUB / d["src"]
+                if not src.exists():
+                    print(f"figures: {d['src']} not found (run node build.mjs once)", file=sys.stderr)
+                    continue
+                t = src.read_text(encoding="utf-8")
+                css = "\n".join(re.findall(r"<style[^>]*>(.*?)</style>", t, re.S))
+                key = f"fig-{abs(hash(d['src'])) % 10**8}"
+                figs = []
+                for sid in d["sections"]:
+                    m = re.search(r'<section id="' + re.escape(sid) + r'"[^>]*>(.*?)</section>', t, re.S)
+                    if not m:
+                        continue
+                    h = re.search(r"<h2[^>]*>(.*?)</h2>", m.group(1), re.S)
+                    # the whole section (text, tables and diagrams), so the document is distributed, not framed
+                    figs.append({"title": re.sub(r"<[^>]+>", "", h.group(1)).strip() if h else sid, "html": m.group(0)})
+                out.setdefault(spec_dir, {}).setdefault(area, []).append(
+                    {"title": d["title"], "src": d["src"], "scope": key, "css": scope_css(css, "." + key), "figures": figs})
+    return out
+
+
+def doc_to_section(src: Path, out: Path, source_label: str) -> None:
+    """Write a hub markdown section holding a whole HTML document's sections natively (scoped CSS, no iframe)."""
+    t = src.read_text(encoding="utf-8")
+    css = "\n".join(re.findall(r"<style[^>]*>(.*?)</style>", t, re.S))
+    key = f"doc-{abs(hash(str(src))) % 10**8}"
+    secs = re.findall(r"<section\b.*?</section>", t, re.S)
+    out.write_text(f"Source: `{source_label}`\n\n<style>{scope_css(css, '.' + key)}</style>\n"
+                   f'<div class="ws-doc {key}">\n' + "\n".join(secs) + "\n</div>\n", encoding="utf-8")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--workspace")
-    ws = workspace(ap.parse_args().workspace)
+    ap.add_argument("--doc", nargs=3, metavar=("SRC_HTML", "OUT_MD", "LABEL"), help="render a whole HTML document natively into a section file and exit")
+    args = ap.parse_args()
+    if args.doc:
+        doc_to_section(Path(args.doc[0]), Path(args.doc[1]), args.doc[2])
+        print(f"doc: {args.doc[1]}")
+        return
+    ws = workspace(args.workspace)
     rows = specs_json(ws)
     out_dir = C / "specs"
     if out_dir.exists():
@@ -98,7 +162,21 @@ def main() -> None:
             (dest / "outputs").mkdir(parents=True, exist_ok=True)
             shutil.copy2(src, dest / "outputs" / src.name)
             outputs.append(src.name)
+        contracts = []
+        for src in sorted((d / "contracts").glob("*")) if (d / "contracts").exists() else []:
+            if src.is_file() and src.suffix in (".yaml", ".yml", ".json", ".md") and src.name != "README.md":
+                (dest / "contracts").mkdir(parents=True, exist_ok=True)
+                shutil.copy2(src, dest / "contracts" / src.name)
+                contracts.append(src.name)
         findings = d / "outputs" / "findings.json"
+        groups = {}
+        if findings.exists():
+            rows = json.loads(findings.read_text(encoding="utf-8")).get("findings", [])
+            for field in ("type", "component", "team"):
+                c = {}
+                for x in rows:
+                    c[x.get(field) or "Not set"] = c.get(x.get(field) or "Not set", 0) + 1
+                groups["by" + field.capitalize()] = dict(sorted(c.items(), key=lambda kv: -kv[1]))
         if findings.exists():
             dest.mkdir(parents=True, exist_ok=True)
             shutil.copy2(findings, dest / "findings.json")
@@ -106,14 +184,17 @@ def main() -> None:
         status = json.loads((d / "status.json").read_text(encoding="utf-8")) if (d / "status.json").exists() else {}
         listed = r.get("files")  # spec.py json may list the written files by name
         if isinstance(listed, list):
-            files.update({k: f in listed for k, f in DOCS.items()})
+            files.update({k: True for k, f in DOCS.items() if f in listed})  # spec.py may not track every file; keep our own check for the rest
+        if groups:
+            r = {**r, "findings": {**(r.get("findings") or {}), **groups}}
         specs.append({**r, "dir": name, "files": files,
-                      "review": review, "feedback": feedback, "outputs": outputs, "inputs": inputs,
+                      "review": review, "feedback": feedback, "contracts": contracts, "outputs": outputs, "inputs": inputs,
                       "findingsFile": f"content/specs/{name}/findings.json" if findings.exists() else None,
                       "intake": r.get("intake", status.get("intake")), "approved": status.get("approved", r.get("approved")),
                       "tracker": status.get("tracker", r.get("tracker")), "sources": status.get("sources", []),
                       "repos": status.get("repos", []), "history": status.get("history", [])})
-    loop = {"generated": dt.date.today().isoformat(), "workspace": ws.name, "specs": specs}
+    figures = extract_figures()
+    loop = {"generated": dt.date.today().isoformat(), "workspace": ws.name, "specs": specs, "figures": figures}
     (C / "data").mkdir(parents=True, exist_ok=True)
     (C / "data" / "loop.json").write_text(json.dumps(loop, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
     print(f"loop: {len(specs)} specs from {ws}")

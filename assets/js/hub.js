@@ -144,7 +144,9 @@
       '#/learn': ((DATA.learning || {}).courses || []).reduce((n, c) => n + (c.lessons || []).length, 0),
       '#/releases': ((DATA.releases || {}).releases || []).length
     };
-    const nav = (DATA.nav || []).map(g => ({ ...g, items: (g.items || []).filter(it => moduleOn(routeKey(it.route))) })).filter(g => g.items.length);
+    // a nav group with "fromLoop": true lists every spec in loop.json, so new work appears after a plain rebuild
+    const fromLoop = () => ((DATA.loop || {}).specs || []).map(sp => ({ title: `${sp.key} ${sp.title || ''}`.trim(), icon: 'feature', route: '#/spec/' + sp.dir }));
+    const nav = (DATA.nav || []).map(g => ({ ...g, items: (g.fromLoop ? fromLoop() : (g.items || [])).filter(it => moduleOn(routeKey(it.route))) })).filter(g => g.items.length);
     $('#sidebar').innerHTML = nav.map(g => `
       <div class="nav-group">
         <div class="nav-group__label">${esc(g.label)}</div>

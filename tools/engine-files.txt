@@ -11,6 +11,7 @@ build.mjs
 sync.sh
 tools/dispatch.py
 tools/sync_loop.py
+tools/sync_agentic.py
 tools/hub-update.sh
 tools/hub-migrate.mjs
 tools/engine-files.txt
