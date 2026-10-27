@@ -1,0 +1,34 @@
+{
+  "title": "Agentic engineering loop",
+  "lede": "Every piece of work enters through an intake, becomes a spec folder, and moves through the loop with a gate at each step. This page shows the loop, how work enters it, and where every piece of work is now.",
+  "intake": [
+    { "key": "idea", "title": "Idea", "what": "A plain description, no ticket yet", "command": "/intent <KEY> <slug> \"<the idea>\"", "via": "Typed in the session" },
+    { "key": "jira", "title": "Issue tracker ticket", "what": "An initiative, epic or story", "command": "/intent <KEY> <slug> <TICKET>", "via": "Issue-tracker MCP" },
+    { "key": "github-issue", "title": "GitHub issue or bug", "what": "A bug or request raised on a repo", "command": "/intent <KEY> <slug> <owner/repo#n>", "via": "gh CLI" },
+    { "key": "pr", "title": "Pull request to review", "what": "Code someone wrote, reviewed against the spec", "command": "/pr-review <owner/repo#n>", "via": "gh CLI" }
+  ],
+  "phases": [
+    { "key": "intent", "title": "Intent", "command": "/intent", "does": "Sources into inputs/, then why, for whom, outcome, success measures. /gap maps it onto existing code.", "gate": "Owner approves the intent", "files": ["intent.md", "outputs/review/"], "tools": ["Issue tracker", "Docs", "Designs"] },
+    { "key": "spec", "title": "Spec", "command": "/spec", "does": "One requirement per behaviour, Given/When/Then acceptance criteria.", "gate": "Every requirement has criteria; owner approves", "files": ["spec.md"], "tools": [] },
+    { "key": "design", "title": "Design", "command": "/design", "does": "Components per repo, contracts, data, configuration, test plan; ADRs for real choices.", "gate": "Contracts written; tech lead approves", "files": ["plan.md", "data-model.md", "contracts/"], "tools": [] },
+    { "key": "build", "title": "Build", "command": "/tasks, /build", "does": "One task, one branch, one pull request, tests first.", "gate": "Every task done; /pr-review clean", "files": ["tasks.md"], "tools": ["gh CLI"] },
+    { "key": "test", "title": "Test", "command": "/test", "does": "Unit to end-to-end, every acceptance criterion passing.", "gate": "Every criterion has a passing test", "files": ["test-plan.md", "outputs/test-runs/"], "tools": [] },
+    { "key": "deploy", "title": "Deploy", "command": "/deploy", "does": "Release notes, the pipeline, smoke test.", "gate": "Smoke test passes in the target environment", "files": ["outputs/release-notes.md"], "tools": [] },
+    { "key": "maintain", "title": "Maintain", "command": "/maintain, /fix-issue", "does": "Runbook, incidents, feedback; new needs become a new intent.", "gate": "Findings become a new intent", "files": ["outputs/runbook.md", "outputs/feedback/"], "tools": [] }
+  ],
+  "review": {
+    "command": "/gap <KEY> <area>",
+    "areas": [
+      { "key": "architecture", "title": "Architecture" },
+      { "key": "infra", "title": "Infrastructure" },
+      { "key": "apis", "title": "APIs" },
+      { "key": "data", "title": "Data" },
+      { "key": "localization", "title": "Localization" },
+      { "key": "ui-ux", "title": "UI / UX" },
+      { "key": "security", "title": "Security" },
+      { "key": "tests", "title": "Tests" }
+    ]
+  },
+  "tools": [],
+  "trackerBase": ""
+}

@@ -3,12 +3,14 @@
 # project deploy scripts (deploy-*.sh). Keep this list in the template only.
 index.html
 assets/js/hub.js
+assets/js/loop.js
 assets/js/comments.js
 assets/css/hub.css
 assets/css/mockup-kit.css
 build.mjs
 sync.sh
 tools/dispatch.py
+tools/sync_loop.py
 tools/hub-update.sh
 tools/hub-migrate.mjs
 tools/engine-files.txt

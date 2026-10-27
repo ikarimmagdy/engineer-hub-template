@@ -1,4 +1,4 @@
-# Engineering Hub, template (v3)
+# Engineering Hub, template (v4)
 
 One engine, many hubs: the engine files come from this repo and are updated in place with
 `tools/hub-update.sh`; each project keeps only its content (`content/`, `assets/img/`).
@@ -14,6 +14,27 @@ local doc in the repo.
 It is a static site (HTML, CSS, one JS file) whose **content is data**: markdown +
 JSON under `content/`. No framework, no build server. A small `build.mjs` assembles a
 manifest and copies your repo docs in so they are viewable in the hub.
+
+## v4: the agentic engineering loop as the front door
+
+A hub can open on the loop instead of the overview. It displays a workspace made from the
+agentic engineering project template (`specs/<KEY>-<slug>/`, `tools/spec.py`) and never holds
+its own status: phase, approvals and tasks come only from `spec.py`.
+
+| Page | Route | Source |
+|---|---|---|
+| The loop: intakes (idea, tracker ticket, GitHub issue, PR), the phases with command, tools and gate, every spec by phase | `#/loop` | `content/data/loop-config.json` + `content/data/loop.json` |
+| One piece of work, fixed tabs: Overview, Intent, Code review (per area), Findings, Feedback, Spec, Design, Tasks, Tests, History | `#/spec/<dir>/<tab>` | the spec's files, copied by `tools/sync_loop.py` |
+| Findings across work, all or by review area (architecture, infra, APIs, data, localization, UI/UX, security, tests) | `#/findings/<area>` | each spec's `outputs/findings.json` |
+
+Set up: in `brand.json` add `"home": "loop"` and `"workspace": "<path to the workspace from this folder>"`;
+copy `content/data/loop-config.json` and name your MCP servers and tools in it; then
+`python3 tools/sync_loop.py && node build.mjs`. Add the loop pages to `content/nav.json`
+(`#/loop`, `#/findings/all`, one `#/spec/<dir>/overview` per spec).
+
+Brand additions: `markSvg` (SVG used as favicon and gate mark), `logoDark`, and `home` (also the
+topbar link). Extension scripts can add pages through `window.HUB_ROUTES`, wide pages through
+`window.HUB_WIDE` and search entries through `window.HUB_SEARCH`, using the helpers on `window.Hub`.
 
 ## Use it in a project (5 minutes)
 

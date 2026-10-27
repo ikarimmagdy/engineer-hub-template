@@ -34,6 +34,7 @@ const GROUPS = {
   'developer-guide': 'Developer guide'
 };
 const kb = [];
+const IMG = /\.(png|jpe?g|gif|svg|webp)$/i;
 function titleOf(txt, fallback) {
   const m = txt.match(/^#\s+(.+)$/m);
   return (m ? m[1] : fallback).replace(/[#*`]/g, '').trim().slice(0, 90);
@@ -50,8 +51,12 @@ function walk(dir) {
   if (!existsSync(dir)) return;
   for (const name of readdirSync(dir)) {
     const p = join(dir, name);
+    // the hub may live inside docsDir; never walk its own output
+    if (p === ROOT || name.startsWith('.') || name === 'test-data') continue;   // test-data holds personal data, never mirrored
     const st = statSync(p);
     if (st.isDirectory()) { walk(p); continue; }
+    // images referenced by the docs travel with them, so relative paths keep working
+    if (IMG.test(name)) { const d = join(KBSRC, relative(DOCS, p)); mkdirSync(dirname(d), { recursive: true }); copyFileSync(p, d); continue; }
     if (!name.endsWith('.md')) continue;
     const relFromRepo = relative(REPO, p);           // e.g. docs/knowledge-base/x.md
     const relFromDocs = relative(DOCS, p);           // e.g. knowledge-base/x.md
@@ -95,6 +100,7 @@ const VRE = /^v(\d+)-[\d-]+\.(html?|md|pdf)$/i;
       if (excl.some(x => p.includes(x))) continue;
       if (statSync(p).isDirectory()) { visit(p); continue; }
       const ext = (name.split('.').pop() || '').toLowerCase();
+      if (IMG.test(name)) { const d = join(C, 'kb-src', relative(REPO, p)); mkdirSync(dirname(d), { recursive: true }); copyFileSync(p, d); continue; }
       if (!types.includes(ext === 'htm' ? 'html' : ext)) continue;
       if (root.latestOnly !== false && versioned.length && (name === 'index.html' || (VRE.test(name) && name !== latest))) continue;
       const rel = relative(REPO, p).replace(/\\/g, '/');
@@ -118,7 +124,7 @@ kb.sort((a, b) => ((a.order || 0) - (b.order || 0)) || (a.group + a.title).local
 const nav = read(join(C, 'nav.json'));
 const overview = read(join(C, 'overview.json'));
 const sections = read(join(C, 'sections.json'));
-const features = read(join(D, 'features.json'));
+const features = readIf(join(D, 'features.json')) || [];   // optional since v4: a loop hub may have no roadmap features
 const roadmapExtra = readIf(join(D, 'roadmapExtra.json')) || [];
 let adrs = readIf(join(D, 'adrs.json')) || [];
 // ADR files (docs/adr/NNNN-slug.md, the /adr command's format) win over adrs.json when present.
@@ -254,8 +260,8 @@ if (existsSync(CODE) && REPOS.length) {
 }
 
 const manifest = {
-  meta: { generated: new Date().toISOString().slice(0, 10), version: 'v3', template: (existsSync(join(C, '.template-version')) ? readFileSync(join(C, '.template-version'), 'utf8').split(/\s+/)[0] : ''), brand: brand.name || '', hubDir: relative(REPO, ROOT).replace(/\\/g, '/') || '.' },
-  overview, nav, sections, features, roadmapExtra, adrs, gaps, security, performance, gtm, vendors, questions, lifecycle, kb, traceability, feedback, learning, releases,
+  meta: { generated: new Date().toISOString().slice(0, 10), version: 'v4', template: (existsSync(join(C, '.template-version')) ? readFileSync(join(C, '.template-version'), 'utf8').split(/\s+/)[0] : ''), brand: brand.name || '', hubDir: relative(REPO, ROOT).replace(/\\/g, '/') || '.' },
+  overview, nav, sections, features, loop: readIf(join(D, 'loop.json')), loopConfig: readIf(join(D, 'loop-config.json')), roadmapExtra, adrs, gaps, security, performance, gtm, vendors, questions, lifecycle, kb, traceability, feedback, learning, releases,
   defectsSummary: { total: summary.defects?.total || 0, critical: summary.defects?.critical || 0, high: summary.defects?.high || 0, medium: summary.defects?.medium || 0, low: summary.defects?.low || 0 },
   counts: { gaps: summary.gaps || null, security: summary.security || null }
 };
@@ -270,14 +276,19 @@ if (existsSync(IDX)) {
   const ea = s => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
   const title = brand.name ? `${brand.name} Engineering Hub` : 'Engineering Hub';
   const fill = brand.primary || '#2563eb', stroke = brand.markStroke || '#ffffff', rx = brand.markRadius ?? 8;
-  const mark = `<rect width="32" height="32" rx="${rx}" fill="${fill}"/><path d="M9 16h14M16 9v14" stroke="${stroke}" stroke-width="3" stroke-linecap="round"/>`;
-  const fav = 'data:image/svg+xml,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">${mark.replace('stroke-linecap', 'fill="none" stroke-linecap')}</svg>`).replace(/'/g, '%27');
+  // brand.json "markSvg": path to an SVG used as favicon and gate mark (its viewBox is kept); otherwise the generated plus mark
+  const markFile = brand.markSvg && existsSync(join(ROOT, brand.markSvg)) ? readFileSync(join(ROOT, brand.markSvg), 'utf8') : '';
+  const markBox = (markFile.match(/viewBox="([^"]+)"/) || [])[1] || '0 0 32 32';
+  const markInner = markFile ? markFile.replace(/^[\s\S]*?<svg[^>]*>/, '').replace(/<\/svg>[\s\S]*$/, '').trim() : '';
+  const mark = markInner || `<rect width="32" height="32" rx="${rx}" fill="${fill}"/><path d="M9 16h14M16 9v14" stroke="${stroke}" stroke-width="3" stroke-linecap="round"/>`;
+  const fav = 'data:image/svg+xml,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="${markBox}">${markInner ? mark : mark.replace('stroke-linecap', 'fill="none" stroke-linecap')}</svg>`).replace(/'/g, '%27');
   let h = readFileSync(IDX, 'utf8'); const before = h;
   h = h.replace(/<base href="[^"]*">/, `<base href="${ea(brand.baseHref || './')}">`)
     .replace(/<title>[^<]*<\/title>/, `<title>${ea(title)}</title>`)
     .replace(/<meta name="description" content="[^"]*">/, `<meta name="description" content="${ea(brand.description || title + ': the single place the team reviews what is built, planned, the architecture, infrastructure, ADRs, gaps, security, and every feature dossier.')}">`)
     .replace(/<link rel="icon" href="[^"]*">/, `<link rel="icon" href="${fav}">`)
-    .replace(/(<div class="gate__mark"[^>]*>\s*<svg viewBox="0 0 32 32">)[\s\S]*?(<\/svg>)/, `$1${mark}$2`)
+    .replace(/(<div class="gate__mark"[^>]*>\s*<svg viewBox=")[^"]*(">)[\s\S]*?(<\/svg>)/, `$1${markBox}$2${mark}$3`)
+    .replace(/(<a class="topbar__brand" href=")#\/[^"]*(")/, `$1#/${ea(brand.home || 'overview')}$2`)
     .replace(/(<form id="gateForm"[\s\S]*?<h1>)[^<]*(<\/h1>)/, `$1${ea(title)}$2`)
     .replace(/aria-label="[^"]*Engineering Hub home"/, `aria-label="${ea(title)} home"`)
     .replace(/<img (?:src="[^"]*" )?alt="" class="brand-logo"[^>]*>/, existsSync(join(ROOT, brand.logo || 'assets/img/logo.png'))

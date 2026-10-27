@@ -1,5 +1,5 @@
 /* ============================================================
-   Engineering Hub, single-page engine (template v3).
+   Engineering Hub, single-page engine (template v4).
    Content is DATA: manifest.json + markdown under content/.
    Everything project-specific comes from content/brand.json and
    content/*; this file is replaced by tools/hub-update.sh, so
@@ -155,7 +155,7 @@
       </div>`).join('');
   }
   function setActive() {
-    const base = '#/' + (location.hash.replace(/^#\//, '').split('/')[0] || 'overview');
+    const base = '#/' + (location.hash.replace(/^#\//, '').split('/')[0] || HOME());
     $$('.nav-link').forEach(a => a.classList.toggle('active', a.getAttribute('data-route') === base));
   }
 
@@ -163,6 +163,8 @@
      brand.json "modules": { "learn": false, "releases": true, ... } switches a page on or off.
      Without a flag, a data-driven module is on when its data exists. */
   const routeKey = r => String(r || '').replace(/^#\//, '').split('/')[0];
+  // brand.json "home": the route key the hub opens on (default overview; a loop hub uses "loop")
+  const HOME = () => (window.__BRAND || {}).home || 'overview';
   const MODULE_DATA = {
     learn: () => ((DATA.learning || {}).courses || []).length, course: () => ((DATA.learning || {}).courses || []).length, lesson: () => ((DATA.learning || {}).courses || []).length,
     releases: () => ((DATA.releases || {}).releases || []).length,
@@ -184,18 +186,22 @@
     feature: renderFeature, product: md('product'), architecture: md('architecture'),
     infra: md('infra'), cicd: md('cicd'), adr: renderADR, gaps: renderGaps,
     security: renderSecurity, performance: renderPerformance, observability: md('observability'),
-    kb: renderKB, doc: renderDoc, gtm: renderGTM, traceability: renderTrace, accounts: renderAccounts, changelog: renderChangelog, dispatch: renderDispatch, stories: renderStories, vendors: renderVendors, questions: renderQuestions,
+    kb: renderKB, doc: renderDoc, review: renderReview, gtm: renderGTM, traceability: renderTrace, accounts: renderAccounts, changelog: renderChangelog, dispatch: renderDispatch, stories: renderStories, vendors: renderVendors, questions: renderQuestions,
     learn: renderLearn, course: renderCourse, lesson: renderLesson, releases: renderReleases
   };
   async function route() {
-    if (!location.hash || location.hash === '#') { location.hash = '#/overview'; return; }
+    const home = HOME();
+    if (!location.hash || location.hash === '#') { location.hash = '#/' + home; return; }
     const parts = location.hash.replace(/^#\//, '').split('/');
-    const key = parts[0] || 'overview';
+    const key = parts[0] || home;
     const arg = parts.slice(1).join('/');
+    // routes added by extension scripts (window.HUB_ROUTES, e.g. loop.js) sit next to the built-in ones
+    const R = { ...ROUTES, ...(window.HUB_ROUTES || {}) };
+    const homeFn = R[home] || renderOverview;
     // any section in sections.json without its own renderer (e.g. a Streams or Screens page) renders as markdown
-    const fn = (!moduleOn(key) && key !== 'overview') ? renderOverview : (ROUTES[key] || ((DATA && (DATA.sections || []).some(s => s.id === key)) ? md(key) : renderOverview));
+    const fn = (!moduleOn(key) && key !== home) ? homeFn : (R[key] || ((DATA && (DATA.sections || []).some(s => s.id === key)) ? md(key) : homeFn));
     setActive();
-    $('#content').classList.toggle('main--wide', key === 'roadmap' || key === 'dispatch');
+    $('#content').classList.toggle('main--wide', ['roadmap', 'dispatch', 'review', 'doc', ...(window.HUB_WIDE || [])].includes(key));
     $('#content').scrollTop = 0; window.scrollTo(0, 0);
     $('#content').innerHTML = `<div class="loading"><span class="spinner"></span> Loading…</div>`;
     try { await fn(arg); } catch (e) { $('#content').innerHTML = `<div class="callout danger"><b>Render error.</b> ${esc(e.message)}</div>`; }
@@ -208,8 +214,16 @@
     if (!r.ok) throw new Error('Missing file: ' + path);
     return r.text();
   }
-  function renderMarkdown(mdText, mount) {
+  function renderMarkdown(mdText, mount, base) {
     mount.innerHTML = window.marked ? marked.parse(mdText) : `<pre>${esc(mdText)}</pre>`;
+    // a doc's relative images resolve against the doc's own folder, not the hub page
+    if (base) {
+      const docUrl = new URL(base, location.href);
+      $$('img[src]', mount).forEach(img => {
+        const s = img.getAttribute('src');
+        if (s && !/^([a-z][a-z0-9+.-]*:|\/|#)/i.test(s)) img.src = new URL(s, docUrl).href;
+      });
+    }
     // convert ```mermaid blocks
     $$('code.language-mermaid', mount).forEach(code => {
       const pre = code.closest('pre');
@@ -1213,8 +1227,75 @@
       mount.innerHTML = `${k ? `<div class="page-head"><h1>${esc(k.title)}</h1>${k.summary ? `<p class="lede">${esc(k.summary)}</p>` : ''}</div>` : ''}<iframe class="docframe" title="${esc(k ? k.title : arg)}" src="${src}"></iframe>`;
       return;
     }
-    try { renderMarkdown(await loadMD(src), mount); }
+    try { renderMarkdown(await loadMD(src), mount, src); }
     catch (e) { mount.innerHTML = `<div class="callout warn"><b>Could not load</b> <code>${esc(arg)}</code>. It may be a binary file; see it in the repo.</div>`; }
+  }
+
+  /* ---------- CODE REVIEW: one page per feature / CR, summary + all issues + a tab per platform ---------- */
+  let CR = null;
+  const RV = { platform: '', severity: '', category: '', theme: '', q: '' };
+  async function renderReview(arg) {
+    const c = $('#content');
+    if (!CR) CR = await fetch('content/data/code-review.json', { cache: 'no-cache' }).then(r => r.ok ? r.json() : { initiatives: [] }).catch(() => ({ initiatives: [] }));
+    const list = CR.initiatives || [];
+    if (!list.length) { c.innerHTML = `<div class="page-head"><p class="eyebrow">Code review</p><h1>No code reviews yet</h1><p class="lede">A review shows here when an initiative has gap-analysis/v&lt;N&gt;-&lt;date&gt;-code-review.md.</p></div>`; return; }
+    const [key, tab = 'summary'] = (arg || '').split('/');
+    const ini = list.find(i => i.key === key) || list[0];
+    const F = ini.findings || [];
+    const sevs = ['Critical', 'High', 'Medium', 'Low'];
+    const inl = t => window.marked ? marked.parseInline(String(t || '')) : esc(t);
+    const pname = id => ((ini.platforms.find(p => p.id === id) || {}).name || id);
+    const tabs = [['summary', 'Summary', ''], ['issues', 'All issues', F.length], ...ini.platforms.map(p => [p.id, p.name, F.filter(f => f.platform === p.id).length])];
+    c.innerHTML = `
+      <div class="page-head rv-head"><div><p class="eyebrow">Code review · ${esc(ini.version)} · ${esc(ini.date)}</p>
+        <h1>${esc(ini.key)} code review</h1>
+        <p class="lede">${esc(String(ini.title).replace(/^[^—]*—\s*/, ''))}</p></div>
+        <label class="rv-pick">Feature / CR <select id="rvIni">${list.map(i => `<option value="${esc(i.key)}" ${i.key === ini.key ? 'selected' : ''}>${esc(i.key)}</option>`).join('')}</select></label>
+      </div>
+      <div class="stat-row">${sevs.map(s => `<div class="stat"><div class="n rv-n-${s.toLowerCase()}">${F.filter(f => f.severity === s).length}</div><div class="l">${s}</div></div>`).join('')}<div class="stat"><div class="n">${F.length}</div><div class="l">Total issues</div></div></div>
+      <nav class="rv-tabs">${tabs.map(([id, label, k]) => `<a class="rv-tab ${id === tab ? 'active' : ''}" href="#/review/${esc(ini.key)}/${esc(id)}">${esc(label)}${k !== '' ? ` <span class="k">${k}</span>` : ''}</a>`).join('')}</nav>
+      <div id="rvBody"></div>`;
+    $('#rvIni').onchange = e => { location.hash = '#/review/' + e.target.value + '/summary'; };
+    const body = $('#rvBody');
+    if (tab === 'issues') return renderIssues();
+    const doc = tab === 'summary' ? ini.summary : (ini.platforms.find(p => p.id === tab) || {}).doc;
+    if (!doc) { body.innerHTML = `<div class="callout warn">Unknown tab.</div>`; return; }
+    const src = 'content/kb-src/' + doc.split('/').map(encodeURIComponent).join('/');
+    body.innerHTML = `<p class="rv-actions">${tab !== 'summary' ? `<a class="rv-btn" id="rvFilter" href="#/review/${esc(ini.key)}/issues">Show ${esc(pname(tab))} issues as a filterable list</a>` : `<a class="rv-btn" href="#/review/${esc(ini.key)}/issues">All ${F.length} issues as a filterable list</a>`}
+      <a href="${src}" target="_blank" rel="noopener">Open the report file</a> <code>${esc(doc)}</code></p>
+      <div id="rvDoc" class="md rv-doc"><div class="loading"><span class="spinner"></span> Loading…</div></div>`;
+    const fb = $('#rvFilter'); if (fb) fb.onclick = () => { Object.assign(RV, { platform: tab, severity: '', category: '', theme: '', q: '' }); };
+    try { renderMarkdown(await loadMD(src), $('#rvDoc'), src); }
+    catch (e) { $('#rvDoc').innerHTML = `<div class="callout warn">Could not load <code>${esc(doc)}</code>.</div>`; }
+
+    function renderIssues() {
+      const cats = [...new Set(F.map(f => (f.category || '').split(/[ (/]/)[0]).filter(Boolean))].sort();
+      body.innerHTML = `<div class="rv-filters">
+          <select id="fPlat"><option value="">All platforms</option>${ini.platforms.map(p => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('')}</select>
+          <select id="fSev"><option value="">All severities</option>${sevs.map(s => `<option>${s}</option>`).join('')}</select>
+          <select id="fCat"><option value="">All categories</option>${cats.map(s => `<option>${esc(s)}</option>`).join('')}</select>
+          <select id="fTheme"><option value="">All themes</option>${ini.themes.map(t => `<option value="${esc(t.id)}">${esc(t.id)} · ${esc(t.title)}</option>`).join('')}</select>
+          <input id="fQ" type="search" placeholder="Search ID, finding, file, fix">
+          <button class="rv-btn rv-clear" id="fClear" type="button">Clear</button>
+          <span id="fCount" class="rv-count"></span></div>
+        <p class="rv-hint">Click a row for impact and recommended fix.</p>
+        <table class="rv-table"><thead><tr><th>ID</th><th>Platform</th><th>Severity</th><th>Category</th><th>Theme</th><th>Finding</th><th>Location</th></tr></thead><tbody id="fRows"></tbody></table>`;
+      const bind = (id, k) => { const el = $('#' + id); el.value = RV[k]; el.oninput = () => { RV[k] = el.value; draw(); }; };
+      bind('fPlat', 'platform'); bind('fSev', 'severity'); bind('fCat', 'category'); bind('fTheme', 'theme'); bind('fQ', 'q');
+      $('#fClear').onclick = () => { Object.assign(RV, { platform: '', severity: '', category: '', theme: '', q: '' }); renderIssues(); };
+      draw();
+      function draw() {
+        const q = RV.q.toLowerCase();
+        const rows = F.filter(f => (!RV.platform || f.platform === RV.platform) && (!RV.severity || f.severity === RV.severity)
+            && (!RV.category || (f.category || '').startsWith(RV.category)) && (!RV.theme || (f.themes || []).includes(RV.theme))
+            && (!q || [f.id, f.finding, f.location, f.impact, f.fix, f.category].join(' ').toLowerCase().includes(q)))
+          .sort((a, b) => sevs.indexOf(a.severity) - sevs.indexOf(b.severity));
+        $('#fCount').textContent = `${rows.length} of ${F.length}`;
+        $('#fRows').innerHTML = rows.map(f => `<tr class="rv-row"><td><b>${esc(f.id)}</b></td><td>${esc(pname(f.platform))}</td><td><span class="rv-sev rv-${f.severity.toLowerCase()}">${esc(f.severity)}</span></td><td>${inl(f.category)}</td><td>${(f.themes || []).map(t => `<span class="badge b-low" title="${esc((ini.themes.find(x => x.id === t) || {}).title || '')}">${esc(t)}</span>`).join(' ')}</td><td>${inl(f.finding)}</td><td class="rv-loc">${inl(f.location)}</td></tr>
+          <tr class="rv-detail" hidden><td colspan="7"><div class="rv-dgrid"><div><h4>Impact</h4><p>${inl(f.impact)}</p></div><div><h4>Recommended fix</h4><p>${inl(f.fix)}</p></div></div></td></tr>`).join('') || `<tr><td colspan="7">No issues match these filters.</td></tr>`;
+        $$('.rv-row', body).forEach(tr => tr.onclick = () => { const d = tr.nextElementSibling; d.hidden = !d.hidden; tr.classList.toggle('open', !d.hidden); });
+      }
+    }
   }
 
   /* ---------- GTM / production-readiness board ---------- */
@@ -1430,6 +1511,7 @@
     });
     (DATA.sections || []).forEach(s => idx.push({ kind: 'Section', title: s.title, sub: s.lede, href: '#/' + s.id }));
     (DATA.nav || []).forEach(g => g.items.forEach(it => idx.push({ kind: 'Page', title: it.title, sub: '', href: it.route })));
+    (window.HUB_SEARCH || []).forEach(fn => { try { idx.push(...(fn(DATA) || [])); } catch (_) {} });
     const run = q => {
       q = q.trim().toLowerCase();
       if (!q) { box.hidden = true; return; }
@@ -1550,6 +1632,13 @@
     $('#scrim')?.addEventListener('click', closeMobileNav);
   }
   function closeMobileNav() { $('#sidebar')?.classList.remove('open'); $('#scrim')?.classList.remove('show'); }
+
+  /* ---------- extension API ----------
+     Extension scripts loaded after hub.js (e.g. loop.js) add pages through window.HUB_ROUTES,
+     wide pages through window.HUB_WIDE and search entries through window.HUB_SEARCH, and use
+     these helpers so they render exactly like the built-in pages. */
+  window.Hub = { get DATA() { return DATA; }, $, $$, esc, arr, ico, loadMD, renderMarkdown, runMermaid, md,
+    brand: () => window.__BRAND || {}, route: () => route() };
 
   (async () => { try { await applyBrand(); } catch (_) {} initGate(); })();
 })();
