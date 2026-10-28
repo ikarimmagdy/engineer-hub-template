@@ -7,7 +7,8 @@
    or overwrites content. Safe to run any number of times.
    ============================================================ */
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const HUB = process.argv[2] || '.';
 const rd = p => existsSync(join(HUB, p)) ? readFileSync(join(HUB, p), 'utf8') : '';
@@ -61,6 +62,28 @@ if (bucket && !brand.deploy) {
   const cf = (sync.match(/HUB_CF:=([^}$]+)\}/) || [])[1]; if (cf) d.cloudfront = cf;
   const url = (sync.match(/(https:\/\/[^\s"]+)/) || [])[1]; if (url) d.url = url;
   add('deploy', d);
+}
+
+// loop hubs (brand.json "workspace"): add the template's loop nav groups and loop-config sections that are missing
+if (brand.workspace) {
+  const TPL = join(dirname(fileURLToPath(import.meta.url)), '..', 'content');
+  const tplNav = JSON.parse(readFileSync(join(TPL, 'nav.json'), 'utf8'));
+  const isLoop = g => g.fromLoop || (g.items || []).some(i => /^#\/(start|loop|findings)/.test(i.route || ''));
+  const np = join(HUB, 'content', 'nav.json');
+  const nav = existsSync(np) ? JSON.parse(readFileSync(np, 'utf8')) : [];
+  if (!nav.some(g => (g.items || []).some(i => i.route === '#/loop'))) {
+    writeFileSync(np, JSON.stringify([...tplNav.filter(isLoop), ...nav], null, 2) + '\n');
+    console.log('  nav.json: added the loop groups (Agentic loop, Work, Review areas)');
+  }
+  const cp = join(HUB, 'content', 'data', 'loop-config.json');
+  const tplCfg = JSON.parse(readFileSync(join(TPL, 'data', 'loop-config.json'), 'utf8'));
+  const cfg = existsSync(cp) ? JSON.parse(readFileSync(cp, 'utf8')) : {};
+  const missing = Object.keys(tplCfg).filter(k => cfg[k] === undefined || (Array.isArray(cfg[k]) && !cfg[k].length));
+  if (missing.length) {
+    missing.forEach(k => { cfg[k] = tplCfg[k]; });
+    writeFileSync(cp, JSON.stringify(cfg, null, 2) + '\n');
+    console.log('  loop-config.json: added ' + missing.join(', '));
+  }
 }
 
 if (added.length) {

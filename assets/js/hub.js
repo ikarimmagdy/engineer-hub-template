@@ -165,15 +165,17 @@
      brand.json "modules": { "learn": false, "releases": true, ... } switches a page on or off.
      Without a flag, a data-driven module is on when its data exists. */
   const routeKey = r => String(r || '').replace(/^#\//, '').split('/')[0];
-  // brand.json "home": the route key the hub opens on (default overview; a loop hub uses "loop")
-  const HOME = () => (window.__BRAND || {}).home || 'overview';
+  // brand.json "home": the route key the hub opens on (default: loop when a workspace is synced, else overview)
+  const HOME = () => (window.__BRAND || {}).home || (DATA.loop ? 'loop' : 'overview');
   const MODULE_DATA = {
     learn: () => ((DATA.learning || {}).courses || []).length, course: () => ((DATA.learning || {}).courses || []).length, lesson: () => ((DATA.learning || {}).courses || []).length,
     releases: () => ((DATA.releases || {}).releases || []).length,
     dispatch: () => (DATA.features || []).some(f => f.fid),
     stories: () => (DATA.features || []).some(f => (f.stories || []).length),
     vendors: () => (DATA.vendors || []).length || (DATA.sections || []).some(s => s.id === 'third-parties'),
-    questions: () => (DATA.questions || []).length
+    questions: () => (DATA.questions || []).length,
+    // loop pages exist only when sync.sh has read a workspace (brand.json "workspace" -> content/data/loop.json)
+    start: () => !!DATA.loop, loop: () => !!DATA.loop, spec: () => !!DATA.loop, findings: () => !!DATA.loop
   };
   function moduleOn(key) {
     const m = (window.__BRAND || {}).modules || {};

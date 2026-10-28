@@ -50,6 +50,14 @@ topbar link). Extension scripts can add pages through `window.HUB_ROUTES`, wide 
    markdown should be linked into the Knowledge base (relative to the project root,
    which is two levels above this folder by default; adjust in `build.mjs` if you place
    it elsewhere).
+   For a **loop hub** (the agentic engineering loop as the front door), also set
+   `"workspace"` to the engineering workspace folder relative to this hub (a repo made
+   from the agentic engineering project template: `specs/` and `tools/spec.py`). The hub
+   then opens on `#/loop`; the nav groups Agentic loop, Work and Review areas come with the
+   template's `content/nav.json`, and `content/data/loop-config.json` holds the Start here
+   steps (set `start.exampleKey`, `start.org` and the clone commands for your project).
+   `./sync.sh` reads the workspace. An existing hub gets the same groups and sections
+   from `tools/hub-update.sh` once `"workspace"` is set (only what is missing is added).
 3. Fill content (see below), then build:
    ```
    cd engineer-guide && node build.mjs

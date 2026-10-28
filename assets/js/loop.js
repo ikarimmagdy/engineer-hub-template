@@ -30,6 +30,9 @@
   const phaseTitle = k => (phases().find(p => p.key === k) || {}).title || k || 'Not set';
   const trackerUrl = key => { const b = cfg().trackerBase || ''; return b && key ? b.replace(/\/$/, '') + '/' + encodeURIComponent(key) : ''; };
   const cmd = (c, key) => String(c || '').replace(/<KEY>/g, key || '<KEY>');
+  // loop-config start.exampleKey / start.org: the work key and repo owner shown in the Start here builder
+  const EX_KEY = () => (cfg().start || {}).exampleKey || 'PROJ-123';
+  const EX_ORG = () => (cfg().start || {}).org || '<org>';
   const pill = (txt, cls) => `<span class="lp-pill ${cls || ''}">${esc(txt)}</span>`;
   const sevPill = s => pill(SEV_LBL[s] || s || 'n/a', 'sev-' + (s || 'none'));
   const copyBtn = text => `<button class="lp-copy" type="button" data-copy="${esc(text)}" title="Copy">${esc(text)}</button>`;
@@ -67,7 +70,7 @@
     const byPhase = Object.fromEntries(phases().map(p => [p.key, S.filter(s => s.phase === p.key)]));
     const unused = ag ? ag.tools.filter(t => t.configured && !t.used) : [];
     let n = 0; const step = () => ++n;
-    c.innerHTML = `${head('Beyond One agentic engineering', C.title || 'Agentic engineering loop', C.lede || '')}
+    c.innerHTML = `${head(`${(window.__BRAND || {}).name || ''} agentic engineering`.trim(), C.title || 'Agentic engineering loop', C.lede || '')}
       ${ag ? `<section class="lp-block">
         <h2 class="lp-h2"><span class="lp-step">${step()}</span> ${esc((C.sdlc || {}).title || 'The SDLC at a glance')}</h2>
         ${sdlcOverview()}
@@ -459,7 +462,7 @@
       <section class="st-builder"><h2 class="lp-h2"><span class="lp-step">+</span> Add a new work item</h2>
         <div class="st-form">
           <label>Comes from <select id="stKind">${kinds.map(([k, t]) => `<option value="${k}">${t}</option>`).join('')}</select></label>
-          <label>Work key <input id="stKey" placeholder="TELCO-1234" autocomplete="off"></label>
+          <label>Work key <input id="stKey" placeholder="${esc(EX_KEY())}" autocomplete="off"></label>
           <label>Short name <input id="stSlug" placeholder="promissory-cap" autocomplete="off"></label>
           <label class="wide">Source <input id="stRef" placeholder="Jira key, idea text, owner/repo#n or PR URL" autocomplete="off"></label>
         </div>
@@ -471,9 +474,9 @@
         ${(st.commands || []).map(x => `<div class="st-cmd">${copyBtn(x.cmd)}${x.note ? `<span>${esc(x.note)}</span>` : ''}</div>`).join('')}
         ${st.link ? `<p><a href="${esc(st.link.href)}">${esc(st.link.text)}</a></p>` : ''}</div></section>`).join('')}`;
     const out = () => {
-      const k = $('#stKind').value, key = ($('#stKey').value || 'TELCO-1234').trim().toUpperCase(), slug = ($('#stSlug').value || 'short-name').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''), ref = ($('#stRef').value || '').trim();
+      const k = $('#stKind').value, key = ($('#stKey').value || EX_KEY()).trim().toUpperCase(), slug = ($('#stSlug').value || 'short-name').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''), ref = ($('#stRef').value || '').trim();
       const okKey = /^[A-Z][A-Z0-9_]*-\d+$/.test(key);
-      const first = k === 'pr' ? `/pr-review ${ref || 'BeyondOneGroup/<repo>#<n>'}` : k === 'idea' ? `/intent ${key} ${slug} "${ref || 'the idea, in a few sentences'}"` : `/intent ${key} ${slug} ${ref || (k === 'jira' ? key : 'BeyondOneGroup/<repo>#<n>')}`;
+      const first = k === 'pr' ? `/pr-review ${ref || EX_ORG() + '/<repo>#<n>'}` : k === 'idea' ? `/intent ${key} ${slug} "${ref || 'the idea, in a few sentences'}"` : `/intent ${key} ${slug} ${ref || (k === 'jira' ? key : EX_ORG() + '/<repo>#<n>')}`;
       const steps = k === 'pr' ? [[first, 'reviews the PR; findings go to the spec it belongs to']] : [
         [first, k === 'jira' ? 'pulls the ticket, its epics and stories and the Confluence PRD into inputs/, writes intent.md' : 'saves the source into inputs/, writes intent.md'],
         [`/gap ${key} all`, 'reviews the existing code area by area: architecture, infra, APIs, data, localization, UI/UX, security, tests'],

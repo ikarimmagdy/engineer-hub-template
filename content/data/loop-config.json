@@ -2,33 +2,813 @@
   "title": "Agentic engineering loop",
   "lede": "Every piece of work enters through an intake, becomes a spec folder, and moves through the loop with a gate at each step. This page shows the loop, how work enters it, and where every piece of work is now.",
   "intake": [
-    { "key": "idea", "title": "Idea", "what": "A plain description, no ticket yet", "command": "/intent <KEY> <slug> \"<the idea>\"", "via": "Typed in the session" },
-    { "key": "jira", "title": "Issue tracker ticket", "what": "An initiative, epic or story", "command": "/intent <KEY> <slug> <TICKET>", "via": "Issue-tracker MCP" },
-    { "key": "github-issue", "title": "GitHub issue or bug", "what": "A bug or request raised on a repo", "command": "/intent <KEY> <slug> <owner/repo#n>", "via": "gh CLI" },
-    { "key": "pr", "title": "Pull request to review", "what": "Code someone wrote, reviewed against the spec", "command": "/pr-review <owner/repo#n>", "via": "gh CLI" }
+    {
+      "key": "idea",
+      "title": "Idea",
+      "what": "A plain description, no ticket yet",
+      "command": "/intent <KEY> <slug> \"<the idea>\"",
+      "via": "Typed in the session"
+    },
+    {
+      "key": "jira",
+      "title": "Issue tracker ticket",
+      "what": "An initiative, epic or story",
+      "command": "/intent <KEY> <slug> <TICKET>",
+      "via": "Issue-tracker MCP"
+    },
+    {
+      "key": "github-issue",
+      "title": "GitHub issue or bug",
+      "what": "A bug or request raised on a repo",
+      "command": "/intent <KEY> <slug> <owner/repo#n>",
+      "via": "gh CLI"
+    },
+    {
+      "key": "pr",
+      "title": "Pull request to review",
+      "what": "Code someone wrote, reviewed against the spec",
+      "command": "/pr-review <owner/repo#n>",
+      "via": "gh CLI"
+    }
   ],
   "phases": [
-    { "key": "intent", "title": "Intent", "command": "/intent", "does": "Sources into inputs/, then why, for whom, outcome, success measures. /gap maps it onto existing code.", "gate": "Owner approves the intent", "files": ["intent.md", "outputs/review/"], "tools": ["Issue tracker", "Docs", "Designs"] },
-    { "key": "spec", "title": "Spec", "command": "/spec", "does": "One requirement per behaviour, Given/When/Then acceptance criteria.", "gate": "Every requirement has criteria; owner approves", "files": ["spec.md"], "tools": [] },
-    { "key": "design", "title": "Design", "command": "/design", "does": "Components per repo, contracts, data, configuration, test plan; ADRs for real choices.", "gate": "Contracts written; tech lead approves", "files": ["plan.md", "data-model.md", "contracts/"], "tools": [] },
-    { "key": "build", "title": "Build", "command": "/tasks, /build", "does": "One task, one branch, one pull request, tests first.", "gate": "Every task done; /pr-review clean", "files": ["tasks.md"], "tools": ["gh CLI"] },
-    { "key": "test", "title": "Test", "command": "/test", "does": "Unit to end-to-end, every acceptance criterion passing.", "gate": "Every criterion has a passing test", "files": ["test-plan.md", "outputs/test-runs/"], "tools": [] },
-    { "key": "deploy", "title": "Deploy", "command": "/deploy", "does": "Release notes, the pipeline, smoke test.", "gate": "Smoke test passes in the target environment", "files": ["outputs/release-notes.md"], "tools": [] },
-    { "key": "maintain", "title": "Maintain", "command": "/maintain, /fix-issue", "does": "Runbook, incidents, feedback; new needs become a new intent.", "gate": "Findings become a new intent", "files": ["outputs/runbook.md", "outputs/feedback/"], "tools": [] }
+    {
+      "key": "intent",
+      "title": "Intent",
+      "command": "/intent",
+      "does": "Sources into inputs/, then why, for whom, outcome, success measures. /gap maps it onto existing code.",
+      "gate": "Owner approves the intent",
+      "files": [
+        "intent.md",
+        "outputs/review/"
+      ],
+      "tools": [
+        "Issue tracker",
+        "Docs",
+        "Designs"
+      ]
+    },
+    {
+      "key": "spec",
+      "title": "Spec",
+      "command": "/spec",
+      "does": "One requirement per behaviour, Given/When/Then acceptance criteria.",
+      "gate": "Every requirement has criteria; owner approves",
+      "files": [
+        "spec.md"
+      ],
+      "tools": []
+    },
+    {
+      "key": "design",
+      "title": "Design",
+      "command": "/design",
+      "does": "Components per repo, contracts, data, configuration, test plan; ADRs for real choices.",
+      "gate": "Contracts written; tech lead approves",
+      "files": [
+        "plan.md",
+        "data-model.md",
+        "contracts/"
+      ],
+      "tools": []
+    },
+    {
+      "key": "build",
+      "title": "Build",
+      "command": "/tasks, /build",
+      "does": "One task, one branch, one pull request, tests first.",
+      "gate": "Every task done; /pr-review clean",
+      "files": [
+        "tasks.md"
+      ],
+      "tools": [
+        "gh CLI"
+      ]
+    },
+    {
+      "key": "test",
+      "title": "Test",
+      "command": "/test",
+      "does": "Unit to end-to-end, every acceptance criterion passing.",
+      "gate": "Every criterion has a passing test",
+      "files": [
+        "test-plan.md",
+        "outputs/test-runs/"
+      ],
+      "tools": []
+    },
+    {
+      "key": "deploy",
+      "title": "Deploy",
+      "command": "/deploy",
+      "does": "Release notes, the pipeline, smoke test.",
+      "gate": "Smoke test passes in the target environment",
+      "files": [
+        "outputs/release-notes.md"
+      ],
+      "tools": []
+    },
+    {
+      "key": "maintain",
+      "title": "Maintain",
+      "command": "/maintain, /fix-issue",
+      "does": "Runbook, incidents, feedback; new needs become a new intent.",
+      "gate": "Findings become a new intent",
+      "files": [
+        "outputs/runbook.md",
+        "outputs/feedback/"
+      ],
+      "tools": []
+    }
   ],
   "review": {
     "command": "/gap <KEY> <area>",
     "areas": [
-      { "key": "architecture", "title": "Architecture" },
-      { "key": "infra", "title": "Infrastructure" },
-      { "key": "apis", "title": "APIs" },
-      { "key": "data", "title": "Data" },
-      { "key": "localization", "title": "Localization" },
-      { "key": "ui-ux", "title": "UI / UX" },
-      { "key": "security", "title": "Security" },
-      { "key": "tests", "title": "Tests" }
+      {
+        "key": "architecture",
+        "title": "Architecture"
+      },
+      {
+        "key": "infra",
+        "title": "Infrastructure"
+      },
+      {
+        "key": "apis",
+        "title": "APIs"
+      },
+      {
+        "key": "data",
+        "title": "Data"
+      },
+      {
+        "key": "localization",
+        "title": "Localization"
+      },
+      {
+        "key": "ui-ux",
+        "title": "UI / UX"
+      },
+      {
+        "key": "security",
+        "title": "Security"
+      },
+      {
+        "key": "tests",
+        "title": "Tests"
+      }
     ]
   },
-  "tools": [],
-  "trackerBase": ""
+  "tools": [
+    {
+      "name": "Atlassian MCP",
+      "kind": "MCP server",
+      "use": "Jira initiatives, epics, stories; Confluence PRDs into inputs/",
+      "example": "/intent PROJ-123 short-name PROJ-123"
+    },
+    {
+      "name": "Figma MCP",
+      "kind": "MCP server",
+      "use": "Design frames, variables and screenshots for intent, spec and UI/UX review",
+      "example": "/gap PROJ-123 ui-ux"
+    },
+    {
+      "name": "gh CLI",
+      "kind": "CLI",
+      "use": "GitHub issues as intake, pull requests for build and review",
+      "example": "/pr-review <org>/<repo>#<n>"
+    },
+    {
+      "name": "Mobile MCP",
+      "kind": "MCP server",
+      "use": "Drive iOS simulators and Android emulators for mobile tests",
+      "example": ""
+    },
+    {
+      "name": "Playwright MCP",
+      "kind": "MCP server",
+      "use": "Drive a browser for web end-to-end tests and debugging",
+      "example": "cd tests/e2e && npx playwright test"
+    }
+  ],
+  "trackerBase": "",
+  "entries": [
+    {
+      "key": "idea",
+      "title": "Idea",
+      "what": "A plain description, no ticket yet",
+      "command": "cmd:intent",
+      "example": "/intent <KEY> <slug> \"<the idea>\"",
+      "via": "Typed in the session"
+    },
+    {
+      "key": "jira",
+      "title": "Jira ticket",
+      "what": "Initiative, epic or story, with its Confluence PRD",
+      "command": "cmd:intent",
+      "example": "/intent <KEY> <slug> <JIRA-KEY>",
+      "via": "Atlassian MCP"
+    },
+    {
+      "key": "github-issue",
+      "title": "GitHub issue",
+      "what": "A bug or request on one of your repositories",
+      "command": "cmd:intent",
+      "example": "/intent <KEY> <slug> <org>/<repo>#<n>",
+      "via": "gh issue view"
+    },
+    {
+      "key": "pr",
+      "title": "Pull request",
+      "what": "Code to review before merge",
+      "command": "cmd:pr-review",
+      "example": "/pr-review <org>/<repo>#<n>",
+      "via": "gh pr diff"
+    },
+    {
+      "key": "feedback",
+      "title": "Customer / QA feedback",
+      "what": "A batch of reported issues with screenshots",
+      "command": "cmd:feedback",
+      "example": "/feedback <KEY>",
+      "via": "Pasted in the session"
+    },
+    {
+      "key": "bug",
+      "title": "Bug to fix",
+      "what": "One defect, fixed end to end",
+      "command": "cmd:fix-issue",
+      "example": "/fix-issue <description or issue>",
+      "via": "Typed or a GitHub issue"
+    }
+  ],
+  "flows": [
+    {
+      "key": "jira",
+      "title": "From a Jira ticket to an approved intent",
+      "steps": [
+        {
+          "nodes": [
+            "entry:jira",
+            "cmd:intent"
+          ],
+          "text": "/intent <KEY> <slug> <JIRA-KEY> decides the intake kind is jira."
+        },
+        {
+          "nodes": [
+            "cmd:intent",
+            "tool:spec-py"
+          ],
+          "text": "spec.py new creates specs/<KEY>-<slug>/ and records the intake (kind jira, ref)."
+        },
+        {
+          "nodes": [
+            "cmd:intent",
+            "tool:atlassian"
+          ],
+          "text": "The Atlassian MCP reads the initiative, its epics and stories, and the Confluence PRD."
+        },
+        {
+          "nodes": [
+            "cmd:intent",
+            "tool:figma"
+          ],
+          "text": "The Figma MCP reads the linked design frames."
+        },
+        {
+          "nodes": [
+            "cmd:intent",
+            "file:inputs"
+          ],
+          "text": "Each source is saved into inputs/ as a dated file, never edited afterwards."
+        },
+        {
+          "nodes": [
+            "cmd:intent",
+            "file:intent"
+          ],
+          "text": "intent.md is written from the sources only; anything they do not say goes to Open questions."
+        },
+        {
+          "nodes": [
+            "cmd:intent",
+            "cmd:gap"
+          ],
+          "text": "Existing code is involved, so /gap runs."
+        },
+        {
+          "nodes": [
+            "cmd:gap",
+            "agent:gap-analyst"
+          ],
+          "text": "The gap-analyst agent maps the requirements onto the repos under code/: built, partial, missing, with file:line evidence."
+        },
+        {
+          "nodes": [
+            "cmd:gap",
+            "file:review",
+            "file:findings"
+          ],
+          "text": "Per area asked (architecture, localization, …): outputs/review/<area>.md and one row per finding in outputs/findings.json."
+        },
+        {
+          "nodes": [
+            "cmd:intent",
+            "tool:spec-py"
+          ],
+          "text": "Gate: the product owner approves; spec.py approve <KEY> intent, then spec.py phase <KEY> spec."
+        }
+      ]
+    },
+    {
+      "key": "idea",
+      "title": "From an idea to an intent",
+      "steps": [
+        {
+          "nodes": [
+            "entry:idea",
+            "cmd:intent"
+          ],
+          "text": "/intent <KEY> <slug> \"<the idea>\": intake kind idea, no ticket."
+        },
+        {
+          "nodes": [
+            "cmd:intent",
+            "tool:spec-py"
+          ],
+          "text": "spec.py new creates the spec folder with intake idea."
+        },
+        {
+          "nodes": [
+            "cmd:intent",
+            "file:inputs"
+          ],
+          "text": "The idea text is saved into inputs/."
+        },
+        {
+          "nodes": [
+            "cmd:intent",
+            "file:intent"
+          ],
+          "text": "intent.md: problem, who, outcome, success measures; unknowns as Open questions."
+        },
+        {
+          "nodes": [
+            "cmd:intent",
+            "tool:spec-py"
+          ],
+          "text": "Gate: owner approves the intent."
+        }
+      ]
+    },
+    {
+      "key": "github-issue",
+      "title": "From a GitHub issue to an intent",
+      "steps": [
+        {
+          "nodes": [
+            "entry:github-issue",
+            "cmd:intent"
+          ],
+          "text": "/intent <KEY> <slug> <org>/<repo>#<n>: intake kind github-issue."
+        },
+        {
+          "nodes": [
+            "cmd:intent",
+            "tool:gh"
+          ],
+          "text": "gh issue view reads the issue, its labels and comments."
+        },
+        {
+          "nodes": [
+            "cmd:intent",
+            "file:inputs",
+            "file:intent"
+          ],
+          "text": "The issue snapshot goes to inputs/; intent.md is written from it."
+        },
+        {
+          "nodes": [
+            "cmd:intent",
+            "cmd:gap"
+          ],
+          "text": "/gap maps it onto the existing code."
+        },
+        {
+          "nodes": [
+            "cmd:gap",
+            "agent:gap-analyst",
+            "file:findings"
+          ],
+          "text": "gap-analyst reports what exists; findings land in outputs/findings.json."
+        }
+      ]
+    },
+    {
+      "key": "pr",
+      "title": "Reviewing a pull request",
+      "steps": [
+        {
+          "nodes": [
+            "entry:pr",
+            "cmd:pr-review"
+          ],
+          "text": "/pr-review <org>/<repo>#<n>."
+        },
+        {
+          "nodes": [
+            "cmd:pr-review",
+            "tool:gh"
+          ],
+          "text": "gh pr diff fetches the change."
+        },
+        {
+          "nodes": [
+            "cmd:pr-review",
+            "agent:code-reviewer"
+          ],
+          "text": "The code-reviewer agent checks correctness and fit with the constitution and .claude/rules."
+        },
+        {
+          "nodes": [
+            "cmd:pr-review",
+            "agent:security-auditor"
+          ],
+          "text": "security-auditor also runs when auth, data, secrets or integrations changed."
+        },
+        {
+          "nodes": [
+            "cmd:pr-review",
+            "file:findings"
+          ],
+          "text": "If the PR belongs to a spec, each finding is appended to that spec's outputs/findings.json; then a merge / don't-merge verdict."
+        }
+      ]
+    },
+    {
+      "key": "feedback",
+      "title": "Root-causing a feedback batch",
+      "steps": [
+        {
+          "nodes": [
+            "entry:feedback",
+            "cmd:feedback"
+          ],
+          "text": "/feedback <KEY> with the reported issues; no personal data is copied."
+        },
+        {
+          "nodes": [
+            "cmd:feedback",
+            "file:review"
+          ],
+          "text": "The branch the reporter used comes from outputs/review/scope.md; the code path behind each issue is read."
+        },
+        {
+          "nodes": [
+            "cmd:feedback",
+            "file:findings"
+          ],
+          "text": "Each issue gets a verdict (code, code likely, backend/data, other) and is linked to existing findings or added as a new one."
+        },
+        {
+          "nodes": [
+            "cmd:feedback",
+            "file:feedback"
+          ],
+          "text": "outputs/feedback/v<N>-<date>.md: summary, root cause and fix direction per issue, unknowns."
+        }
+      ]
+    },
+    {
+      "key": "bug",
+      "title": "Fixing one bug",
+      "steps": [
+        {
+          "nodes": [
+            "entry:bug",
+            "cmd:fix-issue"
+          ],
+          "text": "/fix-issue <the bug>."
+        },
+        {
+          "nodes": [
+            "cmd:fix-issue"
+          ],
+          "text": "Reproduce with a failing test, state the root cause in one sentence, make the smallest fix."
+        },
+        {
+          "nodes": [
+            "cmd:fix-issue",
+            "agent:code-reviewer"
+          ],
+          "text": "code-reviewer reviews the diff; its findings are addressed before commit."
+        }
+      ]
+    },
+    {
+      "key": "delivery",
+      "title": "From an approved intent to production",
+      "steps": [
+        {
+          "nodes": [
+            "cmd:spec",
+            "agent:spec-writer",
+            "file:spec"
+          ],
+          "text": "/spec: spec-writer turns the intent and stories into requirements with Given/When/Then criteria. Owner approves."
+        },
+        {
+          "nodes": [
+            "cmd:design",
+            "agent:architect",
+            "file:design"
+          ],
+          "text": "/design: architect designs components per repo, contracts, data and the test plan. Tech lead approves."
+        },
+        {
+          "nodes": [
+            "cmd:tasks",
+            "file:tasks"
+          ],
+          "text": "/tasks: one task, one branch, one pull request."
+        },
+        {
+          "nodes": [
+            "cmd:build",
+            "hook:spec-gate"
+          ],
+          "text": "/build: the spec-gate hook blocks any edit under code/ until a spec is in build with intent, spec and design approved."
+        },
+        {
+          "nodes": [
+            "cmd:test",
+            "agent:test-writer",
+            "file:tests"
+          ],
+          "text": "/test: test-writer adds tests until every acceptance criterion passes."
+        },
+        {
+          "nodes": [
+            "cmd:deploy",
+            "agent:release-manager",
+            "file:release"
+          ],
+          "text": "/deploy: release-manager prepares deploy order, migrations, rollback and release notes."
+        },
+        {
+          "nodes": [
+            "cmd:maintain",
+            "agent:security-auditor",
+            "file:runbook"
+          ],
+          "text": "/maintain: runbook and incidents; security-auditor; new needs become a new intent."
+        }
+      ]
+    }
+  ],
+  "sdlc": {
+    "title": "SDLC with Claude Code",
+    "workspace": "",
+    "sources": [
+      {
+        "t": "Idea",
+        "d": "typed in the session",
+        "go": "entry:idea"
+      },
+      {
+        "t": "Jira + Confluence PRD",
+        "d": "initiatives, epics, stories",
+        "go": "entry:jira"
+      },
+      {
+        "t": "Figma designs",
+        "d": "frames linked from the PRD",
+        "go": "tool:figma"
+      },
+      {
+        "t": "GitHub issues and PRs",
+        "d": "your repositories",
+        "go": "entry:github-issue"
+      },
+      {
+        "t": "Customer / QA feedback",
+        "d": "reported issues, screenshots",
+        "go": "entry:feedback"
+      }
+    ],
+    "delivers": [
+      {
+        "t": "specs/<KEY>-<slug>/",
+        "d": "intent, findings, spec, design, tasks, tests",
+        "go": "file:intent"
+      },
+      {
+        "t": "Service repos",
+        "d": "one branch and one pull request per task",
+        "go": "file:tasks"
+      },
+      {
+        "t": "DEV → UAT → PROD",
+        "d": "pipelines and environments",
+        "go": "file:release"
+      },
+      {
+        "t": "Engineering Hub",
+        "d": "this portal: reads spec.py, never its own status",
+        "go": ""
+      }
+    ]
+  },
+  "start": {
+    "title": "How to run the loop",
+    "refresh": "./sync.sh",
+    "lede": "Everything starts in the engineering workspace with Claude Code, from VS Code or a terminal. Commands write files into specs/<KEY>-<slug>/; this hub reads those files. Status and approvals live only in spec.py.",
+    "steps": [
+      {
+        "title": "Get the workspace (first time only)",
+        "where": "Terminal",
+        "text": [
+          "Clone the workspace, enable its git hooks, and follow its CLAUDE.md for the repos under code/ and the local .env."
+        ],
+        "commands": [
+          {
+            "cmd": "git clone <workspace-git-url> <workspace-dir>",
+            "note": "your GitHub access to the workspace repo"
+          },
+          {
+            "cmd": "cd <workspace-dir> && git config core.hooksPath .githooks",
+            "note": "enables the git identity hook"
+          }
+        ]
+      },
+      {
+        "title": "Open Claude Code in the workspace",
+        "where": "VS Code or terminal",
+        "text": [
+          "VS Code: File > Open Folder > the workspace, then open the Claude Code panel. Terminal: start claude inside the folder.",
+          "The session-start hook prints the specs in flight and their next step; the prompt router points you at the right command."
+        ],
+        "commands": [
+          {
+            "cmd": "cd <workspace-dir> && claude",
+            "note": "terminal"
+          }
+        ]
+      },
+      {
+        "title": "Sign in to the tools (first time only)",
+        "where": "Inside Claude Code",
+        "text": [
+          "Atlassian (Jira, Confluence) and Figma sign in with OAuth from /mcp. GitHub issues and pull requests use your gh login."
+        ],
+        "commands": [
+          {
+            "cmd": "/mcp",
+            "note": "authenticate atlassian and figma"
+          },
+          {
+            "cmd": "gh auth status",
+            "note": "terminal: must show your account"
+          }
+        ]
+      },
+      {
+        "title": "Add a new work item",
+        "where": "Inside Claude Code",
+        "text": [
+          "Use the builder above. The work key is the Jira initiative or epic key; the ticket (or idea, issue, PR) is the last argument, and /intent pulls it. For an idea without a ticket use a placeholder key such as IDEA-1.",
+          "/intent creates specs/<KEY>-<slug>/, saves every source into inputs/ and writes intent.md from the sources only; anything they do not say goes to Open questions."
+        ],
+        "commands": [
+          {
+            "cmd": "/intent PROJ-123 short-name PROJ-123",
+            "note": "from Jira"
+          },
+          {
+            "cmd": "/intent IDEA-1 short-name \"what we want and why\"",
+            "note": "from an idea"
+          },
+          {
+            "cmd": "/intent PROJ-123 short-name <org>/<repo>#<n>",
+            "note": "from a GitHub issue"
+          }
+        ]
+      },
+      {
+        "title": "Review the existing code",
+        "where": "Inside Claude Code",
+        "text": [
+          "/gap maps the intent onto the code, then reviews it area by area. Each area writes outputs/review/<area>.md and adds rows to outputs/findings.json. Classify the findings so they group by type, component and team."
+        ],
+        "commands": [
+          {
+            "cmd": "/gap PROJ-123 all",
+            "note": "or one area: architecture, infra, apis, data, localization, ui-ux, security, tests"
+          },
+          {
+            "cmd": "python3 tools/findings.py classify PROJ-123",
+            "note": "terminal"
+          }
+        ]
+      },
+      {
+        "title": "Refresh and open the hub",
+        "where": "Terminal",
+        "text": [
+          "The hub reads the workspace when you refresh it. The new work appears under Work with its findings dashboard and phase tabs."
+        ],
+        "commands": [
+          {
+            "cmd": "cd <hub-dir> && ./sync.sh",
+            "note": "then reload the page"
+          }
+        ],
+        "link": {
+          "href": "#/loop",
+          "text": "Open the loop"
+        }
+      },
+      {
+        "title": "Approve",
+        "where": "Hub, then terminal",
+        "text": [
+          "The owner reads the phase in the hub. Each phase awaiting approval shows an Approve box with the exact commands: approve, then move the spec to the next phase. Refresh the hub and the tab turns green. Approvals are recorded in status.json, in git, with who and when."
+        ],
+        "commands": [
+          {
+            "cmd": "python3 tools/spec.py approve PROJ-123 intent --by \"<your name>\""
+          },
+          {
+            "cmd": "python3 tools/spec.py phase PROJ-123 spec"
+          }
+        ]
+      },
+      {
+        "title": "Spec, design, build, test, deploy",
+        "where": "Inside Claude Code",
+        "text": [
+          "Each command writes its file and stops at a gate. The spec-gate hook blocks any edit under code/ until intent, spec and design are approved and the spec is in build. One task is one branch and one pull request."
+        ],
+        "commands": [
+          {
+            "cmd": "/spec PROJ-123"
+          },
+          {
+            "cmd": "/design PROJ-123"
+          },
+          {
+            "cmd": "/tasks PROJ-123"
+          },
+          {
+            "cmd": "/build PROJ-123 T1"
+          },
+          {
+            "cmd": "/pr-review"
+          },
+          {
+            "cmd": "/test PROJ-123"
+          },
+          {
+            "cmd": "/deploy PROJ-123 dev"
+          }
+        ]
+      },
+      {
+        "title": "Feedback, bugs and pull requests",
+        "where": "Inside Claude Code",
+        "text": [
+          "Customer or QA feedback becomes a batch with a root cause per issue, linked to findings. A single bug goes through /fix-issue. Any pull request goes through /pr-review."
+        ],
+        "commands": [
+          {
+            "cmd": "/feedback PROJ-123"
+          },
+          {
+            "cmd": "/fix-issue <the bug>"
+          },
+          {
+            "cmd": "/pr-review <org>/<repo>#<n>"
+          }
+        ]
+      },
+      {
+        "title": "Where am I",
+        "where": "Inside Claude Code or terminal",
+        "text": [
+          "/feature shows where a spec is and runs its next step. /handoff writes the resume state for the next session or a teammate."
+        ],
+        "commands": [
+          {
+            "cmd": "/feature PROJ-123"
+          },
+          {
+            "cmd": "python3 tools/spec.py list",
+            "note": "terminal"
+          },
+          {
+            "cmd": "/handoff"
+          }
+        ]
+      }
+    ]
+  }
 }

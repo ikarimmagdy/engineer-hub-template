@@ -1,5 +1,75 @@
 [
   {
+    "label": "Agentic loop",
+    "items": [
+      {
+        "title": "Start here",
+        "icon": "learn",
+        "route": "#/start"
+      },
+      {
+        "title": "The loop",
+        "icon": "cicd",
+        "route": "#/loop"
+      },
+      {
+        "title": "All findings",
+        "icon": "gaps",
+        "route": "#/findings/all"
+      }
+    ]
+  },
+  {
+    "label": "Work",
+    "fromLoop": true,
+    "items": []
+  },
+  {
+    "label": "Review areas",
+    "items": [
+      {
+        "title": "Architecture",
+        "icon": "arch",
+        "route": "#/findings/architecture"
+      },
+      {
+        "title": "Infrastructure",
+        "icon": "infra",
+        "route": "#/findings/infra"
+      },
+      {
+        "title": "APIs",
+        "icon": "trace",
+        "route": "#/findings/apis"
+      },
+      {
+        "title": "Data",
+        "icon": "kb",
+        "route": "#/findings/data"
+      },
+      {
+        "title": "Localization",
+        "icon": "learn",
+        "route": "#/findings/localization"
+      },
+      {
+        "title": "UI / UX",
+        "icon": "product",
+        "route": "#/findings/ui-ux"
+      },
+      {
+        "title": "Security",
+        "icon": "security",
+        "route": "#/findings/security"
+      },
+      {
+        "title": "Tests",
+        "icon": "perf",
+        "route": "#/findings/tests"
+      }
+    ]
+  },
+  {
     "label": "Start here",
     "items": [
       {
