@@ -50,6 +50,41 @@ route already listed, and loopback links (`127.0.0.1`, `localhost`) when the hub
 this machine. Keys: `/` filters the menu, arrows move, left / right close and open a group, `[`
 collapses the menu to an icon rail on desktop. Below 1000px it is an off-canvas drawer.
 
+## Spec documents (full pages)
+
+A spec can show whole self-contained HTML documents (an architecture document, a communication
+matrix) as full pages with their own menu, tabs and inline scripts, instead of slicing their
+sections into review areas. Declare them in `content/data/loop-config.json`:
+
+```json
+"pages": {
+  "<spec dir>": [
+    { "id": "architecture", "title": "Architecture", "src": "outputs/architecture" },
+    { "id": "communication-matrix", "title": "Communication matrix", "src": "outputs/communication-matrix" }
+  ]
+}
+```
+
+- `src` is relative to the spec folder in the workspace: a file, or a versioned folder whose
+  highest `v<N>-<YYYY-MM-DD>.html` is used (`index.html` is ignored). A path starting with
+  `content/` is relative to the hub instead. `tools/sync_loop.py` copies it to
+  `content/specs/<dir>/pages/<id>.html` and lists it in `loop.json` (`pages`, with the version).
+- Route `#/spec/<dir>/page/<id>[/<section-id>]`: the document fills the viewport in a frame,
+  opened at `#<section-id>` when given; the document's own hash changes are written back into the
+  hub URL, so every view has a shareable hub link. Each page is listed under its spec in the side
+  menu, in the spec page's aside (Documents) and in search.
+- Document rules: one self-contained file (inline CSS, SVG and JS; scripts only from
+  cdnjs.cloudflare.com; no fetch of other files). Views are `<section id>` with an `<h2>` and read
+  stacked without JS; a side menu switches them by `location.hash` (`hashchange`). Colours are CSS
+  custom properties on `:root`, with dark values under `:root[data-theme="dark"]` and
+  `@media (prefers-color-scheme:dark){:root:not([data-theme="light"])}`: the hub sets
+  `<html data-theme>` in the frame to follow its theme toggle. Fluid width (no fixed page width;
+  `max-width` 1440px or less, centred), works from 360px, own scrolling inside the document
+  (`body` scrolls; sticky, not fixed, side menu). Inline SVG uses `viewBox` with `width:100%` and
+  colours from the tokens or `currentColor`. Fonts: Poppins and JetBrains Mono (Google Fonts) or
+  the system stack.
+- The older `attachments` (sections of a document copied into a review area) still work.
+
 ## Use it in a project (5 minutes)
 
 1. Copy this folder into the project, for example `outputs/engineer-guide/`.

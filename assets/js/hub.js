@@ -220,7 +220,7 @@
           ${ico('feature')}<span class="nav-spec__body"><span class="nav-spec__top"><span class="nav-spec__key">${esc(s.key)}</span><span class="nav-spec__ac" title="Acceptance criteria passing">${ok}/${n}</span></span>
           <span class="nav-spec__t">${esc(s.title || s.dir)}</span>
           <span class="nav-spec__bar" aria-hidden="true"><i style="width:${pct(ok, n)}%"></i></span></span>
-        </a>`;
+        </a>${(s.pages || []).map(pg => `<a class="nav-link nav-sub" data-route="#/spec/${esc(s.dir)}/page/${esc(pg.id)}" href="#/spec/${esc(s.dir)}/page/${esc(pg.id)}" title="${esc(s.key + ' ' + pg.title)}" data-q="${esc((s.key + ' ' + s.title + ' ' + pg.title).toLowerCase())}">${ico('adr')}<span class="nav-link__t">${esc(pg.title)}</span></a>`).join('')}`;
     };
     const body = g => g.kind === 'work'
       ? g.phases.filter(p => NAV_PHASES.includes(p.key) || p.items.length).map((p, i) => `<div class="nav-phase${p.items.length ? '' : ' is-empty'}" data-phase="${esc(p.key)}"><a class="nav-phase__h" href="#/loop" tabindex="-1" title="${esc(p.title)}: ${p.items.length} in this phase"><span class="nav-phase__i">${i + 1}</span><span>${esc(p.title)}</span><span class="nav-phase__n">${p.items.length}</span></a>${p.items.map(specLink).join('')}</div>`).join('')

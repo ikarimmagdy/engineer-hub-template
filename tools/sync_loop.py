@@ -109,6 +109,31 @@ def extract_figures() -> dict:
     return out
 
 
+def spec_pages(cfg: dict, d: Path, name: str, dest: Path) -> list:
+    """loop-config "pages": whole self-contained HTML documents shown as full pages of a spec (own menu, tabs,
+    inline JS, CSS and SVG kept), one entry each in the spec page and under the spec in the side menu.
+    "src" is relative to the spec folder (a file, or a versioned folder whose latest v<N>-<date>.html is used);
+    a path starting with content/ is relative to the hub app instead."""
+    out = []
+    for p in (cfg.get("pages") or {}).get(name, []):
+        pid, raw = p.get("id"), p.get("src") or ""
+        if not pid or not raw:
+            continue
+        src = (HUB / raw) if raw.startswith("content/") else (d / raw)
+        if src.is_dir():
+            vs = sorted(src.glob("v*-*.html"), key=lambda f: (int((re.match(r"v(\d+)-", f.name) or [0, 0])[1]), f.name))
+            src = vs[-1] if vs else None
+        if not src or not src.is_file():
+            print(f"pages: {name} {pid}: {raw} not found", file=sys.stderr)
+            continue
+        (dest / "pages").mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src, dest / "pages" / f"{pid}.html")
+        out.append({"id": pid, "title": p.get("title") or pid.replace("-", " ").capitalize(),
+                    "file": f"content/specs/{name}/pages/{pid}.html", "version": src.name,
+                    "source": raw.rstrip("/") + ("/" + src.name if not raw.endswith(".html") else "")})
+    return out
+
+
 def doc_to_section(src: Path, out: Path, source_label: str) -> None:
     """Write a hub markdown section holding a whole HTML document's sections natively (scoped CSS, no iframe)."""
     t = src.read_text(encoding="utf-8")
@@ -135,6 +160,8 @@ def main() -> None:
         shutil.rmtree(out_dir)
     tpl = ws / "specs" / "_template"
     specs = []
+    cfg_p = C / "data" / "loop-config.json"
+    loop_cfg = json.loads(cfg_p.read_text(encoding="utf-8")) if cfg_p.exists() else {}
     for r in rows:
         name = r.get("dir") or next((d.name for d in (ws / "specs").glob(f"{r['key']}-*") if d.is_dir()), r["key"])
         d = ws / "specs" / name
@@ -192,7 +219,8 @@ def main() -> None:
                       "findingsFile": f"content/specs/{name}/findings.json" if findings.exists() else None,
                       "intake": r.get("intake", status.get("intake")), "approved": status.get("approved", r.get("approved")),
                       "tracker": status.get("tracker", r.get("tracker")), "sources": status.get("sources", []),
-                      "repos": status.get("repos", []), "history": status.get("history", [])})
+                      "repos": status.get("repos", []), "history": status.get("history", []),
+                      "pages": spec_pages(loop_cfg, d, name, dest)})
     figures = extract_figures()
     loop = {"generated": dt.date.today().isoformat(), "workspace": ws.name, "specs": specs, "figures": figures}
     (C / "data").mkdir(parents=True, exist_ok=True)

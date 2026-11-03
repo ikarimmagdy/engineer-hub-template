@@ -283,6 +283,7 @@
     const s = specs().find(x => x.dir === dir || x.key === dir);
     const c = $('#content');
     if (!s) { c.innerHTML = head('Work', 'Not found', '') + `<div class="callout warn">No spec <code>${esc(dir)}</code> in loop.json. Run the hub sync.</div>`; return; }
+    if (parts[1] === 'page') return renderSpecPage(s, parts[2], parts.slice(3).join('/'));
     const keys = phases().map(p => p.key);
     const phase = keys.includes(parts[1]) ? parts[1] : (keys.includes(s.phase) ? s.phase : 'intent');
     const secs = sections(s, phase);
@@ -306,6 +307,7 @@
       <div class="ws-body"><aside class="ws-side">${secs.map(([k, t, n, subs]) => `
           <a href="#/spec/${esc(s.dir)}/${phase}/${k}" class="${k === sec ? 'on' : ''} ${n ? '' : 'empty'}">${esc(t)}${typeof n === 'number' && n ? ` <span>${n}</span>` : ''}</a>
           ${k === sec && subs ? `<div class="ws-sub">${subs.map(a => `<a href="#/spec/${esc(s.dir)}/${phase}/${k}/${a}" class="${(item || 'scope') === a ? 'on' : ''} ${(s.review || []).includes(a) ? '' : 'empty'}">${esc(a === 'scope' ? 'Scope' : areaTitle(a))}</a>`).join('')}</div>` : ''}`).join('')}
+          ${(s.pages || []).length ? `<p class="ws-docs-h">Documents</p>${s.pages.map(pg => `<a href="#/spec/${esc(s.dir)}/page/${esc(pg.id)}" class="ws-doclink">${esc(pg.title)}</a>`).join('')}` : ''}
           <p class="ws-gate"><b>Gate</b> ${esc((phases().find(p => p.key === phase) || {}).gate || '')}</p>
           ${phaseState(s, phase).cls === 'review' && ['intent', 'spec', 'design'].includes(phase) ? `<div class="ws-approve"><b>Approve ${esc(phaseTitle(phase))}</b>
             <p>Read it here, then run in the workspace terminal:</p>
@@ -355,6 +357,46 @@
     else m.innerHTML = notYet(phaseTitle(phase), (phases().find(p => p.key === phase) || {}).command);
     wireCopy(m);
   }
+  /* ---------- #/spec/<dir>/page/<id>: a whole self-contained HTML document (loop-config "pages") ----------
+     Framed, so its own menu, tabs and inline scripts keep working; the hub theme is passed in as
+     <html data-theme> (same origin) and follows the theme toggle. */
+  const hubTheme = () => document.documentElement.getAttribute('data-theme');
+  const themeFrame = f => { try { const r = f.contentDocument && f.contentDocument.documentElement; if (!r) return; const t = hubTheme(); if (t) r.setAttribute('data-theme', t); else r.removeAttribute('data-theme'); } catch (_) {} };
+  new MutationObserver(() => $$('.ws-page__frame').forEach(themeFrame)).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  // #/spec/<dir>/page/<id>/<section> opens the document at its #<section>; the document's own hash changes are
+  // mirrored back into the hub URL, so every view of the document has a shareable hub link
+  function renderSpecPage(s, id, inner) {
+    const c = $('#content'), P = s.pages || [], pg = P.find(x => x.id === id) || P[0];
+    if (!pg) { c.innerHTML = head('Work · ' + s.key, 'No documents', '') + `<div class="callout warn">This spec declares no pages in loop-config.json "pages".</div>`; return; }
+    const url = pg.file + '?v=' + encodeURIComponent(pg.version || ''), hubBase = `#/spec/${s.dir}/page/${pg.id}`;
+    c.innerHTML = `<div class="page-head ws-page__head"><p class="eyebrow"><a href="#/spec/${esc(s.dir)}">Work · ${esc(s.key)}</a> · ${esc(s.title || '')}</p><h1>${esc(pg.title)}</h1></div>
+      <div class="ws-page">
+        <div class="ws-page__bar"><nav class="lp-tabs">${P.map(x => `<a href="#/spec/${esc(s.dir)}/page/${esc(x.id)}" class="${x.id === pg.id ? 'on' : ''}">${esc(x.title)}</a>`).join('')}</nav>
+          <span class="ws-page__meta">${esc(pg.version || '')}${pg.source ? `<span class="ws-page__src"> · <code title="${esc(pg.source)}">${esc(pg.source)}</code></span>` : ''} · <a href="${esc(url)}" target="_blank" rel="noopener">Open full page</a></span></div>
+        <iframe class="ws-page__frame" src="${esc(url + (inner ? '#' + inner : ''))}" title="${esc(pg.title)}" loading="eager"></iframe>
+      </div>`;
+    const f = $('.ws-page__frame', c);
+    // the frame fills the rest of the viewport and the hub page itself never scrolls, so a #fragment inside the
+    // document (which browsers also apply to the frame's ancestors) cannot push the hub header away
+    document.body.classList.add('hub-docpage');
+    const fit = () => { if (!f.isConnected) { window.removeEventListener('resize', fit); document.body.classList.remove('hub-docpage'); return; }
+      window.scrollTo(0, 0); f.style.height = Math.max(420, window.innerHeight - f.getBoundingClientRect().top - 12) + 'px'; };
+    fit(); window.addEventListener('resize', fit);
+    window.addEventListener('hashchange', function off() { if (!/^#\/spec\/[^/]+\/page\//.test(location.hash)) { document.body.classList.remove('hub-docpage'); window.removeEventListener('hashchange', off); } });
+    const keep = () => requestAnimationFrame(() => window.scrollTo(0, 0));
+    f.addEventListener('load', () => {
+      themeFrame(f); keep();
+      try {
+        const w = f.contentWindow;
+        w.addEventListener('hashchange', () => {
+          keep();
+          const h = decodeURIComponent(w.location.hash.replace(/^#/, ''));
+          history.replaceState(null, '', location.pathname + location.search + hubBase + (h ? '/' + h : ''));
+        });
+      } catch (_) {}
+    });
+  }
+
   async function reviewArea(s, area, m, base) {
     if (!(s.review || []).includes(area)) {
       m.innerHTML = `<div class="ws-empty"><b>${esc(area === 'scope' ? 'Scope' : areaTitle(area))}: not reviewed yet.</b><p>Run ${copyBtn(cmd(area === 'scope' ? '/gap <KEY>' : `/gap <KEY> ${area}`, s.key))}</p></div>`;
@@ -494,5 +536,5 @@
 
   window.HUB_ROUTES = Object.assign(window.HUB_ROUTES || {}, { start: renderStart, loop: renderLoop, spec: renderSpec, findings: renderFindings });
   window.HUB_WIDE = (window.HUB_WIDE || []).concat(['loop', 'spec', 'findings']);
-  window.HUB_SEARCH = (window.HUB_SEARCH || []).concat([data => ((data.loop || {}).specs || []).map(s => ({ kind: 'Spec', title: `${s.key} ${s.title || ''}`, sub: `${s.phase || ''} ${(s.intake || {}).ref || ''}`, href: `#/spec/${s.dir}` }))]);
+  window.HUB_SEARCH = (window.HUB_SEARCH || []).concat([data => ((data.loop || {}).specs || []).map(s => ({ kind: 'Spec', title: `${s.key} ${s.title || ''}`, sub: `${s.phase || ''} ${(s.intake || {}).ref || ''}`, href: `#/spec/${s.dir}` })), data => ((data.loop || {}).specs || []).flatMap(s => (s.pages || []).map(pg => ({ kind: 'Document', title: `${s.key} ${pg.title}`, sub: pg.version || '', href: `#/spec/${s.dir}/page/${pg.id}` })))]);
 })();
