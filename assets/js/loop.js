@@ -290,7 +290,12 @@
     const sec = secs.some(x => x[0] === parts[2]) ? parts[2] : (secs[0] || [''])[0];
     const item = parts.slice(3).join('/');
     const it = s.intake || {}, tr = s.tracker || {}, f = s.findings || {};
-    const link = k => { const u = trackerUrl(k); return u ? `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(k)}</a>` : esc(k); };
+    // a tracker key links to the tracker, a URL links as itself under its key, anything else (an idea's note) is text
+    const link = k => {
+      const url = /^https?:\/\//i.test(String(k || '')) ? k : (/^[A-Z][A-Z0-9]+-\d+$/.test(String(k || '')) ? trackerUrl(k) : '');
+      const label = url && url === k ? ((String(k).match(/[A-Z][A-Z0-9]+-\d+/) || [])[0] || String(k).replace(/^https?:\/\//, '')) : k;
+      return url ? `<a href="${esc(url)}" target="_blank" rel="noopener">${esc(label)}</a>` : esc(k);
+    };
     const by = f.bySeverity || {};
     c.innerHTML = `<div class="page-head"><p class="eyebrow">Work · ${esc(s.key)}</p><h1>${esc(s.title || s.dir)}</h1>
         <p class="ws-meta">${it.kind ? pill(INTAKE_LBL[it.kind] || it.kind, 'k-' + it.kind) : ''} ${it.ref ? link(it.ref) : ''}
@@ -442,14 +447,14 @@
         && (FV.type === 'all' || r.type === FV.type) && (FV.component === 'all' || r.component === FV.component) && (FV.team === 'all' || r.team === FV.team)
         && (!q || [r.id, r.title, r.location, r.detail, r.category].join(' ').toLowerCase().includes(q)))
         .sort((a, b) => SEVS.indexOf(a.severity) - SEVS.indexOf(b.severity));
-      $('#lpGrid').innerHTML = `<table class="lp-grid"><thead><tr><th></th>${SEVS.map(k => `<th>${SEV_LBL[k]}</th>`).join('')}<th>Total</th></tr></thead><tbody>
+      $('#lpGrid').innerHTML = `<div class="lp-scroll"><table class="lp-grid"><thead><tr><th></th>${SEVS.map(k => `<th>${SEV_LBL[k]}</th>`).join('')}<th>Total</th></tr></thead><tbody>
         ${dims.map(d => { const r = rows.filter(x => gval(x) === d); return `<tr><th>${esc(d)}</th>${SEVS.map(k => { const n = r.filter(x => x.severity === k).length; return `<td><button class="lp-cell sev-${k} ${n ? '' : 'zero'}" data-g="${esc(d)}" data-sev="${k}">${n || '·'}</button></td>`; }).join('')}<td>${r.length}</td></tr>`; }).join('')}
-      </tbody></table>`;
+      </tbody></table></div>`;
       $('#lpList').innerHTML = `<p class="lp-muted">${list.length} of ${rows.length} shown</p>
-        <table class="lp-table lp-findings"><thead><tr><th>ID</th><th>Severity</th><th>Finding</th><th>Type</th><th>Component</th><th>Team</th><th>Scope</th>${opt.fixedSpec ? '' : '<th>Spec</th>'}<th>Status</th></tr></thead><tbody>
+        <div class="lp-scroll"><table class="lp-table lp-findings"><thead><tr><th>ID</th><th>Severity</th><th>Finding</th><th>Type</th><th>Component</th><th>Team</th><th>Scope</th>${opt.fixedSpec ? '' : '<th>Spec</th>'}<th>Status</th></tr></thead><tbody>
         ${list.map(r => { const k = r._spec.dir + ':' + r.id; const open = FV.open.has(k); return `<tr class="lp-frow" data-k="${esc(k)}"><td><b>${esc(r.id)}</b></td><td>${sevPill(r.severity)}</td><td>${esc(r.title || '')}</td><td>${esc(r.type)}</td><td>${esc(r.component)}</td><td>${esc(r.team)}</td><td>${esc(r.scope || '')}</td>${opt.fixedSpec ? '' : `<td><a href="#/spec/${esc(r._spec.dir)}/intent/findings">${esc(r._spec.key)}</a></td>`}<td>${esc(r.status || 'open')}</td></tr>
           ${open ? `<tr class="lp-fdetail"><td colspan="9"><dl>${[['Location', r.location], ['Finding', r.detail], ['Impact', r.impact], ['Fix', r.fix], ['Layer', r.layer], ['Dimension', r.dimension], ['Area', r.area ? areaTitle(r.area) : ''], ['Category', r.category], ['Source', r.source]].filter(([, v]) => v).map(([t, v]) => `<dt>${t}</dt><dd>${esc(v)}</dd>`).join('')}</dl></td></tr>` : ''}`; }).join('')}
-        </tbody></table>`;
+        </tbody></table></div>`;
       $$('.lp-cell', m).forEach(b => b.onclick = () => { const v = b.dataset.g; if (gkey === 'dimension') FV.dim = v; else if (gkey === 'area') FV.area = (areas().find(a => a.title === v) || {}).key || 'none'; else FV[gkey] = v; FV.sev = b.dataset.sev; sync(); draw(); });
       $$('.lp-frow', m).forEach(tr => tr.onclick = e => { if (e.target.closest('a')) return; const k = tr.dataset.k; FV.open.has(k) ? FV.open.delete(k) : FV.open.add(k); draw(); });
     };

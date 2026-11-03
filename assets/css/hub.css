@@ -133,6 +133,7 @@ img{max-width:100%}
 :root[data-theme="dark"] .nav-count--warn{color:var(--tb-warning-fill)!important}
 :root[data-theme="dark"] .nav-count--bad{color:var(--tb-danger-fill)!important}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .nav-count--ok{color:var(--tb-success-fill)!important}:root:not([data-theme="light"]) .nav-count--warn{color:var(--tb-warning-fill)!important}:root:not([data-theme="light"]) .nav-count--bad{color:var(--tb-danger-fill)!important}}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .nav-count--ok{color:var(--tb-success-fill)!important}:root:not([data-theme="light"]) .nav-count--warn{color:var(--tb-warning-fill)!important}:root:not([data-theme="light"]) .nav-count--bad{color:var(--tb-danger-fill)!important}}
 .nav-ext{width:12px;height:12px;flex:none;color:var(--text-muted);opacity:.7}
 .nav-link--ext .nav-count + .nav-ext{margin-left:4px}
 .nav-link--ext .nav-link__t + .nav-ext{margin-left:auto}
@@ -654,7 +655,8 @@ table.dispatch .badge{white-space:normal;text-transform:none;letter-spacing:0;fo
 .board--few .board__col{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px;align-content:start}
 .board--few .board__col>h2,.board--few .board__col>.colhint{grid-column:1/-1}
 .board--few .board__col .tcard{margin:0}
-.md td:first-child{white-space:nowrap}
+/* short first-column keys stay on one line; prose in the first column wraps (renderMarkdown marks them) */
+.md td.md-key{white-space:nowrap}
 
 /* user stories */
 .us-table td{vertical-align:top;font-size:.84rem}
@@ -1003,3 +1005,28 @@ div.sd-b{cursor:default}
 body.hub-docpage{overflow:hidden}
 body.hub-docpage .main{padding-bottom:0}
 body.hub-docpage .ws-page__frame{min-height:0}
+/* ---- v4.6: tables never push the page sideways; links the hub cannot follow read as text ---- */
+.md-table,.lp-scroll{max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;margin:14px 0}
+.md-table>table{margin:0}
+.lp-scroll{margin:0 0 14px}.lp-scroll>table{margin:0}
+.md th{overflow-wrap:normal;word-break:normal}
+.lp-findings td{overflow-wrap:anywhere}.lp-findings td:first-child,.lp-findings td:nth-child(2){overflow-wrap:normal;white-space:nowrap}
+.md-deadlink{border-bottom:1px dotted var(--border-strong);cursor:help}
+.md h1[id],.md h2[id],.md h3[id],.md h4[id]{scroll-margin-top:80px}
+@media print{.md-table,.lp-scroll{overflow:visible!important}}
+/* long tokens (paths, ids, URLs) wrap instead of running past the edge */
+.md :not(pre)>code,.md h1,.md h2,.md h3,.md h4,.card p,.card h3,.card h4{overflow-wrap:anywhere}
+.card{min-width:0}
+.adr-table td:first-child{white-space:nowrap}.adr-table td:nth-child(2){min-width:220px}.adr-table td:nth-child(3){min-width:120px;max-width:200px}
+.adr-note{font-size:.75rem;color:var(--text-muted);margin-top:4px;line-height:1.35}
+/* phone search: a button in the top bar opens the field under it */
+.search-open{display:none}
+@media (max-width:640px){
+  .search-open{display:grid}
+  .topbar.search-on .topbar__search{display:flex;position:absolute;left:12px;right:12px;top:calc(100% + 6px);max-width:none;margin:0;z-index:60;box-shadow:var(--shadow-lg)}
+  .topbar.search-on .search-results{left:0;right:0;width:auto}
+}
+.topbar__signout{white-space:nowrap}
+@media (max-width:640px){.topbar{gap:8px;padding:0 12px}.topbar__right{gap:6px}.topbar__signout{padding-left:10px;padding-right:10px}}
+/* table cells break long tokens but never short words ("mobil|e"); code spans stay breakable */
+.md th,.md td{overflow-wrap:break-word}

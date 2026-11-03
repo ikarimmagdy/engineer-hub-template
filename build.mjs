@@ -37,27 +37,41 @@ const kb = [];
 const IMG = /\.(png|jpe?g|gif|svg|webp)$/i;
 function titleOf(txt, fallback) {
   const m = txt.match(/^#\s+(.+)$/m);
-  return (m ? m[1] : fallback).replace(/[#*`]/g, '').trim().slice(0, 90);
+  // no heading: the file name, readable ("selfcare-apis.md" -> "Selfcare apis")
+  const name = String(fallback).replace(/\.[a-z]+$/i, '').replace(/[-_]+/g, ' ').trim();
+  return (m ? m[1] : name.charAt(0).toUpperCase() + name.slice(1)).replace(/[#*`]/g, '').trim().slice(0, 90);
 }
+// every file copied into kb-src (repo-relative), so the hub can tell a working relative link from a dead one
+const kbFiles = [];
 function summaryOf(txt) {
   const lines = txt.split('\n').map(l => l.trim());
   for (const l of lines) {
     if (!l || l.startsWith('#') || l.startsWith('>') || l.startsWith('|') || l.startsWith('```') || l.startsWith('-')) continue;
-    return l.replace(/[*`\[\]]/g, '').replace(/\(.*?\)/g, '').slice(0, 130);
+    return clip(l.replace(/[*`\[\]]/g, '').replace(/\(.*?\)/g, ''), 130);
   }
   return '';
 }
+// cut at a word boundary with an ellipsis, never mid-word
+function clip(t, n) { t = String(t).replace(/\s+/g, ' ').trim(); if (t.length <= n) return t; const c = t.slice(0, n); return c.slice(0, Math.max(c.lastIndexOf(' '), n * .6)).replace(/[\s,;:.\-]+$/, '') + '…'; }
+// exact version files (v<N>-<YYYY-MM-DD>.<ext>); run logs such as v3-<date>-run.md do not match
+const EXACT_V = /^v(\d+)-\d{4}-\d{2}-\d{2}\.(md|html?|pdf)$/i;
+const latestExact = (names, ext) => names.filter(n => EXACT_V.test(n) && n.toLowerCase().endsWith(ext))
+  .sort((a, b) => +b.match(EXACT_V)[1] - +a.match(EXACT_V)[1])[0];
 function walk(dir) {
   if (!existsSync(dir)) return;
-  for (const name of readdirSync(dir)) {
+  const names = readdirSync(dir);
+  // a versioned folder lists only its highest version (plus README.md / index.html, its version
+  // index); older versions are still copied so the index links keep working
+  const latestMd = latestExact(names, '.md');
+  for (const name of names) {
     const p = join(dir, name);
     // the hub may live inside docsDir; never walk its own output
     if (p === ROOT || name.startsWith('.') || name === 'test-data') continue;   // test-data holds personal data, never mirrored
     const st = statSync(p);
     if (st.isDirectory()) { walk(p); continue; }
-    // images referenced by the docs travel with them, so relative paths keep working
-    if (IMG.test(name)) { const d = join(KBSRC, relative(DOCS, p)); mkdirSync(dirname(d), { recursive: true }); copyFileSync(p, d); continue; }
-    if (!name.endsWith('.md')) continue;
+    // images, PDFs and JSON records referenced by the docs travel with them (PDFs open in the hub's document view)
+    if (IMG.test(name) || /\.(pdf|json)$/i.test(name)) { const d = join(KBSRC, relative(DOCS, p)); mkdirSync(dirname(d), { recursive: true }); copyFileSync(p, d); kbFiles.push(relative(REPO, p).replace(/\\/g, '/')); continue; }
+    if (!name.endsWith('.md') || name === 'CLAUDE.md') continue;
     const relFromRepo = relative(REPO, p);           // e.g. docs/knowledge-base/x.md
     const relFromDocs = relative(DOCS, p);           // e.g. knowledge-base/x.md
     const txt = readFileSync(p, 'utf8');
@@ -65,6 +79,8 @@ function walk(dir) {
     const dest = join(KBSRC, relFromDocs);
     mkdirSync(dirname(dest), { recursive: true });
     writeFileSync(dest, txt);
+    kbFiles.push(relFromRepo.replace(/\\/g, '/'));
+    if (latestMd && EXACT_V.test(name) && name !== latestMd) continue;
     const top = relFromDocs.split('/')[0];
     kb.push({
       title: titleOf(txt, name.replace(/\.md$/, '')),
@@ -81,10 +97,10 @@ walk(DOCS);
 /* ---- 1b. extra knowledge-base roots (brand.json "kbRoots") ----
    [{ "dir": "streams/x/output/html", "group": "X documents", "types": ["md","html","pdf"],
       "latestOnly": true, "exclude": ["drafts"] }]
-   Versioned folders (v<N>-<date>.html + index.html) contribute only their highest version
-   when latestOnly is true, and their index.html is skipped. */
+   Versioned folders (v<N>-<date>.html + index.html) list only their highest version plus
+   index.html (the version index) when latestOnly is true; older versions are still copied so its links work. */
 const htmlTitle = t => ((t.match(/<title[^>]*>([^<]+)<\/title>/i) || t.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i) || [])[1] || '').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
-const htmlSummary = t => { const m = t.replace(/<(script|style)[\s\S]*?<\/\1>/gi, '').match(/<p[^>]*>([\s\S]*?)<\/p>/i); return m ? m[1].replace(/<[^>]+>/g, '').replace(/&[a-z#0-9]+;/gi, ' ').replace(/\s+/g, ' ').trim().slice(0, 140) : ''; };
+const htmlSummary = t => { const m = t.replace(/<(script|style)[\s\S]*?<\/\1>/gi, '').match(/<p[^>]*>([\s\S]*?)<\/p>/i); return m ? m[1].replace(/<[^>]+>/g, '').replace(/&[a-z#0-9]+;/gi, ' ').replace(/\s+/g, ' ').trim() : ''; };
 const VRE = /^v(\d+)-[\d-]+\.(html?|md|pdf)$/i;
 (brand.kbRoots || []).forEach((root, order) => {
   const base = join(REPO, root.dir);
@@ -100,20 +116,22 @@ const VRE = /^v(\d+)-[\d-]+\.(html?|md|pdf)$/i;
       if (excl.some(x => p.includes(x))) continue;
       if (statSync(p).isDirectory()) { visit(p); continue; }
       const ext = (name.split('.').pop() || '').toLowerCase();
-      if (IMG.test(name)) { const d = join(C, 'kb-src', relative(REPO, p)); mkdirSync(dirname(d), { recursive: true }); copyFileSync(p, d); continue; }
-      if (!types.includes(ext === 'htm' ? 'html' : ext)) continue;
-      if (root.latestOnly !== false && versioned.length && (name === 'index.html' || (VRE.test(name) && name !== latest))) continue;
+      if (IMG.test(name)) { const d = join(C, 'kb-src', relative(REPO, p)); mkdirSync(dirname(d), { recursive: true }); copyFileSync(p, d); kbFiles.push(relative(REPO, p).replace(/\\/g, '/')); continue; }
+      if (!types.includes(ext === 'htm' ? 'html' : ext) || name === 'CLAUDE.md') continue;
       const rel = relative(REPO, p).replace(/\\/g, '/');
       const dest = join(C, 'kb-src', rel);
       mkdirSync(dirname(dest), { recursive: true });
       copyFileSync(p, dest);
+      kbFiles.push(rel);
+      // older versions are copied (the version index links to them) but not listed
+      if (root.latestOnly !== false && versioned.length && VRE.test(name) && name !== latest) continue;
       let title = '', summary = '';
       const folder = dir.split(/[\\/]/).pop().replace(/[-_]/g, ' ');
       if (ext === 'md') { const t = readFileSync(p, 'utf8'); title = titleOf(t, name); summary = summaryOf(t); }
       else if (ext.startsWith('htm')) { const t = readFileSync(p, 'utf8'); title = htmlTitle(t) || folder; summary = htmlSummary(t); }
       else title = name.replace(/\.[a-z]+$/i, '').replace(/^\d+\s*-\s*/, '');
       const vm = name.match(VRE);
-      kb.push({ title: title.slice(0, 100), path: rel, group: root.group || 'Docs', summary, version: vm ? 'v' + vm[1] : '', order: order + 1 });
+      kb.push({ title: title.slice(0, 100), path: rel, group: root.group || 'Docs', summary: clip(summary, 140), version: vm ? 'v' + vm[1] : '', order: order + 1 });
     }
   };
   visit(base);
@@ -129,18 +147,21 @@ const roadmapExtra = readIf(join(D, 'roadmapExtra.json')) || [];
 let adrs = readIf(join(D, 'adrs.json')) || [];
 // ADR files (docs/adr/NNNN-slug.md, the /adr command's format) win over adrs.json when present.
 const ADRDIR = join(REPO, brand.adrDir || 'docs/adr');
-// keep the id width an existing adrs.json uses (ADR-0001 vs ADR-001)
-const adrPad = ((adrs.map(a => (String(a.id || '').match(/^ADR-(\d+)$/) || [])[1]).find(Boolean)) || '000').length;
+let adrSource = '';
+// keep the id width an existing adrs.json uses (ADR-0001 vs ADR-001); otherwise the file numbers' four digits
+const adrPad = ((adrs.map(a => (String(a.id || '').match(/^ADR-(\d+)$/) || [])[1]).find(Boolean)) || '0000').length;
 if (existsSync(ADRDIR)) {
   const fromFiles = readdirSync(ADRDIR).filter(n => /^\d{4}-.+\.md$/.test(n) && !n.startsWith('0000-')).sort().map(n => {
     const t = readFileSync(join(ADRDIR, n), 'utf8');
     const num = +n.slice(0, 4);
     const field = k => ((t.match(new RegExp('\\*\\*' + k + ':\\*\\*\\s*(.+)')) || [])[1] || '').trim();
-    const title = ((t.match(/^#\s+\d{4}\s*[:.\-]?\s*(.+)$/m) || [])[1] || n).trim();
+    const title = ((t.match(/^#\s+\d{4}\s*[:.\-\u2013\u2014]?\s*(.+)$/m) || [])[1] || n).trim();
+    // mirrored into kb-src/adr/ so each decision opens in the hub (and links to docs/adr/ resolve to it)
+    mkdirSync(join(C, 'kb-src', 'adr'), { recursive: true }); writeFileSync(join(C, 'kb-src', 'adr', n), t); kbFiles.push('adr/' + n);
     const sec = h => ((t.split(new RegExp('^## ' + h + '\\s*$', 'm'))[1] || '').split(/^## /m)[0] || '').trim().replace(/\s+/g, ' ');
-    return { id: 'ADR-' + String(num).padStart(adrPad, '0'), title, status: field('Status') || 'Proposed', date: field('Date'), summary: (sec('Decision') || sec('Context')).slice(0, 420), file: relative(REPO, join(ADRDIR, n)).replace(/\\/g, '/') };
+    return { id: 'ADR-' + String(num).padStart(adrPad, '0'), title, status: field('Status') || 'Proposed', date: field('Date'), summary: (sec('Decision') || sec('Context')).slice(0, 420), file: relative(REPO, join(ADRDIR, n)).replace(/\\/g, '/'), doc: 'adr/' + n };
   });
-  if (fromFiles.length) adrs = fromFiles;
+  if (fromFiles.length) { adrs = fromFiles; adrSource = (brand.adrDir || 'docs/adr').replace(/^(\.\.\/)+/, ''); }
 }
 const gaps = readIf(join(D, 'gaps.json')) || [];
 const security = readIf(join(D, 'security.json')) || [];
@@ -260,8 +281,8 @@ if (existsSync(CODE) && REPOS.length) {
 }
 
 const manifest = {
-  meta: { generated: new Date().toISOString().slice(0, 10), version: 'v4', template: (existsSync(join(C, '.template-version')) ? readFileSync(join(C, '.template-version'), 'utf8').split(/\s+/)[0] : ''), brand: brand.name || '', hubDir: relative(REPO, ROOT).replace(/\\/g, '/') || '.' },
-  overview, nav, sections, features, loop: readIf(join(D, 'loop.json')), loopConfig: readIf(join(D, 'loop-config.json')), agentic: readIf(join(D, 'agentic.json')), roadmapExtra, adrs, gaps, security, performance, gtm, vendors, questions, lifecycle, kb, traceability, feedback, learning, releases,
+  meta: { generated: new Date().toISOString().slice(0, 10), version: 'v4', template: (existsSync(join(C, '.template-version')) ? readFileSync(join(C, '.template-version'), 'utf8').split(/\s+/)[0] : ''), brand: brand.name || '', hubDir: relative(REPO, ROOT).replace(/\\/g, '/') || '.', adrSource },
+  overview, nav, sections, features, loop: readIf(join(D, 'loop.json')), loopConfig: readIf(join(D, 'loop-config.json')), agentic: readIf(join(D, 'agentic.json')), roadmapExtra, adrs, gaps, security, performance, gtm, vendors, questions, lifecycle, kb, kbFiles, traceability, feedback, learning, releases,
   defectsSummary: { total: summary.defects?.total || 0, critical: summary.defects?.critical || 0, high: summary.defects?.high || 0, medium: summary.defects?.medium || 0, low: summary.defects?.low || 0 },
   counts: { gaps: summary.gaps || null, security: summary.security || null }
 };

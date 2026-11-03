@@ -143,7 +143,7 @@ engine CSS when present).
 | Security / performance | `content/data/security.json`, `content/data/performance.json` |
 | GTM / production readiness | `content/data/gtm.json` (items grouped by `workstream`) |
 | Section pages | `content/sections/*.md` (product, architecture, infra, cicd, observability, security, performance, accounts, changelog) |
-| Knowledge base | automatic: `build.mjs` scans `docsDir` and links every `.md`. Add more folders (Markdown, HTML, PDF) with `kbRoots` in `brand.json`; versioned folders contribute only their latest `v<N>-<date>` file |
+| Knowledge base | automatic: `build.mjs` scans `docsDir` and links every `.md` except `CLAUDE.md`; a folder with exact `v<N>-<YYYY-MM-DD>.md` files lists only its highest version plus its `README.md` (older versions are still copied, so the index links work; run logs such as `v3-<date>-run.md` stay listed). Add more folders (Markdown, HTML, PDF) with `kbRoots` in `brand.json`; versioned folders contribute only their latest `v<N>-<date>` file |
 | Learning paths | `content/learning/paths.json` (paths, each an ordered list of course ids or `course/lesson` refs) + one `content/learning/courses/<id>.json` per course + lesson files. See "Learning paths" below |
 | Navigation | `content/nav.json`: groups of `{ title, icon, route, badge?, tone? }`. Group options: `collapsed` (starts closed; an `Archive…` group does by default), `fromLoop` (every spec in `loop.json`, grouped by phase, with criteria passing), `fromSections` (a section id prefix or list whose pages are appended). See "Side menu" below |
 
@@ -188,7 +188,8 @@ A concrete case, How it works in the platform, What goes wrong, The vocabulary, 
 | `fontsUrl` | Google Fonts css2 URL for `font` |
 | `markRadius`, `markStroke` | favicon and gate mark shape and plus colour |
 | `repoUrls` | per-repo web URL overrides (`""` = no remote); repos may be nested paths such as `area/code/repo` |
-| `adrDir` | ADR markdown folder (default `docs/adr`); files win over `adrs.json` |
+| `adrDir` | ADR markdown folder (default `docs/adr`, relative to `repoRoot`, may point into the workspace); files win over `adrs.json`, are copied into the knowledge base and open from the Decision log |
+| `workspaceUrl` | web URL of the workspace repo's tree (e.g. `https://github.com/<org>/<repo>/blob/main`): a spec document's link to a workspace file the hub does not carry opens there; without it such links render as plain text |
 | `defaultParty`, `roadmapSort` | initial roadmap / feature filter and sort (`fid`, `seq`, `run`, ...) |
 | `modules` | switch pages on or off: `{ "learn": false, "releases": true }`. Without a flag a data page (`learn`, `releases`, `dispatch`, `stories`, `vendors`, `questions`) shows only when its data exists |
 | `deploy` | `{ bucket, prefix, cloudfront, url }`, or a list of them each with a `name`, read by `./sync.sh --deploy [name]` (every target by default) |
@@ -198,7 +199,14 @@ Optional data files switch modules on by being present: `content/learning/paths.
 title, tickets, notes, platforms: [{ platform, component, version, where, status }], build }]`),
 `feedback.json` (client feedback changelog), `questions.json`, `vendors.json`,
 `content/stories/*.json`. Comments are on when `content/comments-config.json` has
-`"enabled": true`. Any `sections.json` entry without its own page renders as Markdown.
+`"enabled": true`. Any `sections.json` entry without its own page renders as Markdown; give it
+`"base": "content/kb-src/<repo path of its source>"` when it is generated from a repo document, so
+the source's relative links resolve.
+
+Links in rendered documents: a relative link to a file the hub carries becomes a hub page (knowledge
+base documents, spec intent, spec, design, tasks, test plan, reviews, feedback, contracts, outputs,
+ADRs); a link to a file the hub does not carry renders as plain text with the path in its tooltip, so
+no link is dead. Headings get GitHub-style ids, so `#anchor` links scroll within the document.
 
 ## File map
 

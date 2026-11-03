@@ -385,6 +385,10 @@
     $('#content').scrollTop = 0; window.scrollTo(0, 0);
     $('#content').innerHTML = `<div class="loading"><span class="spinner"></span> Loading…</div>`;
     try { await fn(arg); } catch (e) { $('#content').innerHTML = `<div class="callout danger"><b>Render error.</b> ${esc(e.message)}</div>`; }
+    // the browser tab names the page: "<page title> · <brand> Engineering Hub"
+    const base = (window.__BRAND || {}).name ? `${window.__BRAND.name} Engineering Hub` : 'Engineering Hub';
+    const h1 = $('#content h1'); const t = h1 ? h1.textContent.replace(/\s+/g, ' ').trim() : '';
+    document.title = t && t !== base ? `${t.slice(0, 80)} · ${base}` : base;
     closeMobileNav();
   }
 
@@ -411,8 +415,81 @@
       pre.replaceWith(div);
     });
     runMermaid(mount);
+    // wide tables scroll inside their own box instead of pushing the page sideways
+    // a key/value table written with an empty header row shows no empty header bar
+    $$('thead', mount).forEach(th => { if (!th.textContent.trim()) th.remove(); });
+    $$('table', mount).forEach(t => { const first = $$('tbody tr > td:first-child', t); if (first.length && first.every(td => td.textContent.trim().length <= 28)) first.forEach(td => td.classList.add('md-key')); });
+    $$('table', mount).forEach(t => { if (t.parentElement.classList.contains('md-table')) return; const w = document.createElement('div'); w.className = 'md-table'; t.replaceWith(w); w.appendChild(t); });
+    // headings get GitHub-style ids so a doc's own #anchors work; the router never sees them
+    const used = {};
+    $$('h1,h2,h3,h4,h5,h6', mount).forEach(h => { if (h.id) return; let id = headingId(h.textContent); if (!id) return; if (used[id] != null) id += '-' + (++used[id]); else used[id] = 0; h.id = id; });
+    $$('a[href^="#"]:not([href^="#/"])', mount).forEach(a => a.addEventListener('click', e => {
+      e.preventDefault();
+      const id = decodeURIComponent(a.getAttribute('href').slice(1));
+      const t = mount.querySelector('[id="' + id.replace(/"/g, '') + '"]') || mount.querySelector('[id="' + headingId(id) + '"]');
+      if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }));
+    // relative links: to a hub page when the hub carries the file, plain text when it does not (no dead links)
+    $$('a[href]', mount).forEach(a => {
+      const href = a.getAttribute('href');
+      if (/^([a-z][a-z0-9+.-]*:|\/\/|#)/i.test(href)) return;
+      const to = hubLink(href, base);
+      if (to === undefined) return;
+      if (to && to.route) { a.setAttribute('href', to.route); return; }
+      if (to && to.url) { a.setAttribute('href', to.url); a.target = '_blank'; a.rel = 'noopener'; return; }
+      const sp = document.createElement('span'); sp.className = 'md-deadlink'; sp.title = 'Not in the hub: ' + href; sp.innerHTML = a.innerHTML; a.replaceWith(sp);
+    });
     // external links new tab
     $$('a[href^="http"]', mount).forEach(a => { a.target = '_blank'; a.rel = 'noopener'; });
+  }
+  function headingId(t) { return String(t || '').trim().toLowerCase().replace(/[^\p{L}\p{N}\s_-]/gu, '').replace(/\s/g, '-'); }
+  /* Where a relative link in a rendered doc points. base is the doc's hub path (content/kb-src/<repo path>,
+     content/specs/<dir>/<file>, or a section's "base"); without one, links resolve from the hub page.
+     Returns { route } for a hub page, { url } for a file or the workspace repo, null when the hub does not
+     carry the target, undefined to leave the link alone. */
+  const SPEC_ROUTES = { 'intent.md': 'intent/intent', 'spec.md': 'spec/spec', 'plan.md': 'design/plan', 'data-model.md': 'design/data-model',
+    'tasks.md': 'build/tasks', 'test-plan.md': 'test/test-plan', 'outputs/release-notes.md': 'deploy/release', 'outputs/runbook.md': 'maintain/runbook',
+    'outputs/findings.json': 'intent/findings', 'outputs/review': 'intent/review', 'outputs/feedback': 'intent/feedback', 'contracts': 'design/contracts', '': '' };
+  function hubLink(href, base) {
+    const page = location.href.split('#')[0].split('?')[0];
+    const root = new URL('./', page);
+    let u; try { u = new URL(href, base ? new URL(base, root) : root); } catch (_) { return null; }
+    if (u.origin !== root.origin) return undefined;
+    let rel = decodeURIComponent(u.pathname);
+    if (!rel.startsWith(root.pathname)) return null;
+    rel = rel.slice(root.pathname.length);
+    const files = new Set(DATA.kbFiles || []);
+    if (rel.startsWith('content/kb-src/')) {
+      let p = rel.slice('content/kb-src/'.length).replace(/\/$/, '');
+      if (!files.has(p)) p = [p + '/README.md', p + '/index.html'].find(x => files.has(x)) || '';
+      if (!p) return null;
+      return /\.(md|html?|pdf)$/i.test(p) ? { route: '#/doc/' + p } : { url: 'content/kb-src/' + p };
+    }
+    const sm = rel.match(/^content\/specs\/([^/]+)\/(.*)$/);
+    const bm = base && String(base).match(/^content\/specs\/([^/]+)\/(.*)$/);
+    if (sm || bm) {
+      // resolve in the workspace layout (specs/<dir>/outputs/review/...), which the hub copy flattens
+      const wsBase = bm ? 'specs/' + bm[1] + '/' + bm[2].replace(/^(review|feedback)\//, 'outputs/$1/').replace(/^findings\.json$/, 'outputs/findings.json') : 'specs/';
+      const w = decodeURIComponent(new URL(href, 'http://ws/' + wsBase).pathname).slice(1);
+      const m = w.match(/^specs\/([^/]+)\/?(.*)$/);
+      const s = m && ((DATA.loop || {}).specs || []).find(x => x.dir === m[1]);
+      if (s) {
+        const sub = m[2].replace(/\/$/, '');
+        if (SPEC_ROUTES[sub] != null) return { route: '#/spec/' + s.dir + (SPEC_ROUTES[sub] ? '/' + SPEC_ROUTES[sub] : '') };
+        let x;
+        if ((x = sub.match(/^outputs\/review\/([\w-]+)\.md$/)) && (s.review || []).includes(x[1])) return { route: `#/spec/${s.dir}/intent/review/${x[1]}` };
+        if ((x = sub.match(/^outputs\/feedback\/([^/]+)$/)) && (s.feedback || []).includes(x[1])) return { route: `#/spec/${s.dir}/intent/feedback/${x[1]}` };
+        if ((x = sub.match(/^contracts\/([^/]+)$/)) && (s.contracts || []).includes(x[1])) return { route: `#/spec/${s.dir}/design/contracts/${x[1]}` };
+        if ((x = sub.match(/^outputs\/([^/]+\.md)$/)) && (s.outputs || []).includes(x[1])) return { route: `#/doc/content/specs/${s.dir}/outputs/${x[1]}` };
+      }
+      const adr = w.match(/(?:^|\/)docs\/adr\/(\d{4}-[^/]+\.md)$/);
+      if (adr && files.has('adr/' + adr[1])) return { route: '#/doc/adr/' + adr[1] };
+      const ws = (window.__BRAND || {}).workspaceUrl;
+      return ws ? { url: ws.replace(/\/$/, '') + '/' + w } : null;
+    }
+    // other hub files (media, test evidence) open as they are
+    if (rel.startsWith('content/') || rel.startsWith('assets/')) return undefined;
+    return null;
   }
   function runMermaid(scope) {
     if (!window.mermaid) return;
@@ -420,7 +497,8 @@
     if (!nodes.length) return;
     nodes.forEach(n => n.dataset.done = '1');
     // Mermaid sizes boxes by measuring text, so render only after the web font is ready or labels get clipped.
-    const go = () => { try { mermaid.run({ nodes }); } catch (e) { /* ignore */ } };
+    // a page left before the font loaded has detached nodes; a failed diagram never becomes an uncaught rejection
+    const go = () => { const live = nodes.filter(n => n.isConnected); if (!live.length) return; try { const r = mermaid.run({ nodes: live }); if (r && r.catch) r.catch(() => {}); } catch (e) { /* ignore */ } };
     (document.fonts && document.fonts.ready) ? document.fonts.ready.then(go) : go();
   }
   function md(sectionId) {
@@ -428,7 +506,7 @@
       const sec = (DATA.sections || []).find(s => s.id === sectionId) || { title: sectionId, doc: `content/sections/${sectionId}.md`, lede: '' };
       const c = $('#content');
       c.innerHTML = `<div class="page-head"><p class="eyebrow">${esc(sec.eyebrow || 'Reference')}</p><h1>${esc(sec.title)}</h1>${sec.lede ? `<p class="lede">${esc(sec.lede)}</p>` : ''}</div><div class="md" id="mdmount"></div>`;
-      try { renderMarkdown(await loadMD(sec.doc), $('#mdmount')); }
+      try { renderMarkdown(await loadMD(sec.doc), $('#mdmount'), sec.base); }
       catch (e) { $('#mdmount').innerHTML = `<div class="callout warn"><b>Not written yet.</b> <code>${esc(sec.doc)}</code> is missing.</div>`; }
     };
   }
@@ -1303,16 +1381,18 @@
     $('#content').innerHTML = `
       <div class="page-head"><p class="eyebrow">Decisions</p><h1>Architecture Decision Records</h1>
       <p class="lede">Every significant decision, why it was made, and its status. ${a.length} records.</p></div>
-      <div class="tbl-wrap"><table class="data">
+      ${a.length ? `<div class="tbl-wrap"><table class="data adr-table">
         <thead><tr><th>#</th><th>Decision</th><th>Status</th><th>Summary</th></tr></thead>
-        <tbody>${a.map(r => `<tr>
+        <tbody>${a.map(r => { const st = String(r.status || '').match(/^([A-Za-z-]+)[\s,;:]*(.*)$/) || ['', r.status || '', ''];
+          const inl = t => window.marked ? marked.parseInline(String(t)) : esc(t);
+          return `<tr>
           <td><code>${esc(r.id)}</code></td>
-          <td><b>${esc(r.title)}</b>${r.date ? `<br><span style="color:var(--text-muted);font-size:.8em">${esc(r.date)}</span>` : ''}</td>
-          <td>${statusBadge(r.status)}</td>
-          <td>${esc(r.summary || '')}</td>
-        </tr>`).join('')}</tbody>
-      </table></div>
-      <p class="footer-note">Source: <code>content/data/adrs.json</code>.</p>`;
+          <td><b>${r.doc ? `<a href="#/doc/${esc(r.doc)}">${inl(r.title)}</a>` : inl(r.title)}</b>${r.date ? `<br><span style="color:var(--text-muted);font-size:.8em">${esc(r.date)}</span>` : ''}</td>
+          <td>${statusBadge(st[1])}${st[2] ? `<div class="adr-note">${esc(st[2].replace(/^\((.*)\)$/, '$1'))}</div>` : ''}</td>
+          <td>${inl(r.summary || '')}</td>
+        </tr>`; }).join('')}</tbody>
+      </table></div>` : `<div class="callout"><b>No decisions recorded yet.</b> Record one with <code>/adr</code>; it shows here after the next sync.</div>`}
+      <p class="footer-note">Source: <code>${esc((DATA.meta || {}).adrSource || 'content/data/adrs.json')}</code>.</p>`;
   }
 
   /* ---------- GAPS ---------- */
@@ -1398,16 +1478,22 @@
   async function renderDoc(arg) {
     const c = $('#content');
     const k = (DATA.kb || []).find(x => x.path === arg);
-    const src = 'content/kb-src/' + arg.split('/').map(encodeURIComponent).join('/');
+    // a spec's other outputs (content/specs/<dir>/outputs/*.md) open here too; everything else is a knowledge-base copy
+    const src = (/^content\/specs\/[^/]+\/outputs\/[^/]+\.md$/.test(arg) ? '' : 'content/kb-src/') + arg.split('/').map(encodeURIComponent).join('/');
     c.innerHTML = `<div class="breadcrumb"><a href="#/kb">Knowledge base</a> › <code style="font-size:.9em">${esc(arg)}</code> · <a href="${src}" target="_blank" rel="noopener">open in a new tab</a></div><div id="mdmount" class="md"><div class="loading"><span class="spinner"></span> Loading…</div></div>`;
     const mount = $('#mdmount');
     if (/\.(html?|pdf)$/i.test(arg)) {
       // HTML and PDF documents render as they were published, in a frame.
       mount.className = '';
-      mount.innerHTML = `${k ? `<div class="page-head"><h1>${esc(k.title)}</h1>${k.summary ? `<p class="lede">${esc(k.summary)}</p>` : ''}</div>` : ''}<iframe class="docframe" title="${esc(k ? k.title : arg)}" src="${src}"></iframe>`;
+      const ft = k ? k.title : arg.split('/').pop().replace(/\.[a-z]+$/i, '').replace(/[-_]+/g, ' ');
+      mount.innerHTML = `<div class="page-head"><h1>${esc(ft)}</h1>${k && k.summary ? `<p class="lede">${esc(k.summary)}</p>` : ''}</div><iframe class="docframe" title="${esc(ft)}" src="${src}"></iframe>`;
       return;
     }
-    try { renderMarkdown(await loadMD(src), mount, src); }
+    try {
+      renderMarkdown(await loadMD(src), mount, src);
+      // a document without its own title gets one, so every page has a heading
+      if (!mount.querySelector('h1')) mount.insertAdjacentHTML('afterbegin', `<h1>${esc(k ? k.title : arg.split('/').pop().replace(/\.md$/i, '').replace(/[-_]+/g, ' '))}</h1>`);
+    }
     catch (e) { mount.innerHTML = `<div class="callout warn"><b>Could not load</b> <code>${esc(arg)}</code>. It may be a binary file; see it in the repo.</div>`; }
   }
 
@@ -1701,8 +1787,11 @@
     };
     input.addEventListener('input', () => run(input.value));
     input.addEventListener('focus', () => { if (input.value) run(input.value); });
-    document.addEventListener('click', e => { if (!e.target.closest('.topbar__search')) box.hidden = true; });
-    box.addEventListener('click', () => { box.hidden = true; input.value = ''; });
+    document.addEventListener('click', e => { if (!e.target.closest('.topbar__search') && !e.target.closest('#searchOpen')) { box.hidden = true; $('.topbar')?.classList.remove('search-on'); } });
+    box.addEventListener('click', () => { box.hidden = true; input.value = ''; $('.topbar')?.classList.remove('search-on'); });
+    // phones: the search field is behind a button and opens under the top bar
+    $('#searchOpen')?.addEventListener('click', () => { const on = $('.topbar').classList.toggle('search-on'); if (on) input.focus(); else box.hidden = true; });
+    input.addEventListener('keydown', e => { if (e.key === 'Escape') { box.hidden = true; $('.topbar')?.classList.remove('search-on'); input.blur(); } });
   }
 
 
