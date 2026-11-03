@@ -36,6 +36,20 @@ Brand additions: `markSvg` (SVG used as favicon and gate mark), `logoDark`, and 
 topbar link). Extension scripts can add pages through `window.HUB_ROUTES`, wide pages through
 `window.HUB_WIDE` and search entries through `window.HUB_SEARCH`, using the helpers on `window.Hub`.
 
+## Side menu
+
+Built only from `content/nav.json` and the data, so content changes show after `node build.mjs`.
+Groups collapse (remembered per browser) and the group holding the open page always opens. The
+open page is highlighted, including its child pages (`#/spec/X/design` lights `#/spec/X`; a
+section lights its `parent` from `sections.json`, or the entry its eyebrow names). Badges come from
+the data: counts (features, ADRs, gaps, docs, open questions, ...), open findings per review area
+(`#/findings/<area>`), and a test page's latest pass rate read from its lede (`latest <run> 61/61`).
+A Work group (`fromLoop`) lists every spec under its phase in loop order, all seven phases shown.
+Left out automatically: entries whose page does not exist or whose module is off, repeats of a
+route already listed, and loopback links (`127.0.0.1`, `localhost`) when the hub is not served from
+this machine. Keys: `/` filters the menu, arrows move, left / right close and open a group, `[`
+collapses the menu to an icon rail on desktop. Below 1000px it is an off-canvas drawer.
+
 ## Use it in a project (5 minutes)
 
 1. Copy this folder into the project, for example `outputs/engineer-guide/`.
@@ -96,7 +110,7 @@ engine CSS when present).
 | Section pages | `content/sections/*.md` (product, architecture, infra, cicd, observability, security, performance, accounts, changelog) |
 | Knowledge base | automatic: `build.mjs` scans `docsDir` and links every `.md`. Add more folders (Markdown, HTML, PDF) with `kbRoots` in `brand.json`; versioned folders contribute only their latest `v<N>-<date>` file |
 | Learning paths | `content/learning/paths.json` (paths, each an ordered list of course ids or `course/lesson` refs) + one `content/learning/courses/<id>.json` per course + lesson files. See "Learning paths" below |
-| Navigation | `content/nav.json` |
+| Navigation | `content/nav.json`: groups of `{ title, icon, route, badge?, tone? }`. Group options: `collapsed` (starts closed; an `Archive…` group does by default), `fromLoop` (every spec in `loop.json`, grouped by phase, with criteria passing), `fromSections` (a section id prefix or list whose pages are appended). See "Side menu" below |
 
 Then run `node build.mjs` and re-deploy. To keep it current automatically, run the
 build and sync in CI on merge to your main branch.

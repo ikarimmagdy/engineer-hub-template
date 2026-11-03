@@ -130,8 +130,37 @@
     route();
   }
 
-  /* ---------- nav ---------- */
-  function buildNav() {
+  /* ---------- nav ----------
+     Built from content/nav.json, nothing hard-coded. Per group: "label", "items", optional "icon",
+     "collapsed" (start closed; a group whose label starts with Archive does by default), "fromLoop"
+     (every spec in loop.json, grouped by phase) and "fromSections" (a section id prefix, or a list,
+     whose sections are appended, e.g. "test-executions-"). Per item: "title", "icon", "route",
+     optional "badge" and "tone" (ok, warn, bad). Entries whose page does not exist, repeats of a route
+     already listed and loopback links on a hub not served from this machine are left out. */
+  const NAV_KEY = 'tb-hub-nav';
+  const navState = (() => { try { return JSON.parse(localStorage.getItem(NAV_KEY) || '{}') || {}; } catch (_) { return {}; } })();
+  const saveNav = () => { try { localStorage.setItem(NAV_KEY, JSON.stringify(navState)); } catch (_) {} };
+  const NAV_PHASES = ['intent', 'spec', 'design', 'build', 'test', 'deploy', 'maintain'];
+  const isExt = r => /^[a-z][a-z0-9+.-]*:/i.test(String(r || ''));
+  const isLoopback = r => /^https?:\/\/(127\.0\.0\.1|localhost|\[::1\])(:|\/|$)/i.test(String(r || ''));
+  const servedLocally = () => /^(127\.0\.0\.1|localhost|\[::1\]|)$/.test(location.hostname);
+  const pct = (a, b) => b ? Math.round(100 * a / b) : 0;
+  const toneOf = p => p >= 95 ? 'ok' : p >= 70 ? 'warn' : 'bad';
+
+  function navModel() {
+    const R = { ...ROUTES, ...(window.HUB_ROUTES || {}) };
+    const secs = DATA.sections || [];
+    const secIds = new Set(secs.map(s => s.id));
+    const specs = (DATA.loop || {}).specs || [];
+    const live = r => {
+      if (!r) return false;
+      if (isExt(r)) return !isLoopback(r) || servedLocally();
+      const k = routeKey(r);
+      if (!k || !(k in R || secIds.has(k)) || !moduleOn(k)) return false;
+      if (k === 'spec') return specs.some(s => s.dir === r.replace(/^#\/spec\//, '').split('/')[0]);
+      return true;
+    };
+    const openFindings = area => specs.reduce((n, s) => n + (area ? ((s.findings || {}).byArea || {})[area] || 0 : (s.findings || {}).open || 0), 0);
     const counts = {
       '#/features': (DATA.features || []).length,
       '#/adr': (DATA.adrs || []).length,
@@ -144,21 +173,168 @@
       '#/learn': ((DATA.learning || {}).courses || []).reduce((n, c) => n + (c.lessons || []).length, 0),
       '#/releases': ((DATA.releases || {}).releases || []).length
     };
-    // a nav group with "fromLoop": true lists every spec in loop.json, so new work appears after a plain rebuild
-    const fromLoop = () => ((DATA.loop || {}).specs || []).map(sp => ({ title: `${sp.key} ${sp.title || ''}`.trim(), icon: 'feature', route: '#/spec/' + sp.dir }));
-    const nav = (DATA.nav || []).map(g => ({ ...g, items: (g.fromLoop ? fromLoop() : (g.items || [])).filter(it => moduleOn(routeKey(it.route))) })).filter(g => g.items.length);
-    $('#sidebar').innerHTML = nav.map(g => `
-      <div class="nav-group">
-        <div class="nav-group__label">${esc(g.label)}</div>
-        ${g.items.map(it => `<a class="nav-link" data-route="${esc(it.route)}" href="${esc(it.route)}">
-          ${ico(it.icon)}<span>${esc(it.title)}</span>
-          ${counts[it.route] ? `<span class="nav-count">${counts[it.route]}</span>` : ''}
-        </a>`).join('')}
-      </div>`).join('');
+    const badgeFor = it => {
+      if (it.badge != null && it.badge !== '') return { text: String(it.badge), tone: it.tone || '' };
+      const r = it.route;
+      if (counts[r]) return { text: String(counts[r]), tone: '' };
+      const fm = /^#\/findings\/([^/]+)$/.exec(r);
+      if (fm && specs.length) { const n = openFindings(fm[1] === 'all' ? '' : fm[1]); return n ? { text: String(n), tone: '', title: `${n} open findings` } : null; }
+      // a test page: the pass rate of its latest run, read from the section lede ("latest <run> 61/61")
+      const sec = !isExt(r) && secs.find(s => s.id === routeKey(r) && /^test-?exec/.test(s.id));
+      const m = sec && (/latest\s+\S+\s+(\d+)\s*\/\s*(\d+)/i.exec(sec.lede || '') || /(\d+)\s*\/\s*(\d+)/.exec(sec.lede || ''));
+      if (m) { const p = pct(+m[1], +m[2]); return { text: p + '%', tone: toneOf(p), title: `Latest run ${m[1]}/${m[2]} passing` }; }
+      return null;
+    };
+    const seen = new Set();
+    const keep = it => { if (!live(it.route) || seen.has(it.route)) return false; seen.add(it.route); return true; };
+    return (DATA.nav || []).map((g, gi) => {
+      const id = 'g' + gi + '-' + String(g.label || '').toLowerCase().replace(/[^a-z0-9]+/g, '-');
+      if (g.fromLoop) {
+        const order = ((DATA.loopConfig || {}).phases || []).map(p => p.key);
+        const ph = order.length ? order : NAV_PHASES;
+        const title = k => (((DATA.loopConfig || {}).phases || []).find(p => p.key === k) || {}).title || (k ? k[0].toUpperCase() + k.slice(1) : 'Not set');
+        const items = specs.map(s => ({ spec: s, title: `${s.key} ${s.title || ''}`.trim(), icon: 'feature', route: '#/spec/' + s.dir })).filter(keep);
+        const phases = [...ph, ...new Set(items.map(i => i.spec.phase).filter(p => !ph.includes(p)))]
+          .map(k => ({ key: k, title: title(k), items: items.filter(i => (i.spec.phase || '') === k) }));
+        return { id, kind: 'work', label: g.label || 'Work', icon: g.icon || 'board', collapsed: !!g.collapsed, phases, items };
+      }
+      const pre = arr(g.fromSections);
+      const extra = pre.length ? secs.filter(s => pre.some(p => s.id.startsWith(p))).map(s => ({ title: s.title, icon: g.sectionIcon || 'test', route: '#/' + s.id })) : [];
+      const items = [...(g.items || []), ...extra].filter(keep).map(it => ({ ...it, ext: isExt(it.route), b: badgeFor(it) }));
+      return { id, kind: 'list', label: g.label || '', icon: g.icon || '', collapsed: g.collapsed != null ? !!g.collapsed : /^archive/i.test(g.label || ''), items };
+    }).filter(g => g.items.length);
   }
+
+  function buildNav() {
+    const groups = navModel();
+    const link = it => `<a class="nav-link${it.ext ? ' nav-link--ext' : ''}" data-route="${esc(it.route)}" href="${esc(it.route)}" title="${esc(it.title)}"${it.ext ? ' target="_blank" rel="noopener"' : ''} data-q="${esc(it.title.toLowerCase())}">
+          ${ico(it.icon)}<span class="nav-link__t">${esc(it.title)}</span>
+          ${it.b ? `<span class="nav-count${it.b.tone ? ' nav-count--' + it.b.tone : ''}"${it.b.title ? ` title="${esc(it.b.title)}"` : ''}>${esc(it.b.text)}</span>` : ''}
+          ${it.ext ? ico('ext', 'nav-ext') : ''}
+        </a>`;
+    const specLink = it => {
+      const s = it.spec, n = s.criteria || 0, ok = s.criteria_passing || 0;
+      const t = s.tasks || {}, tt = Object.values(t).reduce((a, b) => a + (b || 0), 0), td = t.done || 0;
+      const tip = `${s.key} ${s.title || ''} · phase ${s.phase || 'not set'} · ${ok}/${n} criteria passing · ${td}/${tt} tasks done`;
+      return `<a class="nav-link nav-spec" data-route="${esc(it.route)}" href="${esc(it.route)}" title="${esc(tip)}" data-q="${esc((it.title + ' ' + (s.phase || '')).toLowerCase())}">
+          ${ico('feature')}<span class="nav-spec__body"><span class="nav-spec__top"><span class="nav-spec__key">${esc(s.key)}</span><span class="nav-spec__ac" title="Acceptance criteria passing">${ok}/${n}</span></span>
+          <span class="nav-spec__t">${esc(s.title || s.dir)}</span>
+          <span class="nav-spec__bar" aria-hidden="true"><i style="width:${pct(ok, n)}%"></i></span></span>
+        </a>`;
+    };
+    const body = g => g.kind === 'work'
+      ? g.phases.filter(p => NAV_PHASES.includes(p.key) || p.items.length).map((p, i) => `<div class="nav-phase${p.items.length ? '' : ' is-empty'}" data-phase="${esc(p.key)}"><a class="nav-phase__h" href="#/loop" tabindex="-1" title="${esc(p.title)}: ${p.items.length} in this phase"><span class="nav-phase__i">${i + 1}</span><span>${esc(p.title)}</span><span class="nav-phase__n">${p.items.length}</span></a>${p.items.map(specLink).join('')}</div>`).join('')
+      : g.items.map(link).join('');
+    const open = g => navState[g.id] != null ? navState[g.id] : !g.collapsed;
+    const sb = $('#sidebar');
+    sb.innerHTML = `
+      <div class="nav-filter">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+        <input id="navFilter" type="search" placeholder="Filter menu" autocomplete="off" aria-label="Filter the menu">
+        <kbd title="Press / to filter the menu">/</kbd>
+      </div>
+      <div class="nav-groups">${groups.map(g => `
+      <section class="nav-group${open(g) ? '' : ' is-closed'}" data-group="${esc(g.id)}">
+        <button class="nav-group__head" type="button" aria-expanded="${open(g)}" aria-controls="${esc(g.id)}-b">
+          <svg class="nav-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+          <span class="nav-group__label">${esc(g.label)}</span>
+          <span class="nav-group__n">${g.items.length}</span>
+        </button>
+        <div class="nav-group__body" id="${esc(g.id)}-b">${body(g)}</div>
+      </section>`).join('')}
+        <p class="nav-empty" hidden>No menu entries match.</p>
+      </div>
+      <div class="nav-foot">
+        <button id="navRail" class="nav-foot__btn" type="button" aria-label="Collapse the menu" title="Collapse the menu ([)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16M15 10l-2 2 2 2"/></svg>
+          <span>Collapse</span>
+        </button>
+        <span class="nav-foot__meta">${esc([DATA.meta && DATA.meta.template ? 'v' + DATA.meta.template : '', DATA.meta && DATA.meta.generated ? 'built ' + DATA.meta.generated : ''].filter(Boolean).join(' · '))}</span>
+      </div>`;
+    wireNav();
+    setActive();
+  }
+
+  function wireNav() {
+    const sb = $('#sidebar'), input = $('#navFilter');
+    const setOpen = (sec, on) => {
+      sec.classList.toggle('is-closed', !on);
+      $('.nav-group__head', sec).setAttribute('aria-expanded', String(on));
+      navState[sec.dataset.group] = on; saveNav();
+    };
+    $$('.nav-group__head', sb).forEach(h => h.addEventListener('click', () => {
+      if (document.body.classList.contains('nav-rail')) return;
+      setOpen(h.parentElement, h.parentElement.classList.contains('is-closed'));
+    }));
+    const filter = () => {
+      const q = input.value.trim().toLowerCase();
+      sb.classList.toggle('is-filtering', !!q);
+      let any = false;
+      $$('.nav-group', sb).forEach(sec => {
+        let n = 0;
+        $$('.nav-link', sec).forEach(a => { const hit = !q || a.dataset.q.includes(q) || (sec.querySelector('.nav-group__label').textContent.toLowerCase().includes(q)); a.hidden = !hit; if (hit) n++; });
+        $$('.nav-phase', sec).forEach(p => { p.hidden = !$$('.nav-link', p).some(a => !a.hidden); });
+        sec.hidden = !n; any = any || n > 0;
+      });
+      $('.nav-empty', sb).hidden = any;
+    };
+    input.addEventListener('input', filter);
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Escape') { input.value = ''; filter(); input.blur(); }
+      if (e.key === 'Enter') { const a = visibleLinks()[0]; if (a) { a.click(); input.value = ''; filter(); } }
+      if (e.key === 'ArrowDown') { e.preventDefault(); const f = focusables()[0]; f && f.focus(); }
+    });
+    const visibleLinks = () => $$('.nav-link', sb).filter(a => a.offsetParent !== null);
+    const focusables = () => $$('.nav-group__head, .nav-link', sb).filter(a => a.offsetParent !== null);
+    sb.addEventListener('keydown', e => {
+      if (e.target === input) return;
+      const list = focusables(), i = list.indexOf(document.activeElement);
+      if (i < 0) return;
+      const go = j => { e.preventDefault(); list[Math.max(0, Math.min(list.length - 1, j))].focus(); };
+      const head = document.activeElement.classList.contains('nav-group__head');
+      if (e.key === 'ArrowDown') go(i + 1);
+      else if (e.key === 'ArrowUp') { if (i === 0) { e.preventDefault(); input.focus(); } else go(i - 1); }
+      else if (e.key === 'Home') go(0);
+      else if (e.key === 'End') go(list.length - 1);
+      else if (e.key === 'ArrowLeft') { const sec = document.activeElement.closest('.nav-group'); e.preventDefault(); if (head) setOpen(sec, false); else $('.nav-group__head', sec).focus(); }
+      else if (e.key === 'ArrowRight' && head) { e.preventDefault(); setOpen(document.activeElement.parentElement, true); }
+    });
+    // "/" filters the menu (the topbar search keeps its own field); "[" collapses the menu to icons
+    document.addEventListener('keydown', e => {
+      const t = e.target, typing = t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
+      if (typing || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key === '/') { e.preventDefault(); setRail(false); if (matchMedia('(max-width:1000px)').matches) { sb.classList.add('open'); $('#scrim')?.classList.add('show'); } input.focus(); }
+      else if (e.key === '[' && !matchMedia('(max-width:1000px)').matches) setRail(!document.body.classList.contains('nav-rail'));
+    });
+    const setRail = on => {
+      document.body.classList.toggle('nav-rail', on);
+      const b = $('#navRail'); b.setAttribute('aria-label', on ? 'Expand the menu' : 'Collapse the menu'); b.title = (on ? 'Expand the menu' : 'Collapse the menu') + ' ([)'; $('span', b).textContent = on ? 'Expand' : 'Collapse';
+      navState.__rail = on; saveNav();
+    };
+    $('#navRail').addEventListener('click', () => setRail(!document.body.classList.contains('nav-rail')));
+    if (navState.__rail) setRail(true);
+  }
+
   function setActive() {
-    const base = '#/' + (location.hash.replace(/^#\//, '').split('/')[0] || HOME());
-    $$('.nav-link').forEach(a => a.classList.toggle('active', a.getAttribute('data-route') === base));
+    const hash = location.hash || ('#/' + HOME());
+    const base = '#/' + (hash.replace(/^#\//, '').split('/')[0] || HOME());
+    const links = $$('#sidebar .nav-link');
+    // the longest route that is the page itself or a parent of it (#/spec/X matches #/spec/X/design)
+    let best = null;
+    links.forEach(a => { const r = a.getAttribute('data-route'); if ((hash === r || hash.startsWith(r + '/')) && (!best || r.length > best.getAttribute('data-route').length)) best = a; });
+    if (!best) best = links.find(a => a.getAttribute('data-route') === base) || null;
+    // a child page (e.g. one test run) lights up its parent: sections.json "parent", or an eyebrow naming a menu entry
+    if (!best) {
+      const sec = (DATA.sections || []).find(s => '#/' + s.id === base), norm = t => String(t || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+      if (sec && sec.parent) best = links.find(a => a.getAttribute('data-route') === '#/' + sec.parent) || null;
+      if (sec && !best && sec.eyebrow) best = links.find(a => norm(a.title) === norm(sec.eyebrow)) || null;
+    }
+    links.forEach(a => { const on = a === best; a.classList.toggle('active', on); if (on) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
+    if (!best) return;
+    const sec = best.closest('.nav-group');
+    if (sec && sec.classList.contains('is-closed')) { sec.classList.remove('is-closed'); $('.nav-group__head', sec).setAttribute('aria-expanded', 'true'); }
+    const sb = $('#sidebar'), r = best.getBoundingClientRect(), s = sb.getBoundingClientRect();
+    if (r.top < s.top + 40 || r.bottom > s.bottom - 50) best.scrollIntoView({ block: 'center' });
   }
 
   /* ---------- optional modules ----------
@@ -1514,7 +1690,7 @@
       (c.lessons || []).forEach(l => idx.push({ kind: 'Lesson', title: l.title, sub: (c.code || c.title) + ' ' + (l.objectives || []).join(' '), href: `#/lesson/${c.id}/${l.id}` }));
     });
     (DATA.sections || []).forEach(s => idx.push({ kind: 'Section', title: s.title, sub: s.lede, href: '#/' + s.id }));
-    (DATA.nav || []).forEach(g => g.items.forEach(it => idx.push({ kind: 'Page', title: it.title, sub: '', href: it.route })));
+    (DATA.nav || []).forEach(g => (g.items || []).forEach(it => idx.push({ kind: 'Page', title: it.title, sub: '', href: it.route })));
     (window.HUB_SEARCH || []).forEach(fn => { try { idx.push(...(fn(DATA) || [])); } catch (_) {} });
     const run = q => {
       q = q.trim().toLowerCase();
