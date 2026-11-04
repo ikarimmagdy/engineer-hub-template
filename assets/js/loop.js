@@ -370,6 +370,22 @@
   new MutationObserver(() => $$('.ws-page__frame').forEach(themeFrame)).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
   // #/spec/<dir>/page/<id>/<section> opens the document at its #<section>; the document's own hash changes are
   // mirrored back into the hub URL, so every view of the document has a shareable hub link
+  // relative links inside a framed spec document point at its workspace folder, which the hub flattens:
+  // resolve each one like a markdown link (another document's page, the workspace repo, or plain text)
+  function fixFrameLinks(f, s, pg) {
+    try {
+      const d = f.contentDocument, top = location.href.split('#')[0];
+      $$('a[href]', d).forEach(a => {
+        const h = a.getAttribute('href');
+        if (!h || /^(#|[a-z][a-z0-9+.-]*:)/i.test(h)) return;
+        const r = H().hubLink(h, `content/specs/${s.dir}/${pg.source || ''}`);
+        if (r === undefined) return;
+        if (r && r.route) { a.href = top + r.route; a.target = '_top'; }
+        else if (r && r.url) { a.href = r.url; a.target = '_blank'; a.rel = 'noopener'; }
+        else { a.removeAttribute('href'); a.title = h; }
+      });
+    } catch (_) {}
+  }
   function renderSpecPage(s, id, inner) {
     const c = $('#content'), P = s.pages || [], pg = P.find(x => x.id === id) || P[0];
     if (!pg) { c.innerHTML = head('Work · ' + s.key, 'No documents', '') + `<div class="callout warn">This spec declares no pages in loop-config.json "pages".</div>`; return; }
@@ -390,7 +406,7 @@
     window.addEventListener('hashchange', function off() { if (!/^#\/spec\/[^/]+\/page\//.test(location.hash)) { document.body.classList.remove('hub-docpage'); window.removeEventListener('hashchange', off); } });
     const keep = () => requestAnimationFrame(() => window.scrollTo(0, 0));
     f.addEventListener('load', () => {
-      themeFrame(f); keep();
+      themeFrame(f); keep(); fixFrameLinks(f, s, pg);
       try {
         const w = f.contentWindow;
         w.addEventListener('hashchange', () => {
@@ -417,6 +433,7 @@
       <section class="ws-docpart first"><p class="ws-docsrc">From <a href="${esc(b.src)}" target="_blank" rel="noopener">${esc(b.title)}</a></p>
       <div class="ws-doc ${esc(b.scope)}">${b.figures.map(f => f.html).join('')}</div></section>`).join('')}
       ${blocks.length ? '<p class="ws-docsrc ws-docpart">Review of this area: findings, gaps and unknowns</p>' : ''}<div class="md" id="lpmd"></div>`;
+    const af = $('.ws-areadoc__frame', m); if (af) af.addEventListener('load', () => { themeFrame(af); fixFrameLinks(af, s, pg); });
     H().renderMarkdown(await H().loadMD(base + 'review/' + area + '.md'), $('#lpmd'), base + 'review/' + area + '.md');
   }
 

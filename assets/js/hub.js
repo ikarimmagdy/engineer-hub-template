@@ -383,6 +383,8 @@
     kb: renderKB, doc: renderDoc, review: renderReview, gtm: renderGTM, traceability: renderTrace, accounts: renderAccounts, changelog: renderChangelog, dispatch: renderDispatch, stories: renderStories, vendors: renderVendors, questions: renderQuestions,
     learn: renderLearn, course: renderCourse, lesson: renderLesson, releases: renderReleases
   };
+  // a render still running when the next route starts must not report its failure on the new page
+  let ROUTE_SEQ = 0;
   async function route() {
     const home = HOME();
     if (!location.hash || location.hash === '#') { location.hash = '#/' + home; return; }
@@ -398,7 +400,8 @@
     $('#content').classList.toggle('main--wide', ['roadmap', 'dispatch', 'review', 'doc', ...(window.HUB_WIDE || [])].includes(key));
     $('#content').scrollTop = 0; window.scrollTo(0, 0);
     $('#content').innerHTML = `<div class="loading"><span class="spinner"></span> Loading…</div>`;
-    try { await fn(arg); } catch (e) { $('#content').innerHTML = `<div class="callout danger"><b>Render error.</b> ${esc(e.message)}</div>`; }
+    const seq = ++ROUTE_SEQ;
+    try { await fn(arg); } catch (e) { if (seq !== ROUTE_SEQ) return; $('#content').innerHTML = `<div class="callout danger"><b>Render error.</b> ${esc(e.message)}</div>`; }
     // the browser tab names the page: "<page title> · <brand> Engineering Hub"
     const base = (window.__BRAND || {}).name ? `${window.__BRAND.name} Engineering Hub` : 'Engineering Hub';
     const h1 = $('#content h1'); const t = h1 ? h1.textContent.replace(/\s+/g, ' ').trim() : '';
@@ -490,6 +493,9 @@
       if (s) {
         const sub = m[2].replace(/\/$/, '');
         if (SPEC_ROUTES[sub] != null) return { route: '#/spec/' + s.dir + (SPEC_ROUTES[sub] ? '/' + SPEC_ROUTES[sub] : '') };
+        // a file in the folder of a spec document (its index or another version) opens that document's page
+        const doc = (s.pages || []).find(p => p.source && sub.startsWith(p.source.replace(/[^/]+$/, '')));
+        if (doc) return { route: `#/spec/${s.dir}/page/${doc.id}` };
         let x;
         if ((x = sub.match(/^outputs\/review\/([\w-]+)\.md$/)) && (s.review || []).includes(x[1])) return { route: `#/spec/${s.dir}/intent/review/${x[1]}` };
         if ((x = sub.match(/^outputs\/feedback\/([^/]+)$/)) && (s.feedback || []).includes(x[1])) return { route: `#/spec/${s.dir}/intent/feedback/${x[1]}` };
@@ -995,7 +1001,7 @@
     const def = [
       ['board', 'Roadmap board', 'What is shipped, in progress, next and on the horizon.', '#/roadmap'],
       ['feature', 'Feature dossiers', 'Every feature with product view, plan, technical design and test cases.', '#/features'],
-      ['arch', 'Architecture', 'How the system is put together: services, data and flows.', '#/architecture'],
+      ['arch', 'Architecture', 'How the system is put together: services, data and flows.', (DATA.sections || []).some(x => x.id === 'system-architecture') ? '#/system-architecture' : '#/architecture'],
       ['adr', 'Decision log (ADR)', 'Every architecture decision and its status.', '#/adr'],
       ['gaps', 'Gaps & quality', 'Known defects, code gaps, security and performance findings.', '#/gaps'],
       ['kb', 'Knowledge base', 'Every document behind this hub, readable in place.', '#/kb']
@@ -1921,7 +1927,7 @@
      wide pages through window.HUB_WIDE and search entries through window.HUB_SEARCH, and use
      these helpers so they render exactly like the built-in pages. */
   window.Hub = { get DATA() { return DATA; }, $, $$, esc, arr, ico, loadMD, renderMarkdown, runMermaid, md,
-    brand: () => window.__BRAND || {}, route: () => route() };
+    brand: () => window.__BRAND || {}, route: () => route(), hubLink };
 
   (async () => { try { await applyBrand(); } catch (_) {} initGate(); })();
 })();

@@ -159,7 +159,7 @@ if (existsSync(ADRDIR)) {
     // mirrored into kb-src/adr/ so each decision opens in the hub (and links to docs/adr/ resolve to it)
     mkdirSync(join(C, 'kb-src', 'adr'), { recursive: true }); writeFileSync(join(C, 'kb-src', 'adr', n), t); kbFiles.push('adr/' + n);
     const sec = h => ((t.split(new RegExp('^## ' + h + '\\s*$', 'm'))[1] || '').split(/^## /m)[0] || '').trim().replace(/\s+/g, ' ');
-    return { id: 'ADR-' + String(num).padStart(adrPad, '0'), title, status: field('Status') || 'Proposed', date: field('Date'), summary: (sec('Decision') || sec('Context')).slice(0, 420), file: relative(REPO, join(ADRDIR, n)).replace(/\\/g, '/'), doc: 'adr/' + n };
+    return { id: 'ADR-' + String(num).padStart(adrPad, '0'), title, status: field('Status') || 'Proposed', date: field('Date'), summary: (x => x.length > 420 ? x.slice(0, 420).replace(/\s+\S*$/, '') + ' …' : x)(sec('Decision') || sec('Context')), file: relative(REPO, join(ADRDIR, n)).replace(/\\/g, '/'), doc: 'adr/' + n };
   });
   if (fromFiles.length) { adrs = fromFiles; adrSource = (brand.adrDir || 'docs/adr').replace(/^(\.\.\/)+/, ''); }
 }
