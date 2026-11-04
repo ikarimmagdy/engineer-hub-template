@@ -52,8 +52,9 @@ collapses the menu to an icon rail on desktop. Below 1000px it is an off-canvas 
 
 On desktop the side menu holds only the Work group; every other `nav.json` group is a drop-down in
 the menu bar under the top bar. Below 1000px all groups sit in the drawer. Spec titles wrap to two
-lines. Spec documents (`pages`) are not menu entries: they open from the spec page, and a page whose
-id equals a review area (`architecture`) is shown on that area's tab instead of under Documents.
+lines. Spec documents (`pages`) are not menu entries: every spec page shows them in a Documents bar under
+the phases, and a page whose id equals a review area (`architecture`) is also embedded at the top
+of that area's tab, above the code review notes.
 
 ## Spec documents (full pages)
 

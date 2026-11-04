@@ -309,10 +309,10 @@
       </section>
       <nav class="ws-phases">${phases().map((p, i) => { const st = phaseState(s, p.key);
         return `<a href="#/spec/${esc(s.dir)}/${p.key}" class="${p.key === phase ? 'on' : ''} st-${st.cls}"><span class="n">${i + 1}</span><span class="t">${esc(p.title)}</span><span class="s">${esc(st.label)}</span></a>`; }).join('')}</nav>
+      ${(s.pages || []).length ? `<nav class="ws-docbar" aria-label="Documents"><span class="ws-docbar__h">Documents</span>${s.pages.map(pg => `<a href="#/spec/${esc(s.dir)}/page/${esc(pg.id)}"><b>${esc(pg.title)}</b><span>${esc(pg.version || '')}</span></a>`).join('')}</nav>` : ''}
       <div class="ws-body"><aside class="ws-side">${secs.map(([k, t, n, subs]) => `
           <a href="#/spec/${esc(s.dir)}/${phase}/${k}" class="${k === sec ? 'on' : ''} ${n ? '' : 'empty'}">${esc(t)}${typeof n === 'number' && n ? ` <span>${n}</span>` : ''}</a>
           ${k === sec && subs ? `<div class="ws-sub">${subs.map(a => `<a href="#/spec/${esc(s.dir)}/${phase}/${k}/${a}" class="${(item || 'scope') === a ? 'on' : ''} ${(s.review || []).includes(a) ? '' : 'empty'}">${esc(a === 'scope' ? 'Scope' : areaTitle(a))}</a>`).join('')}</div>` : ''}`).join('')}
-          ${(s.pages || []).filter(pg => !areas().some(a => a.key === pg.id)).length ? `<p class="ws-docs-h">Documents</p>${s.pages.filter(pg => !areas().some(a => a.key === pg.id)).map(pg => `<a href="#/spec/${esc(s.dir)}/page/${esc(pg.id)}" class="ws-doclink">${esc(pg.title)}</a>`).join('')}` : ''}
           <p class="ws-gate"><b>Gate</b> ${esc((phases().find(p => p.key === phase) || {}).gate || '')}</p>
           ${phaseState(s, phase).cls === 'review' && ['intent', 'spec', 'design'].includes(phase) ? `<div class="ws-approve"><b>Approve ${esc(phaseTitle(phase))}</b>
             <p>Read it here, then run in the workspace terminal:</p>
@@ -411,7 +411,9 @@
     const blocks = (((loop().figures || {})[s.dir] || {})[area] || []).concat((((loop().figures || {})['*'] || {})[area] || []));
     // a spec document with the same id as the area (loop-config "pages") is that area's document: one entry, linked here
     const pg = (s.pages || []).find(x => x.id === area);
-    m.innerHTML = `${pg ? `<a class="ws-areadoc" href="#/spec/${esc(s.dir)}/page/${esc(pg.id)}"><b>${esc(pg.title)}</b><span>${esc(pg.version || '')} · the full document, with diagrams</span></a>` : ''}${blocks.map(b => `<style>${b.css}</style>
+    m.innerHTML = `${pg ? `<div class="ws-areadoc"><div class="ws-areadoc__bar"><b>${esc(pg.title)}</b><span>${esc(pg.version || '')}</span><a href="#/spec/${esc(s.dir)}/page/${esc(pg.id)}">Open as a page</a></div>
+      <iframe class="ws-areadoc__frame" src="${esc(pg.file + '?v=' + encodeURIComponent(pg.version || ''))}" title="${esc(pg.title)}" loading="lazy"></iframe></div>
+      <p class="ws-docsrc ws-docpart">Code review notes for this area</p>` : ''}${blocks.map(b => `<style>${b.css}</style>
       <section class="ws-docpart first"><p class="ws-docsrc">From <a href="${esc(b.src)}" target="_blank" rel="noopener">${esc(b.title)}</a></p>
       <div class="ws-doc ${esc(b.scope)}">${b.figures.map(f => f.html).join('')}</div></section>`).join('')}
       ${blocks.length ? '<p class="ws-docsrc ws-docpart">Review of this area: findings, gaps and unknowns</p>' : ''}<div class="md" id="lpmd"></div>`;
