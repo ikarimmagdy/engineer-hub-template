@@ -1052,3 +1052,5 @@ body.hub-docpage .ws-page__frame{min-height:0}
   .topnav__menu .nav-link{border-left:0;border-radius:var(--radius-sm)}
 }
 @media print{.topnav{display:none!important}}
+/* screenshots in review tables (outputs/review/<area>/ images): uniform phone-sized thumbnails */
+.md td img{display:block;width:170px;max-width:none;height:auto;border:1px solid var(--border);border-radius:8px;background:var(--surface-2)}

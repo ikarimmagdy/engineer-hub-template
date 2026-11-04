@@ -179,6 +179,12 @@ def main() -> None:
                 (dest / "review").mkdir(parents=True, exist_ok=True)
                 shutil.copy2(src, dest / "review" / src.name)
                 review.append(area)
+            imgs = d / "outputs" / "review" / area
+            if imgs.is_dir():
+                (dest / "review" / area).mkdir(parents=True, exist_ok=True)
+                for img in imgs.iterdir():
+                    if img.suffix.lower() in (".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp"):
+                        shutil.copy2(img, dest / "review" / area / img.name)
         feedback = []
         for src in sorted((d / "outputs" / "feedback").glob("v*.md"), reverse=True):
             (dest / "feedback").mkdir(parents=True, exist_ok=True)
