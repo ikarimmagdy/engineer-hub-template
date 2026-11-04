@@ -220,7 +220,7 @@
           ${ico('feature')}<span class="nav-spec__body"><span class="nav-spec__top"><span class="nav-spec__key">${esc(s.key)}</span><span class="nav-spec__ac" title="Acceptance criteria passing">${ok}/${n}</span></span>
           <span class="nav-spec__t">${esc(s.title || s.dir)}</span>
           <span class="nav-spec__bar" aria-hidden="true"><i style="width:${pct(ok, n)}%"></i></span></span>
-        </a>${(s.pages || []).map(pg => `<a class="nav-link nav-sub" data-route="#/spec/${esc(s.dir)}/page/${esc(pg.id)}" href="#/spec/${esc(s.dir)}/page/${esc(pg.id)}" title="${esc(s.key + ' ' + pg.title)}" data-q="${esc((s.key + ' ' + s.title + ' ' + pg.title).toLowerCase())}">${ico('adr')}<span class="nav-link__t">${esc(pg.title)}</span></a>`).join('')}`;
+        </a>`;
     };
     const body = g => g.kind === 'work'
       ? g.phases.filter(p => NAV_PHASES.includes(p.key) || p.items.length).map((p, i) => `<div class="nav-phase${p.items.length ? '' : ' is-empty'}" data-phase="${esc(p.key)}"><a class="nav-phase__h" href="#/loop" tabindex="-1" title="${esc(p.title)}: ${p.items.length} in this phase"><span class="nav-phase__i">${i + 1}</span><span>${esc(p.title)}</span><span class="nav-phase__n">${p.items.length}</span></a>${p.items.map(specLink).join('')}</div>`).join('')
@@ -234,7 +234,7 @@
         <kbd title="Press / to filter the menu">/</kbd>
       </div>
       <div class="nav-groups">${groups.map(g => `
-      <section class="nav-group${open(g) ? '' : ' is-closed'}" data-group="${esc(g.id)}">
+      <section class="nav-group${g.kind === 'work' ? '' : ' nav-group--hub'}${open(g) ? '' : ' is-closed'}" data-group="${esc(g.id)}">
         <button class="nav-group__head" type="button" aria-expanded="${open(g)}" aria-controls="${esc(g.id)}-b">
           <svg class="nav-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
           <span class="nav-group__label">${esc(g.label)}</span>
@@ -251,6 +251,19 @@
         </button>
         <span class="nav-foot__meta">${esc([DATA.meta && DATA.meta.template ? 'v' + DATA.meta.template : '', DATA.meta && DATA.meta.generated ? 'built ' + DATA.meta.generated : ''].filter(Boolean).join(' · '))}</span>
       </div>`;
+    // desktop: every group but the Work loop sits in the menu bar under the top bar; the drawer keeps them on small screens
+    const tn = $('#topnav');
+    if (tn) {
+      tn.innerHTML = groups.filter(g => g.kind !== 'work').map(g => `<div class="topnav__g"><button class="topnav__btn" type="button" aria-expanded="false" aria-haspopup="true">${esc(g.label)}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></button><div class="topnav__menu">${g.items.map(link).join('')}</div></div>`).join('');
+      const close = except => $$('.topnav__g', tn).forEach(g => { if (g !== except) { g.classList.remove('is-open'); $('.topnav__btn', g).setAttribute('aria-expanded', 'false'); } });
+      $$('.topnav__btn', tn).forEach(b => b.addEventListener('click', e => { e.stopPropagation(); const g = b.parentElement, on = !g.classList.contains('is-open'); close(g); g.classList.toggle('is-open', on); b.setAttribute('aria-expanded', String(on)); }));
+      if (!tn.dataset.wired) {
+        tn.dataset.wired = '1';
+        document.addEventListener('click', e => { if (!e.target.closest('.topnav__g') || e.target.closest('.nav-link')) close(); });
+        document.addEventListener('keydown', e => { if (e.key === 'Escape') close(); });
+        window.addEventListener('hashchange', () => close());
+      }
+    }
     wireNav();
     setActive();
   }
@@ -330,6 +343,7 @@
       if (sec && !best && sec.eyebrow) best = links.find(a => norm(a.title) === norm(sec.eyebrow)) || null;
     }
     links.forEach(a => { const on = a === best; a.classList.toggle('active', on); if (on) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
+    $$('#topnav .topnav__g').forEach(g => { const hit = $$('.nav-link', g).filter(a => best && a.getAttribute('data-route') === best.getAttribute('data-route')); g.classList.toggle('on', hit.length > 0); $$('.nav-link', g).forEach(a => a.classList.toggle('active', hit.includes(a))); });
     if (!best) return;
     const sec = best.closest('.nav-group');
     if (sec && sec.classList.contains('is-closed')) { sec.classList.remove('is-closed'); $('.nav-group__head', sec).setAttribute('aria-expanded', 'true'); }

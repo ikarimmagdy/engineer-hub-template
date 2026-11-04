@@ -50,6 +50,11 @@ route already listed, and loopback links (`127.0.0.1`, `localhost`) when the hub
 this machine. Keys: `/` filters the menu, arrows move, left / right close and open a group, `[`
 collapses the menu to an icon rail on desktop. Below 1000px it is an off-canvas drawer.
 
+On desktop the side menu holds only the Work group; every other `nav.json` group is a drop-down in
+the menu bar under the top bar. Below 1000px all groups sit in the drawer. Spec titles wrap to two
+lines. Spec documents (`pages`) are not menu entries: they open from the spec page, and a page whose
+id equals a review area (`architecture`) is shown on that area's tab instead of under Documents.
+
 ## Spec documents (full pages)
 
 A spec can show whole self-contained HTML documents (an architecture document, a communication
