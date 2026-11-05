@@ -1,0 +1,375 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hub redesign v1</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --ink: #1C1A17; --ink-2: #4A463F; --ink-3: #7A756B;
+  --paper: #FFFFFF; --canvas: #F6F5F2; --line: #E3E0D9; --line-2: #CFCBC2;
+  --brand: #EF3E23;
+  --sev-critical: #B42318; --sev-high: #C4580E; --sev-medium: #A77A06; --sev-low: #5C6B7A;
+  --ok: #1F7A4D; --run: #2F5FB3; --wait: #7A756B; --block: #B42318;
+  --wf: #ECEAE5; --wf-2: #DEDBD4;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ink: #EDEBE6; --ink-2: #C3BFB6; --ink-3: #8E897F;
+    --paper: #1E1D1A; --canvas: #151412; --line: #34322D; --line-2: #45423C;
+    --wf: #2A2925; --wf-2: #36342F;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--canvas); color: var(--ink); font: 15px/1.6 'Poppins', system-ui, sans-serif; }
+main { max-width: 1080px; margin: 0 auto; padding: 48px 24px 96px; }
+h1 { font-size: 34px; line-height: 1.15; margin: 0 0 12px; text-wrap: balance; }
+h2 { font-size: 22px; margin: 56px 0 12px; padding-top: 24px; border-top: 1px solid var(--line); text-wrap: balance; }
+h3 { font-size: 16px; margin: 28px 0 8px; }
+p, li { max-width: 74ch; text-wrap: pretty; }
+.lede { font-size: 17px; color: var(--ink-2); }
+.meta { color: var(--ink-3); font-size: 13px; margin-bottom: 28px; }
+code, .mono { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 0.86em; }
+code { background: var(--wf); padding: 1px 5px; border-radius: 4px; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; margin: 12px 0; background: var(--paper); }
+th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+th { font-weight: 600; color: var(--ink-2); border-bottom: 1px solid var(--line-2); }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+.toc { background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 16px 20px; }
+.toc ol { margin: 0; padding-left: 20px; columns: 2; }
+.toc a { color: var(--ink); }
+.callout { border-left: 3px solid var(--brand); background: var(--paper); padding: 12px 16px; margin: 16px 0; border-radius: 0 6px 6px 0; }
+.callout.warn { border-left-color: var(--sev-high); }
+.decision { background: var(--paper); border: 1px solid var(--line-2); border-radius: 8px; padding: 14px 18px; margin: 12px 0; }
+.decision b { display: block; margin-bottom: 4px; }
+
+/* wireframes */
+.frame { background: var(--paper); border: 1px solid var(--line-2); border-radius: 10px; overflow: hidden; margin: 16px 0 8px; font-size: 12.5px; line-height: 1.45; }
+.frame-cap { color: var(--ink-3); font-size: 13px; margin: 0 0 28px; }
+.bar { display: flex; align-items: center; gap: 14px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+.logo { width: 22px; height: 22px; background: var(--ink); border-radius: 4px; }
+.navlink { color: var(--ink-2); }
+.navlink.on { color: var(--ink); font-weight: 600; box-shadow: inset 0 -2px 0 var(--brand); padding-bottom: 2px; }
+.search { margin-left: auto; background: var(--wf); border-radius: 6px; padding: 5px 10px; color: var(--ink-3); min-width: 220px; }
+.kbd { font-family: 'JetBrains Mono', monospace; font-size: 11px; border: 1px solid var(--line-2); border-radius: 4px; padding: 0 4px; margin-left: 6px; }
+.body { padding: 16px; display: grid; gap: 14px; }
+.cols { display: grid; gap: 14px; }
+.c2 { grid-template-columns: 2fr 1fr; } .c3 { grid-template-columns: repeat(3, 1fr); } .c7 { grid-template-columns: repeat(7, 1fr); }
+.panel { border: 1px solid var(--line); border-radius: 8px; padding: 12px; background: var(--paper); }
+.panel h4 { margin: 0 0 8px; font-size: 13px; }
+.row { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-top: 1px solid var(--line); }
+.row:first-of-type { border-top: 0; }
+.row .k { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--ink-3); min-width: 74px; }
+.row .t { flex: 1; }
+.row .a { color: var(--ink-3); font-size: 11.5px; }
+.pill { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--line-2); color: var(--ink-2); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+.d-crit { background: var(--sev-critical); } .d-high { background: var(--sev-high); } .d-med { background: var(--sev-medium); } .d-low { background: var(--sev-low); }
+.d-ok { background: var(--ok); } .d-run { background: var(--run); } .d-wait { background: var(--wait); } .d-block { background: var(--block); }
+.col h5 { margin: 0 0 6px; font-size: 11.5px; color: var(--ink-2); font-weight: 600; display: flex; justify-content: space-between; }
+.card { border: 1px solid var(--line); border-radius: 6px; padding: 8px; margin-bottom: 6px; background: var(--paper); }
+.card .k { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--ink-3); }
+.card .t { font-weight: 500; margin: 2px 0 6px; }
+.meter { height: 4px; background: var(--wf-2); border-radius: 2px; overflow: hidden; }
+.meter i { display: block; height: 100%; background: var(--ok); }
+.empty { color: var(--ink-3); font-style: italic; font-size: 11.5px; }
+.steps { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.step { border-top: 3px solid var(--wf-2); padding-top: 4px; font-size: 11px; color: var(--ink-3); }
+.step.done { border-color: var(--ink); color: var(--ink-2); }
+.step.now { border-color: var(--brand); color: var(--ink); font-weight: 600; }
+.tabs { display: flex; gap: 16px; border-bottom: 1px solid var(--line); padding: 0 16px; }
+.tabs span { padding: 8px 0; color: var(--ink-3); }
+.tabs span.on { color: var(--ink); font-weight: 600; box-shadow: inset 0 -2px 0 var(--ink); }
+.btn { display: inline-block; font-size: 11.5px; padding: 3px 10px; border-radius: 6px; border: 1px solid var(--line-2); }
+.btn.primary { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.stat b { font-size: 20px; display: block; font-variant-numeric: tabular-nums; }
+.stat span { color: var(--ink-3); font-size: 11.5px; }
+.palette { max-width: 560px; margin: 24px auto; border: 1px solid var(--line-2); border-radius: 10px; background: var(--paper); box-shadow: 0 10px 30px rgba(0,0,0,.12); }
+.palette .q { padding: 12px 14px; border-bottom: 1px solid var(--line); }
+.palette .grp { padding: 6px 14px 2px; font-size: 11px; color: var(--ink-3); }
+.palette .it { padding: 6px 14px; display: flex; justify-content: space-between; }
+.palette .it.sel { background: var(--wf); }
+
+.swatches { display: flex; flex-wrap: wrap; gap: 10px; margin: 12px 0; }
+.sw { width: 150px; font-size: 12px; }
+.sw i { display: block; height: 40px; border-radius: 6px; border: 1px solid var(--line); margin-bottom: 4px; }
+
+@media (max-width: 760px) {
+  main { padding: 28px 16px 64px; }
+  .c2, .c3, .c7 { grid-template-columns: 1fr; }
+  .toc ol { columns: 1; }
+  .search { display: none; }
+  .frame { overflow-x: auto; }
+  table { display: block; overflow-x: auto; }
+}
+</style>
+</head>
+<body>
+<main>
+
+<h1>Engineering Hub redesign</h1>
+<p class="lede">A proposal to turn the hub from a set of generated pages into an app the team opens every morning. It covers who uses it and for what, a new structure, wireframes, a visual system, and two phases: first a new front-end on today's data, then sign-in and write actions.</p>
+<p class="meta">v1, 5 November 2026 · Karim Magdy · for approval before any build · engine: <code>engineer-hub-template</code> 4.7.3 → 5.0.0</p>
+
+<nav class="toc" aria-label="Contents">
+<ol>
+<li><a href="#why">What is wrong today</a></li>
+<li><a href="#who">Who opens the hub, and why</a></li>
+<li><a href="#ia">New structure</a></li>
+<li><a href="#wire">Wireframes</a></li>
+<li><a href="#visual">Visual system</a></li>
+<li><a href="#p1">Phase 1: new front-end</a></li>
+<li><a href="#p2">Phase 2: sign-in and actions</a></li>
+<li><a href="#plan">Plan and exit criteria</a></li>
+<li><a href="#decide">Decisions needed</a></li>
+</ol>
+</nav>
+
+<h2 id="why">1. What is wrong today</h2>
+<p>From the Beyond One hub on 5 November 2026 (<code>/start</code>, <code>/loop</code>, <code>/spec/TELCO-2513-fmk-onboarding</code>, <code>/test-executions-telco-2513</code>, 1440×900):</p>
+<table>
+<thead><tr><th>Problem</th><th>Where you see it</th><th>Effect</th></tr></thead>
+<tbody>
+<tr><td>Two navigation systems</td><td>Top menu with 8 groups, plus a left sidebar that always lists work by phase whatever section you are in</td><td>You cannot tell where you are. The sidebar takes 300px on pages that have nothing to do with work items.</td></tr>
+<tr><td>No home</td><td><code>/start</code> is a how-to form and <code>/loop</code> is a diagram</td><td>Nothing answers "what needs me today". You have to open each work item to find blocked tasks, failing tests or gates waiting for approval.</td></tr>
+<tr><td>Explanation mixed with status</td><td>Spec pages open with paragraphs on how task status works before the task table</td><td>The useful part sits below the fold. Explanations repeat on every work item.</td></tr>
+<tr><td>Counts shown three times</td><td>TELCO-2513 shows findings by severity, then by type, then by area. Localization 13 and Security appear in two rows.</td><td>111 findings look like noise rather than a priority list.</td></tr>
+<tr><td>Test runs live outside their work item</td><td>"TELCO-2513 test executions" sits under Delivery, next to environment links and logins</td><td>Tests and the criteria they prove are two clicks apart. A second initiative with phone runs adds another top-level entry.</td></tr>
+<tr><td>Laptop-only links in a shared hub</td><td>"Local tools": eight <code>127.0.0.1</code> consoles</td><td>Dead links for everyone using the deployed hub.</td></tr>
+<tr><td>Red means three things</td><td>The brand, the current phase, and Critical severity are all red. Test status uses emoji (✅ ❌ ⏳).</td><td>Severity stops standing out. The status icons look different on every OS and screen readers announce them as words.</td></tr>
+<tr><td>Archive at top level</td><td>"Archive (before v4)" menu</td><td>The old pages compete with the current ones.</td></tr>
+</tbody>
+</table>
+<p>The data underneath is in good shape. <code>spec.py json</code> → <code>content/data/loop.json</code> already carries, per work item: phase, approvals with who and when, task counts by status, criteria tested and passing, findings by severity, area, type and component, and history. The redesign is about presenting that data, not about producing it.</p>
+
+<h2 id="who">2. Who opens the hub, and why</h2>
+<table>
+<thead><tr><th>Who</th><th>The question they come with</th><th>What answers it</th></tr></thead>
+<tbody>
+<tr><td>Engineer</td><td>What do I pick up next, and what blocks it?</td><td>Home: tasks ready to start and blocked tasks; a work item's Tasks tab with branch names and <code>/build</code> commands</td></tr>
+<tr><td>Tech lead</td><td>What waits for my approval? Where is the risk?</td><td>Home: gates waiting; Quality: open critical and high findings across all work</td></tr>
+<tr><td>Product owner</td><td>Where is my epic, and does it do what the stories say?</td><td>A work item's Overview: phase, criteria passing out of total, Jira links</td></tr>
+<tr><td>QA</td><td>What ran on the phones, what failed, and why?</td><td>A work item's Tests tab: the live run, cases by journey, run history with evidence</td></tr>
+<tr><td>Anyone new</td><td>How does work flow here?</td><td>Knowledge → How we work (today's <code>/loop</code> and <code>/start</code>, unchanged in substance)</td></tr>
+</tbody>
+</table>
+
+<h2 id="ia">3. New structure</h2>
+<p>Five top-level sections and one navigation system. The left rail only appears where it helps, inside a work item and inside Knowledge.</p>
+<table>
+<thead><tr><th>Section</th><th>Contains</th><th>Replaces</th></tr></thead>
+<tbody>
+<tr><td><b>Home</b></td><td>Needs attention (gates waiting, blocked tasks, failing criteria, new critical findings), work in flight as one line each, recent activity from <code>history</code></td><td>new</td></tr>
+<tr><td><b>Work</b></td><td>Every work item as a phase board or a sortable table, filtered by phase, repo, owner and team. Each item has one page with tabs: <i>Overview · Requirements · Design · Tasks · Tests · Findings · Activity</i></td><td>Work sidebar, <code>#/spec/*</code>, <code>#/test-executions-*</code></td></tr>
+<tr><td><b>Quality</b></td><td>Findings across all work by severity, area, component and team, with filters. Test health across all work.</td><td>Findings menu (8 entries)</td></tr>
+<tr><td><b>Environments</b></td><td>DEV / UAT / PRD links, test data and accounts, shared tools and logins. Local tools are shown only when the hub runs on <code>127.0.0.1</code>.</td><td>Delivery menu (3 entries), Local tools menu</td></tr>
+<tr><td><b>Knowledge</b></td><td>How we work (loop, intakes, commands), architecture, platform and infrastructure, APIs, decision log, guides, changelog; Archive at the bottom</td><td>Overview, Engineering, Knowledge and Archive menus</td></tr>
+</tbody>
+</table>
+
+<h3>Old links keep working</h3>
+<p>The phone runner (<code>bin/live-test</code>), Jira comments and READMEs already point at hub URLs. The new router redirects every old route:</p>
+<table>
+<thead><tr><th>Old route</th><th>New route</th></tr></thead>
+<tbody>
+<tr><td><code>#/loop</code>, <code>#/start</code></td><td><code>#/knowledge/how-we-work</code></td></tr>
+<tr><td><code>#/spec/&lt;folder&gt;</code>, <code>#/spec/&lt;folder&gt;/&lt;tab&gt;</code></td><td><code>#/work/&lt;KEY&gt;</code>, <code>#/work/&lt;KEY&gt;/&lt;tab&gt;</code></td></tr>
+<tr><td><code>#/test-executions-&lt;key&gt;</code></td><td><code>#/work/&lt;KEY&gt;/tests</code> (the live panel the phone runner opens)</td></tr>
+<tr><td><code>#/findings/&lt;area&gt;</code></td><td><code>#/quality/findings?area=&lt;area&gt;</code></td></tr>
+<tr><td><code>#/accounts</code>, <code>#/env-links</code>, <code>#/tools-logins</code></td><td><code>#/environments/…</code></td></tr>
+<tr><td>Feature, ADR, KB and archive routes</td><td><code>#/knowledge/…</code></td></tr>
+</tbody>
+</table>
+
+<h2 id="wire">4. Wireframes</h2>
+<p>Low fidelity, with the Beyond One hub's real data from 5 November. Each frame shows layout and priority, not final styling. The criterion rows in the Tests tab and the guide name in the palette are illustrative, not taken from the spec.</p>
+
+<h3>Home</h3>
+<div class="frame" role="img" aria-label="Wireframe of the Home page">
+  <div class="bar"><span class="logo"></span><b>Engineering Hub</b><span class="navlink on">Home</span><span class="navlink">Work</span><span class="navlink">Quality</span><span class="navlink">Environments</span><span class="navlink">Knowledge</span><span class="search">Search or run a command<span class="kbd">⌘K</span></span></div>
+  <div class="body">
+    <div class="cols c2">
+      <div class="panel"><h4>Needs attention</h4>
+        <div class="row"><span class="pill"><span class="dot d-wait"></span>gate</span><span class="k">IDEA-1</span><span class="t">Yuno payment service for KSA: intent waiting for owner approval</span><span class="a">since 27 Oct</span></div>
+        <div class="row"><span class="pill"><span class="dot d-wait"></span>gate</span><span class="k">IDEA-3</span><span class="t">Aman parental-protection DNS: intent waiting for owner approval</span><span class="a">today</span></div>
+        <div class="row"><span class="pill"><span class="dot d-block"></span>10 blocked</span><span class="k">TELCO-2513</span><span class="t">FRiENDi Kuwait onboarding: tasks waiting on owners outside the app team</span><span class="a">T0.1 …</span></div>
+        <div class="row"><span class="pill"><span class="dot d-crit"></span>19 critical</span><span class="k">TELCO-2058</span><span class="t">VNet 2.0 (HBB): 284 open findings, 19 critical</span><span class="a">review</span></div>
+        <div class="row"><span class="pill"><span class="dot d-ok"></span>ready</span><span class="k">IDEA-2</span><span class="t">Mobile PO: 22 of 22 criteria passing, ready for <span class="mono">/deploy</span></span><span class="a">4 Nov</span></div>
+      </div>
+      <div class="panel"><h4>Recent activity</h4>
+        <div class="row"><span class="t">IDEA-3 created from Aman stream</span><span class="a">5 Nov</span></div>
+        <div class="row"><span class="t">TELCO-2513 iOS journey 113/113 passed</span><span class="a">4 Nov</span></div>
+        <div class="row"><span class="t">IDEA-2 design approved</span><span class="a">4 Nov</span></div>
+        <div class="row"><span class="t">SWE-70610 architecture v3</span><span class="a">3 Nov</span></div>
+      </div>
+    </div>
+    <div class="panel"><h4>In flight</h4>
+      <div class="row"><span class="k">TELCO-2513</span><span class="t">FRiENDi Kuwait onboarding</span><span class="pill">build</span><span class="a">tasks 1 / 35 · criteria 19 / 30</span><span style="width:120px" class="meter"><i style="width:63%"></i></span></div>
+      <div class="row"><span class="k">SWE-70610</span><span class="t">PaymentProxy .NET upgrade</span><span class="pill">build</span><span class="a">tasks 1 / 31 · criteria 0 / 65</span><span style="width:120px" class="meter"><i style="width:0"></i></span></div>
+      <div class="row"><span class="k">SWE-6110</span><span class="t">Login issues (VM-KSA, FM-KSA)</span><span class="pill">build</span><span class="a">tasks 0 / 13 · criteria 1 / 48</span><span style="width:120px" class="meter"><i style="width:2%"></i></span></div>
+      <div class="row"><span class="k">TELCO-2058</span><span class="t">VNet 2.0 (HBB) onboarding</span><span class="pill">build</span><span class="a">tasks 0 / 18 · criteria 0 / 27</span><span style="width:120px" class="meter"><i style="width:0"></i></span></div>
+    </div>
+  </div>
+</div>
+<p class="frame-cap">Home lists the things to act on first, each with the reason and one link. The meter shows criteria passing, the measure the constitution uses for "done".</p>
+
+<h3>Work: phase board</h3>
+<div class="frame" role="img" aria-label="Wireframe of the Work board">
+  <div class="bar"><span class="logo"></span><b>Engineering Hub</b><span class="navlink">Home</span><span class="navlink on">Work</span><span class="navlink">Quality</span><span class="navlink">Environments</span><span class="navlink">Knowledge</span><span class="search">Search<span class="kbd">⌘K</span></span></div>
+  <div class="body">
+    <div style="display:flex;gap:8px;align-items:center"><span class="btn primary">Board</span><span class="btn">Table</span><span class="pill">Repo: any</span><span class="pill">Team: any</span><span class="pill">Has blocked tasks</span><span style="margin-left:auto" class="btn">New work item</span></div>
+    <div class="cols c7">
+      <div class="col"><h5>Intent <span>2</span></h5><div class="card"><div class="k">IDEA-1</div><div class="t">Yuno payment service</div><span class="pill"><span class="dot d-wait"></span>needs approval</span></div><div class="card"><div class="k">IDEA-3</div><div class="t">Aman DNS</div><span class="pill"><span class="dot d-wait"></span>needs approval</span></div></div>
+      <div class="col"><h5>Spec <span>0</span></h5><p class="empty">Nothing here.</p></div>
+      <div class="col"><h5>Design <span>0</span></h5><p class="empty">Nothing here.</p></div>
+      <div class="col"><h5>Build <span>4</span></h5>
+        <div class="card"><div class="k">TELCO-2513</div><div class="t">FRiENDi Kuwait onboarding</div><div class="meter"><i style="width:63%"></i></div><div style="margin-top:6px"><span class="pill"><span class="dot d-block"></span>10</span> <span class="pill"><span class="dot d-crit"></span>3</span></div></div>
+        <div class="card"><div class="k">SWE-70610</div><div class="t">PaymentProxy .NET</div><div class="meter"><i style="width:0"></i></div></div>
+        <div class="card"><div class="k">SWE-6110</div><div class="t">Login issues</div><div class="meter"><i style="width:2%"></i></div></div>
+        <div class="card"><div class="k">TELCO-2058</div><div class="t">VNet 2.0 (HBB)</div><div class="meter"><i style="width:0"></i></div></div>
+      </div>
+      <div class="col"><h5>Test <span>0</span></h5><p class="empty">Nothing here.</p></div>
+      <div class="col"><h5>Deploy <span>1</span></h5><div class="card"><div class="k">IDEA-2</div><div class="t">Mobile PO</div><div class="meter"><i style="width:100%"></i></div></div></div>
+      <div class="col"><h5>Maintain <span>0</span></h5><p class="empty">Nothing here.</p></div>
+    </div>
+  </div>
+</div>
+<p class="frame-cap">Seven columns, one per phase. A card shows only the key, the title, criteria passing, and a badge when something is blocked or critical. The Table view shows the same items with every count as a sortable column.</p>
+
+<h3>Work item: Overview tab</h3>
+<div class="frame" role="img" aria-label="Wireframe of a work item overview">
+  <div class="bar"><span class="logo"></span><b>Engineering Hub</b><span class="navlink">Home</span><span class="navlink on">Work</span><span class="navlink">Quality</span><span class="navlink">Environments</span><span class="navlink">Knowledge</span><span class="search">Search<span class="kbd">⌘K</span></span></div>
+  <div style="padding:14px 16px 0">
+    <div class="a mono" style="color:var(--ink-3)">Work / TELCO-2513</div>
+    <div style="display:flex;align-items:baseline;gap:10px;margin:4px 0 10px"><b style="font-size:18px">FRiENDi Kuwait onboarding</b><span class="pill">build</span><span class="a" style="color:var(--ink-3)">Jira TELCO-2513 · epics SWE-68539, SWE-68540, SWE-68541</span><span style="margin-left:auto" class="btn">Copy <span class="mono">/build TELCO-2513 T0.1</span></span></div>
+    <div class="steps"><div class="step done">Intent · 4 Nov</div><div class="step done">Spec · 4 Nov</div><div class="step done">Design · 4 Nov</div><div class="step now">Build · 1 / 35</div><div class="step">Test</div><div class="step">Deploy</div><div class="step">Maintain</div></div>
+  </div>
+  <div class="tabs" style="margin-top:12px"><span class="on">Overview</span><span>Requirements 19</span><span>Design</span><span>Tasks 35</span><span>Tests 30</span><span>Findings 111</span><span>Activity</span></div>
+  <div class="body">
+    <div class="cols c3">
+      <div class="panel stat"><b>19 / 30</b><span>criteria passing</span></div>
+      <div class="panel stat"><b>10</b><span>tasks blocked, 13 in review</span></div>
+      <div class="panel stat"><b>3 critical · 19 high</b><span>of 111 open findings</span></div>
+    </div>
+    <div class="cols c2">
+      <div class="panel"><h4>Blocked tasks</h4>
+        <div class="row"><span class="k">T0.1</span><span class="t">Waits on an owner outside the app team</span><span class="a">open task</span></div>
+        <div class="row"><span class="k">…</span><span class="t">9 more</span><span class="a">Tasks tab</span></div>
+      </div>
+      <div class="panel"><h4>Latest phone run</h4>
+        <div class="row"><span class="dot d-ok"></span><span class="t">iPhone 16, journey en</span><span class="a">113 / 113 · 4 Nov 17:46</span></div>
+        <div class="row"><span class="t">DEBUG replay data: proves screens and flow, not the backend end to end</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+<p class="frame-cap">The phase strip shows who approved what and when. Each tab carries its count. The Overview only summarises and links; the detail and the explanations live in the tabs.</p>
+
+<h3>Work item: Tests tab</h3>
+<div class="frame" role="img" aria-label="Wireframe of the tests tab">
+  <div class="tabs"><span>Overview</span><span>Requirements 19</span><span>Design</span><span>Tasks 35</span><span class="on">Tests 30</span><span>Findings 111</span><span>Activity</span></div>
+  <div class="body">
+    <div class="panel" style="display:flex;gap:12px;align-items:center"><span class="dot d-wait"></span><b>No run in progress</b><span class="a" style="color:var(--ink-3)">last: 2026-11-04-ios-7, 113 / 113</span><span style="margin-left:auto" class="btn">Copy <span class="mono">/live-test TELCO-2513 both</span></span></div>
+    <div class="panel"><h4>Acceptance criteria</h4>
+      <div class="row"><span class="k">AC-1.1</span><span class="t">Given a new customer … when … then …</span><span class="pill"><span class="dot d-ok"></span>passing</span><span class="a">iOS · Android</span></div>
+      <div class="row"><span class="k">AC-3.2</span><span class="t">Given PACI rejects the civil ID …</span><span class="pill"><span class="dot d-wait"></span>not run</span><span class="a">iOS</span></div>
+    </div>
+    <div class="panel"><h4>Cases by journey · run history</h4><span class="a" style="color:var(--ink-3)">today's tables, unchanged in content, with status as dot plus word instead of emoji</span></div>
+  </div>
+</div>
+<p class="frame-cap">The live panel, the criteria, and the history the phone runner writes, all in one tab. <code>bin/live-test</code> opens <code>#/work/TELCO-2513/tests</code>.</p>
+
+<h3>Command palette (⌘K)</h3>
+<div class="frame" role="img" aria-label="Wireframe of the command palette"><div class="palette">
+  <div class="q">2513 bl</div>
+  <div class="grp">Work</div>
+  <div class="it sel"><span>TELCO-2513 · Tasks · blocked</span><span class="a">10</span></div>
+  <div class="grp">Commands</div>
+  <div class="it"><span class="mono">/build TELCO-2513 T0.1</span><span class="a">copy</span></div>
+  <div class="it"><span class="mono">/live-test TELCO-2513 both</span><span class="a">copy</span></div>
+  <div class="grp">Knowledge</div>
+  <div class="it"><span>FMKW journeys and blocked owners</span><span class="a">guide</span></div>
+</div></div>
+<p class="frame-cap">One search for work items, tabs, findings, documents and the copyable Claude Code commands. It replaces the header search and the sidebar filter.</p>
+
+<h2 id="visual">5. Visual system</h2>
+<p>Keep the Beyond One look (Poppins, ink, the red mark). What changes is what each colour means, so that every colour on screen carries one meaning only.</p>
+<div class="swatches">
+  <div class="sw"><i style="background:#1C1A17"></i>Ink: text, the active phase, primary buttons</div>
+  <div class="sw"><i style="background:#EF3E23"></i>Brand red: logo and the active nav item only</div>
+  <div class="sw"><i style="background:#B42318"></i>Critical, blocked, failed</div>
+  <div class="sw"><i style="background:#C4580E"></i>High</div>
+  <div class="sw"><i style="background:#A77A06"></i>Medium</div>
+  <div class="sw"><i style="background:#5C6B7A"></i>Low</div>
+  <div class="sw"><i style="background:#1F7A4D"></i>Passed, approved</div>
+  <div class="sw"><i style="background:#2F5FB3"></i>Running, in progress</div>
+</div>
+<ul>
+<li><b>Status is a dot plus a word</b>, never colour alone and never emoji. This meets WCAG 1.4.1 and reads the same on every OS.</li>
+<li><b>Type:</b> Poppins for the interface; JetBrains Mono only for things you copy and run (commands, branch names, keys). Numbers use tabular figures so the columns line up.</li>
+<li><b>Density:</b> a compact mode for tables (Quality, Tasks) and a comfortable mode for reading (Knowledge). Light and dark themes are both kept.</li>
+<li><b>Quality floor</b> (from the installed <code>baseline-ui</code> and <code>fixing-accessibility</code> skills): accessible primitives for menus, tabs and dialogs; visible keyboard focus; <code>prefers-reduced-motion</code> respected; no animation except feedback on an action; usable on a phone at 360px.</li>
+</ul>
+
+<h2 id="p1">6. Phase 1: new front-end on today's data</h2>
+<div class="callout">The cut is the data contract. Everything that produces <code>content/</code> stays as it is: <code>spec.py json</code>, <code>sync_loop.py</code>, <code>sync_engineering_hub.py</code>, the test-execution recorder, <code>build.mjs</code>'s manifest and <code>publish.py</code>'s stripping. Only what reads <code>content/</code> is replaced.</div>
+<table>
+<thead><tr><th>Concern</th><th>Choice</th><th>Why</th></tr></thead>
+<tbody>
+<tr><td>Framework</td><td>React 19 + TypeScript, built with Vite</td><td>The 1,933-line <code>hub.js</code> builds pages from HTML strings. Typed components for each tab, card and table can be tested and reused across hubs.</td></tr>
+<tr><td>Routing</td><td>React Router, hash mode</td><td>Static hosting keeps working without server rewrites, and the old <code>#/</code> links redirect in one table.</td></tr>
+<tr><td>Styling</td><td>Tailwind CSS v4, with brand tokens read from <code>brand.json</code> at build time</td><td>One token set per hub. Rebranding still needs no engine edit.</td></tr>
+<tr><td>Primitives</td><td>Base UI (tabs, menu, dialog, popover, combobox)</td><td>Keyboard and focus handled for us (<code>baseline-ui</code> rule)</td></tr>
+<tr><td>Data</td><td>Typed loaders for <code>loop.json</code>, <code>specs/*/findings.json</code>, <code>test-executions/*.json</code> and the manifest; the live panel polls every 2 s as today</td><td>No change to the generators</td></tr>
+<tr><td>Markdown and diagrams</td><td><code>marked</code> and <code>mermaid</code>, as today, bundled instead of loaded from a CDN</td><td>Same rendering. The hub works offline on a laptop.</td></tr>
+<tr><td>Search</td><td>MiniSearch index generated by <code>build.mjs</code></td><td>⌘K over work, findings, documents and commands</td></tr>
+<tr><td>Access</td><td>Soft passcode gate kept</td><td>Real sign-in is phase 2</td></tr>
+<tr><td>Engine delivery</td><td><code>engine-files.txt</code> lists <code>dist/</code> instead of <code>index.html</code> and <code>assets/js/*</code>. <code>hub-update.sh</code> copies a built engine. Hubs need Node only to build.</td><td>Each hub keeps only its <code>content/</code> and images, as today</td></tr>
+<tr><td>Deploy</td><td>Unchanged: node build, then <code>nginx-unprivileged</code> on 8080 with <code>/healthz</code> on <code>dev-shrd-eu-rke2</code></td><td>No platform change, no BeyondBase re-onboarding</td></tr>
+</tbody>
+</table>
+<div class="callout warn"><b>Carried-over risk.</b> The Beyond One hub's notes say <code>deploy/publish.py</code> does not yet strip security findings from <code>content/specs/*/findings.json</code>. The new Quality section reads those files, so it would show them. Fix the strip before the first publish of v5.</div>
+
+<h2 id="p2">7. Phase 2: sign-in and actions</h2>
+<p>The goal: the team can act from the hub (approve a gate, move a task, comment), and the hub stays a view of git. It never becomes a second source of truth.</p>
+<table>
+<thead><tr><th>Capability</th><th>How</th></tr></thead>
+<tbody>
+<tr><td>Sign-in</td><td>OIDC in front of the app. Beyond One SSO or Keycloak (already in the stack): to decide.</td></tr>
+<tr><td>Roles</td><td>Viewer, engineer, tech lead, owner. Security findings are visible only to engineers and up, enforced by the API, not by the publish step.</td></tr>
+<tr><td>Approve a gate</td><td>The API runs the equivalent of <code>spec.py approve &lt;KEY&gt; &lt;phase&gt; --by "&lt;signed-in name&gt;"</code> as a commit in <code>engineering-workspace</code>, through a GitHub App. P-1 (nothing is built that is not in an approved spec) stays auditable in git history.</td></tr>
+<tr><td>Move a task</td><td>The same route as <code>spec.py task &lt;KEY&gt; &lt;id&gt; &lt;status&gt;</code></td></tr>
+<tr><td>Comments</td><td>The existing <code>backend/comments</code> API (Lambda + DynamoDB), signed in, attached to work item, tab and finding</td></tr>
+<tr><td>Freshness</td><td>A workspace push triggers a sync job that regenerates <code>content/</code>. The hub shows "updated n min ago".</td></tr>
+<tr><td>Service</td><td>A small Node API (Fastify) as a second container in the same chart, on the BeyondBase platform</td></tr>
+</tbody>
+</table>
+<p>Phase 2 gets its own design version once phase 1 is in use. The open choices are listed in section 9.</p>
+
+<h2 id="plan">8. Plan and exit criteria</h2>
+<table>
+<thead><tr><th>Step</th><th>Delivers</th><th>Done when</th></tr></thead>
+<tbody>
+<tr><td>1. Skeleton</td><td>Vite + React app in the template, tokens from <code>brand.json</code>, top navigation, ⌘K, redirects for old routes</td><td>Every route in today's <code>nav.json</code> resolves to a page or a redirect</td></tr>
+<tr><td>2. Work</td><td>Board, table, and the work-item page with all seven tabs</td><td>All 7 Beyond One work items render with the same numbers as <code>spec.py list</code></td></tr>
+<tr><td>3. Home and Quality</td><td>Needs attention, in flight, activity; findings across all work with filters</td><td>The total of open findings matches the sum of <code>findings.json</code> (560 on 5 Nov)</td></tr>
+<tr><td>4. Tests</td><td>The live panel, criteria and history in the Tests tab</td><td>A <code>/live-test</code> run on both phones shows live in <code>#/work/TELCO-2513/tests</code></td></tr>
+<tr><td>5. Environments and Knowledge</td><td>Moved pages, local-only tools hidden on the deployed hub, Archive at the bottom</td><td>No <code>127.0.0.1</code> link visible on the deployed site</td></tr>
+<tr><td>6. Ship 5.0.0</td><td>Tag the template, <code>hub-update.sh</code> into the Beyond One hub, publish</td><td>Playwright smoke test of every top-level route passes; accessibility check has no critical issue; security strip verified</td></tr>
+</tbody>
+</table>
+<p>The old engine stays in git at 4.7.3. Rolling back is <code>hub-update.sh</code> to that tag.</p>
+
+<h2 id="decide">9. Decisions needed</h2>
+<div class="decision"><b>1. Approve the structure in section 3</b>Five sections, tabs per work item, the old-route redirects.</div>
+<div class="decision"><b>2. Approve the phase 1 stack in section 6</b>React + Vite + Tailwind + Base UI, built engine delivered through <code>hub-update.sh</code>.</div>
+<div class="decision"><b>3. Who owns the "needs attention" rules</b>The proposal uses: gate waiting for approval, blocked tasks, critical findings, every criterion passing while not deployed. Add or remove rules.</div>
+<div class="decision"><b>4. Phase 2 sign-in</b>Beyond One SSO, or Keycloak. This affects the BeyondBase onboarding, so it can wait until phase 1 is in use.</div>
+<div class="decision"><b>5. Other hubs on the template</b>Each hub moves to 5.0.0 when its owner chooses. The 4.x line gets fixes only.</div>
+
+</main>
+</body>
+</html>
