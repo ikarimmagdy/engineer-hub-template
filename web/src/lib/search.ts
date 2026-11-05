@@ -29,6 +29,11 @@ export function buildIndex(hub: Hub) {
     ...ENV_PAGES.map(([id, t]) => [`/environments/${id}`, t] as [string, string]),
   ];
   pages.forEach(([to, title]) => docs.push({ id: `p:${to}`, group: 'Pages', title, to }));
+  for (const s of hub.loop.specs) {
+    for (const p of s.pages || []) {
+      docs.push({ id: `sp:${s.key}:${p.id}`, group: 'Pages', title: `${p.title}`, hint: s.key, to: `/work/${s.key}/design?doc=page:${p.id}` });
+    }
+  }
   for (const sec of hub.manifest.sections) {
     if (/^(spec-|te-|test-executions-|delivery-loop)/.test(sec.id)) continue;
     docs.push({ id: `s:${sec.id}`, group: 'Pages', title: sec.title, hint: sec.eyebrow, to: `/section/${sec.id}` });

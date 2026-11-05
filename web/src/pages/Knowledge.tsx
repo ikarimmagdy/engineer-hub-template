@@ -57,6 +57,20 @@ export function Knowledge() {
           <div className="font-semibold">Archive</div><div className="mt-1 text-xs text-ink-2">Pages from before the delivery loop</div>
         </Link>
       </div>
+      {hub.loop.specs.some((s) => s.pages?.length) && (
+        <>
+          <h2 className="mb-3 mt-8 text-sm font-semibold text-ink-2">Architecture by work item</h2>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {hub.loop.specs.flatMap((s) => (s.pages || []).map((p) => (
+              <Link key={`${s.key}-${p.id}`} to={`/work/${s.key}/design?doc=page:${p.id}`} className="block rounded-lg border border-line bg-paper px-4 py-3 hover:border-line-2">
+                <div className="font-mono text-[11px] text-ink-3">{s.key} · {s.title}</div>
+                <div className="mt-0.5 text-sm font-medium">{p.title}</div>
+                <div className="mt-0.5 text-xs text-ink-3">{p.version.replace(/\.html$/, '')}</div>
+              </Link>
+            )))}
+          </div>
+        </>
+      )}
       {items.length > 0 && (
         <>
           <h2 className="mb-3 mt-8 text-sm font-semibold text-ink-2">Architecture and platform</h2>
