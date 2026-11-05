@@ -1,6 +1,6 @@
 import { Link, Navigate, useParams, useSearchParams } from 'react-router';
 import {
-  getText, PHASES, PHASE_TITLE, SEVERITIES, severityOf, specDoc, TASK_STATES, trackerUrl, useAsync, useFindings, useHub, useSpec,
+  getText, PHASE_TITLE, SEVERITIES, severityOf, specDoc, TASK_STATES, trackerUrl, useAsync, useFindings, useHub, useSpec,
   type Finding, type Hub, type Spec, type TaskState,
 } from '../lib/data';
 import { taskTotal } from '../lib/attention';
@@ -9,9 +9,11 @@ import { parseTasks, type TaskRow } from '../lib/tasks';
 import { TABS, type Tab } from '../lib/routes';
 import { MarkdownFile, MarkdownText } from '../components/Markdown';
 import {
-  CopyButton, cx, Empty, ErrorNote, fmtDate, Meter, Panel, Pill, SEV_LABEL, SEV_TONE, Select, Skeleton, Stat, StatusText, TabBar, TASK_TONE,
+  CopyButton, cx, Empty, ErrorNote, fmtDate, Meter, Panel, Pill, SEV_LABEL, SEV_TONE, Select, Skeleton, Stat, StatusText, TASK_TONE,
 } from '../components/ui';
 import { TestsTab, LatestRun } from './Tests';
+import { Requirements } from './Requirements';
+import { PhaseBanner, PhaseNav } from '../components/PhaseNav';
 
 export function WorkItem() {
   const { key, tab = 'overview' } = useParams();
@@ -21,9 +23,6 @@ export function WorkItem() {
   if (key !== spec.key) return <Navigate to={`/work/${spec.key}/${tab}`} replace />;
   if (!TABS.some(([t]) => t === tab)) return <Navigate to={`/work/${spec.key}/overview`} replace />;
 
-  const counts: Partial<Record<Tab, number>> = {
-    requirements: spec.requirements, tasks: taskTotal(spec), tests: spec.criteria, findings: spec.findings?.open,
-  };
   const jira = trackerUrl(hub, spec.tracker?.initiative || spec.key);
 
   return (
@@ -43,13 +42,12 @@ export function WorkItem() {
         {spec.next && <NextStep next={spec.next} />}
       </div>
 
-      <PhaseStrip spec={spec} />
-
-      <TabBar label="Work item" className="mt-7" tabs={TABS.map(([t, label]) => ({ to: `/work/${spec.key}/${t}`, label, count: counts[t] }))} />
+      <PhaseNav spec={spec} />
 
       <div className="pt-6">
+        <PhaseBanner spec={spec} tab={tab as Tab} />
         {tab === 'overview' && <Overview spec={spec} />}
-        {tab === 'requirements' && <Doc spec={spec} file="spec.md" what="the spec" cmd={`/spec ${spec.key}`} />}
+        {tab === 'requirements' && <Requirements spec={spec} />}
         {tab === 'design' && <Design spec={spec} />}
         {tab === 'tasks' && <Tasks spec={spec} />}
         {tab === 'tests' && <TestsTab spec={spec} />}
@@ -67,27 +65,6 @@ function NextStep({ next }: { next: string }) {
   return <div className="max-w-sm text-right text-xs text-ink-3"><span className="font-medium text-ink-2">Next:</span> {next}</div>;
 }
 
-function PhaseStrip({ spec }: { spec: Spec }) {
-  const at = PHASES.indexOf(spec.phase);
-  return (
-    <ol className="mt-5 grid grid-cols-7 gap-1.5" aria-label="Phases">
-      {PHASES.map((p, i) => {
-        const approval = (spec.approved as Record<string, { date: string; by: string } | null | undefined>)[p];
-        const state = i < at ? 'done' : i === at ? 'now' : 'later';
-        const note = approval ? `approved ${fmtDate(approval.date)}` : i === at
-          ? (p === 'build' ? `${spec.tasks.done}/${taskTotal(spec)} tasks` : p === 'test' ? `${spec.criteria_passing}/${spec.criteria} passing` : ['intent', 'spec', 'design'].includes(p) ? 'needs approval' : 'current')
-          : i < at ? 'done' : '';
-        return (
-          <li key={p} aria-current={state === 'now' ? 'step' : undefined} title={approval ? `Approved by ${approval.by} on ${approval.date}` : undefined}
-            className={cx('border-t-[3px] pt-1.5 text-xs', state === 'done' && 'border-ink text-ink-2', state === 'now' && 'border-brand font-semibold text-ink', state === 'later' && 'border-line-2 text-ink-3')}>
-            <div className="truncate">{PHASE_TITLE[p]}</div>
-            <div className="truncate font-normal text-ink-3">{note}</div>
-          </li>
-        );
-      })}
-    </ol>
-  );
-}
 
 export function areaTitle(hub: Hub, key: string) {
   const areas = (hub.manifest.loopConfig.review as { areas?: { key: string; title: string }[] } | undefined)?.areas || [];
@@ -175,13 +152,6 @@ function TaskList({ rows, more, spec }: { rows: TaskRow[]; more?: number; spec: 
       {!!more && more > 0 && <li className="py-2 text-sm"><Link to={`/work/${spec.key}/tasks`} className="text-ink-3 underline">{more} more</Link></li>}
     </ul>
   );
-}
-
-function Doc({ spec, file, what, cmd }: { spec: Spec; file: string; what: string; cmd: string }) {
-  if (!spec.files[file.replace(/\.md$/, '')]) {
-    return <Empty action={<CopyButton text={cmd} />}>There is no {what} yet. It is written in the workspace with:</Empty>;
-  }
-  return <MarkdownFile path={specDoc(spec, file)} />;
 }
 
 function Design({ spec }: { spec: Spec }) {
