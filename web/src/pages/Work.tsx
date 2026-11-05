@@ -130,7 +130,7 @@ function Table({ specs, sort, onSort }: { specs: Spec[]; sort: SortKey; onSort: 
         </thead>
         <tbody className="divide-y divide-line">
           {rows.map((s) => (
-            <tr key={s.key} className="hover:bg-canvas">
+            <tr key={s.key} className="hover:bg-sunk">
               <td className="px-3 py-2">
                 <Link to={`/work/${s.key}/overview`} className="hover:underline">
                   <span className="mr-2 font-mono text-[11.5px] text-ink-3">{s.key}</span><span className="font-medium">{s.title}</span>

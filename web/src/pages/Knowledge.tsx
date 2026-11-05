@@ -153,7 +153,7 @@ function StartForm() {
   const cmds = kind === 'pr'
     ? [`/pr-review ${source}`]
     : [`/intent ${k} ${s} ${source}`, `/gap ${k} all`, `python3 tools/spec.py approve ${k} intent --by "<your name>"`, `/spec ${k}`];
-  const field = 'mt-1 h-9 w-full rounded-md border border-line-2 bg-canvas px-2.5 text-sm';
+  const field = 'mt-1 h-9 w-full rounded-md border border-line-2 bg-sunk px-2.5 text-sm';
   return (
     <form className="rounded-lg border border-line bg-paper p-4" onSubmit={(e) => e.preventDefault()}>
       <div className="grid gap-3 md:grid-cols-[180px_160px_minmax(0,1fr)]">
@@ -184,7 +184,7 @@ function Decisions() {
       <ul className="divide-y divide-line overflow-hidden rounded-lg border border-line bg-paper">
         {[...list].sort((a, b) => b.id.localeCompare(a.id)).map((a) => (
           <li key={a.id}>
-            <Link to={`/knowledge/decisions/${a.id}`} className="grid gap-x-4 gap-y-1 px-4 py-3 hover:bg-canvas md:grid-cols-[88px_minmax(0,1fr)_120px]">
+            <Link to={`/knowledge/decisions/${a.id}`} className="grid gap-x-4 gap-y-1 px-4 py-3 hover:bg-sunk md:grid-cols-[88px_minmax(0,1fr)_120px]">
               <span className="font-mono text-[11.5px] text-ink-3">{a.id}</span>
               <span className="min-w-0">
                 <span className="block font-medium" dangerouslySetInnerHTML={{ __html: renderInline(a.title) }} />
@@ -233,7 +233,7 @@ function Library() {
       <ul className="divide-y divide-line overflow-hidden rounded-lg border border-line bg-paper">
         {list.slice(0, 200).map((k) => (
           <li key={k.path}>
-            <Link to={`/doc/${k.path}`} className="grid gap-x-4 px-4 py-2.5 hover:bg-canvas md:grid-cols-[minmax(0,1fr)_200px]">
+            <Link to={`/doc/${k.path}`} className="grid gap-x-4 px-4 py-2.5 hover:bg-sunk md:grid-cols-[minmax(0,1fr)_200px]">
               <span className="min-w-0">
                 <span className="block truncate text-sm font-medium">{k.title}</span>
                 <span className="block truncate font-mono text-[11px] text-ink-3">{k.path}</span>

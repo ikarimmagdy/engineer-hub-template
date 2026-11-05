@@ -1,7 +1,7 @@
-import { Link, NavLink, Navigate, useParams } from 'react-router';
+import { Link, Navigate, useParams } from 'react-router';
 import { SEVERITIES, useAllFindings, useHub } from '../lib/data';
 import { FindingsTable } from './WorkItem';
-import { cx, ErrorNote, Meter, PageHeader, Panel, SEV_LABEL, SEV_TONE, Skeleton, StatusText } from '../components/ui';
+import { cx, ErrorNote, Meter, PageHeader, Panel, SEV_LABEL, SEV_TONE, Skeleton, StatusText, TabBar } from '../components/ui';
 
 export function Quality() {
   const { view } = useParams();
@@ -9,11 +9,7 @@ export function Quality() {
   return (
     <div>
       <PageHeader title="Quality" lede="Open findings from every code review and test health across all work, in one place." />
-      <nav aria-label="Quality" className="mb-6 flex gap-5 border-b border-line">
-        {[['findings', 'Findings'], ['tests', 'Test health']].map(([v, l]) => (
-          <NavLink key={v} to={`/quality/${v}`} className={({ isActive }) => cx('-mb-px border-b-2 py-2.5 text-sm', isActive ? 'border-ink font-semibold' : 'border-transparent text-ink-3 hover:text-ink')}>{l}</NavLink>
-        ))}
-      </nav>
+      <TabBar label="Quality" className="mb-6" tabs={[{ to: '/quality/findings', label: 'Findings' }, { to: '/quality/tests', label: 'Test health' }]} />
       {view === 'tests' ? <TestHealth /> : <AllFindings />}
     </div>
   );

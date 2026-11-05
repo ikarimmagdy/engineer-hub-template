@@ -41,7 +41,7 @@ export function Gate({ brand, onUnlock }: { brand: Brand; onUnlock: () => void }
           onChange={(e) => { setValue(e.target.value); setError(''); }}
           aria-invalid={!!error}
           aria-describedby={error ? 'pass-err' : undefined}
-          className="mt-1.5 h-10 w-full rounded-md border border-line-2 bg-canvas px-3 outline-none focus:border-ink"
+          className="mt-1.5 h-10 w-full rounded-md border border-line-2 bg-sunk px-3 outline-none focus:border-ink"
         />
         {error && <p id="pass-err" className="mt-2 text-sm text-block">{error}</p>}
         <button type="submit" className="mt-4 h-10 w-full rounded-md bg-ink text-sm font-semibold text-paper">Open the hub</button>

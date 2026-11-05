@@ -1,4 +1,4 @@
-import { Link, NavLink, Navigate, useParams, useSearchParams } from 'react-router';
+import { Link, Navigate, useParams, useSearchParams } from 'react-router';
 import {
   getText, PHASES, PHASE_TITLE, SEVERITIES, severityOf, specDoc, TASK_STATES, trackerUrl, useAsync, useFindings, useHub, useSpec,
   type Finding, type Hub, type Spec, type TaskState,
@@ -9,7 +9,7 @@ import { parseTasks, type TaskRow } from '../lib/tasks';
 import { TABS, type Tab } from '../lib/routes';
 import { MarkdownFile, MarkdownText } from '../components/Markdown';
 import {
-  CopyButton, cx, Empty, ErrorNote, fmtDate, Meter, Panel, Pill, SEV_LABEL, SEV_TONE, Select, Skeleton, Stat, StatusText, TASK_TONE,
+  CopyButton, cx, Empty, ErrorNote, fmtDate, Meter, Panel, Pill, SEV_LABEL, SEV_TONE, Select, Skeleton, Stat, StatusText, TabBar, TASK_TONE,
 } from '../components/ui';
 import { TestsTab, LatestRun } from './Tests';
 
@@ -45,16 +45,7 @@ export function WorkItem() {
 
       <PhaseStrip spec={spec} />
 
-      <nav aria-label="Work item" className="-mx-4 mt-6 overflow-x-auto border-b border-line px-4 md:mx-0 md:px-0">
-        <div className="flex min-w-max gap-5">
-          {TABS.map(([t, label]) => (
-            <NavLink key={t} to={`/work/${spec.key}/${t}`}
-              className={({ isActive }) => cx('-mb-px border-b-2 py-2.5 text-sm', isActive ? 'border-ink font-semibold text-ink' : 'border-transparent text-ink-3 hover:text-ink')}>
-              {label}{counts[t] !== undefined && <span className="ml-1.5 tabular-nums text-ink-3">{counts[t]}</span>}
-            </NavLink>
-          ))}
-        </div>
-      </nav>
+      <TabBar label="Work item" className="mt-7" tabs={TABS.map(([t, label]) => ({ to: `/work/${spec.key}/${t}`, label, count: counts[t] }))} />
 
       <div className="pt-6">
         {tab === 'overview' && <Overview spec={spec} />}
@@ -328,7 +319,7 @@ export function FindingsTable({ findings, reviewBase, reviewed, showSpec }: { fi
         {shown.slice(0, 300).map((x, i) => (
           <li key={`${x.spec || ''}${x.id}${i}`}>
             <details className="group">
-              <summary className="grid cursor-pointer list-none grid-cols-[84px_minmax(0,1fr)] gap-x-3 gap-y-1 px-4 py-2.5 hover:bg-canvas md:grid-cols-[84px_minmax(0,1fr)_auto]">
+              <summary className="grid cursor-pointer list-none grid-cols-[84px_minmax(0,1fr)] gap-x-3 gap-y-1 px-4 py-2.5 hover:bg-sunk md:grid-cols-[84px_minmax(0,1fr)_auto]">
                 <StatusText tone={SEV_TONE[severityOf(x)]}>{SEV_LABEL[severityOf(x)]}</StatusText>
                 <span className="min-w-0">
                   {showSpec && x.spec && <span className="mr-2 font-mono text-[11px] text-ink-3">{x.spec}</span>}
@@ -340,7 +331,7 @@ export function FindingsTable({ findings, reviewBase, reviewed, showSpec }: { fi
                   {x.component && <Pill>{x.component}</Pill>}
                 </span>
               </summary>
-              <dl className="grid gap-x-4 gap-y-2 border-t border-line bg-canvas px-4 py-3 text-sm md:grid-cols-[110px_minmax(0,1fr)]">
+              <dl className="grid gap-x-4 gap-y-2 border-t border-line bg-sunk px-4 py-3 text-sm md:grid-cols-[110px_minmax(0,1fr)]">
                 {([['Where', x.location], ['What', x.detail], ['Impact', x.impact], ['Fix', x.fix], ['Type', x.type], ['Team', x.team], ['Source', x.source]] as [string, string | undefined][])
                   .filter(([, v]) => v).map(([k, v]) => (
                     <div key={k} className="contents">

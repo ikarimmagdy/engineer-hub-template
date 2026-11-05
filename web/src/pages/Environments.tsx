@@ -1,8 +1,8 @@
-import { NavLink, Navigate, useParams } from 'react-router';
+import { Navigate, useParams } from 'react-router';
 import { isLocal, useHub } from '../lib/data';
 import { ENV_PAGES } from '../lib/routes';
 import { MarkdownFile } from '../components/Markdown';
-import { cx, Empty, PageHeader } from '../components/ui';
+import { Empty, PageHeader, TabBar } from '../components/ui';
 
 export function Environments() {
   const { page } = useParams();
@@ -16,13 +16,7 @@ export function Environments() {
   return (
     <div>
       <PageHeader title="Environments" lede="Where the stack runs, the accounts and test data for each environment, and the tools the team signs in to." />
-      <nav aria-label="Environments" className="-mx-4 mb-6 overflow-x-auto border-b border-line px-4 md:mx-0 md:px-0">
-        <div className="flex min-w-max gap-5">
-          {tabs.map(([id, t]) => (
-            <NavLink key={id} to={`/environments/${id}`} className={({ isActive }) => cx('-mb-px border-b-2 py-2.5 text-sm', isActive ? 'border-ink font-semibold' : 'border-transparent text-ink-3 hover:text-ink')}>{t}</NavLink>
-          ))}
-        </div>
-      </nav>
+      <TabBar label="Environments" className="mb-6" tabs={tabs.map(([id, t]) => ({ to: `/environments/${id}`, label: t }))} />
       {page === 'local' ? (
         <div>
           <p className="mb-4 max-w-3xl text-sm text-ink-2">Consoles running on this machine. They are listed only when the hub itself runs locally, because on the shared hub these addresses point at the visitor's own laptop.</p>

@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { Link } from 'react-router';
+import { Link, NavLink } from 'react-router';
 import type { Brand, Severity, TaskState } from '../lib/data';
 
 export const cx = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).join(' ');
@@ -113,6 +113,37 @@ export function CopyButton({ text, label, className }: { text: string; label?: R
       <span className="shrink-0 text-ink-3" aria-live="polite">{done ? 'Copied' : 'Copy'}</span>
       <code className="min-w-0 truncate font-mono text-[11.5px]">{label ?? text}</code>
     </button>
+  );
+}
+
+export function TabBar({ label, tabs, className }: { label: string; tabs: { to: string; label: ReactNode; count?: number; end?: boolean }[]; className?: string }) {
+  return (
+    <nav aria-label={label} className={cx('-mx-4 overflow-x-auto border-b-2 border-line px-4 md:mx-0 md:px-0', className)}>
+      <div className="flex min-w-max gap-1">
+        {tabs.map((t) => (
+          <NavLink
+            key={t.to}
+            to={t.to}
+            end={t.end}
+            className={({ isActive }) => cx(
+              'group relative -mb-[2px] inline-flex items-center gap-2 rounded-t-md border-b-[3px] px-3.5 py-2.5 text-[15px] transition-colors',
+              isActive ? 'border-ink font-semibold text-ink' : 'border-transparent text-ink-2 hover:border-line-2 hover:bg-sunk hover:text-ink',
+            )}
+          >
+            {({ isActive }) => (
+              <>
+                <span>{t.label}</span>
+                {t.count !== undefined && (
+                  <span className={cx('min-w-6 rounded-full px-1.5 py-px text-center text-xs font-medium tabular-nums', isActive ? 'bg-ink text-paper' : 'bg-sunk text-ink-2 group-hover:bg-paper')}>
+                    {t.count}
+                  </span>
+                )}
+              </>
+            )}
+          </NavLink>
+        ))}
+      </div>
+    </nav>
   );
 }
 

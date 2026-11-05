@@ -67,7 +67,7 @@ export function Shell({ children, onSignOut }: { children: ReactNode; onSignOut:
           <nav aria-label="Main" className="hidden items-center gap-0.5 md:flex">{NAV.map(([to, l]) => link(to, l))}</nav>
           <div className="ml-auto flex items-center gap-2">
             <button type="button" onClick={() => setPalette(true)}
-              className="flex h-8 items-center gap-2 whitespace-nowrap rounded-md border border-line bg-canvas px-2.5 text-sm text-ink-3 hover:border-line-2 md:w-72">
+              className="flex h-8 items-center gap-2 whitespace-nowrap rounded-md border border-line bg-sunk px-2.5 text-sm text-ink-3 hover:border-line-2 md:w-72">
               <svg aria-hidden viewBox="0 0 20 20" className="size-4 shrink-0"><circle cx="9" cy="9" r="6" fill="none" stroke="currentColor" strokeWidth="1.6" /><path d="m14 14 4 4" stroke="currentColor" strokeWidth="1.6" /></svg>
               <span className="hidden md:inline">Search work and commands</span>
               <kbd className="ml-auto hidden rounded border border-line-2 px-1 font-mono text-[11px] md:inline">⌘K</kbd>
