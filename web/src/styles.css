@@ -97,6 +97,15 @@ body { font-family: var(--font-sans); font-size: 14.5px; line-height: 1.55; -web
 .prose-hub .st { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
 .prose-hub .st::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
 .prose-hub .st-ok { color: var(--ok); } .prose-hub .st-fail { color: var(--block); } .prose-hub .st-run { color: var(--run); } .prose-hub .st-wait { color: var(--wait); }
+.prose-hub .table-groups { display: grid; gap: 8px; }
+.prose-hub .table-group { border: 1px solid var(--line); border-radius: 8px; background: var(--paper); overflow: hidden; }
+.prose-hub .table-group > summary { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 16px; padding: 10px 14px; cursor: pointer; font-weight: 600; list-style: none; }
+.prose-hub .table-group > summary::before { content: "›"; display: inline-block; width: 14px; margin-right: 4px; color: var(--ink-3); transition: transform .15s ease-out; }
+.prose-hub .table-group[open] > summary::before { transform: rotate(90deg); }
+.prose-hub .table-group > summary:hover { background: var(--sunk); }
+.prose-hub .table-group .tg-title { flex: 1; min-width: 0; }
+.prose-hub .table-group .tg-meta { font-weight: 400; font-size: 0.85em; color: var(--ink-3); }
+.prose-hub .table-group > .table-wrap { border: 0; border-top: 1px solid var(--line); border-radius: 0; }
 .prose-hub .mermaid { background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 12px; overflow-x: auto; }
 
 @media (prefers-reduced-motion: reduce) {

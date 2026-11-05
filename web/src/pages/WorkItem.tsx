@@ -1,4 +1,4 @@
-import { Link, Navigate, useParams, useSearchParams } from 'react-router';
+import { Link, Navigate, useLocation, useParams, useSearchParams } from 'react-router';
 import {
   getText, PHASE_TITLE, SEVERITIES, severityOf, specDoc, TASK_STATES, trackerUrl, useAsync, useFindings, useHub, useSpec,
   type Finding, type Hub, type Spec, type TaskState,
@@ -7,7 +7,7 @@ import { taskTotal } from '../lib/attention';
 import { renderInline } from '../lib/markdown';
 import { parseTasks, type TaskRow } from '../lib/tasks';
 import { TABS, type Tab } from '../lib/routes';
-import { MarkdownFile, MarkdownText } from '../components/Markdown';
+import { HtmlPage, MarkdownFile, MarkdownText } from '../components/Markdown';
 import {
   CopyButton, cx, Empty, ErrorNote, fmtDate, Meter, Panel, Pill, SEV_LABEL, SEV_TONE, Select, Skeleton, Stat, StatusText, TASK_TONE,
 } from '../components/ui';
@@ -19,8 +19,9 @@ export function WorkItem() {
   const { key, tab = 'overview' } = useParams();
   const spec = useSpec(key);
   const hub = useHub();
+  const { search } = useLocation();
   if (!spec) return <Empty action={<Link className="underline" to="/work">All work</Link>}>No work item {key} in the workspace.</Empty>;
-  if (key !== spec.key) return <Navigate to={`/work/${spec.key}/${tab}`} replace />;
+  if (key !== spec.key) return <Navigate to={`/work/${spec.key}/${tab}${search}`} replace />;
   if (!TABS.some(([t]) => t === tab)) return <Navigate to={`/work/${spec.key}/overview`} replace />;
 
   const jira = trackerUrl(hub, spec.tracker?.initiative || spec.key);
@@ -39,7 +40,7 @@ export function WorkItem() {
             <span className="text-ink-3">updated {fmtDate(spec.updated)}</span>
           </div>
         </div>
-        {spec.next && <NextStep next={spec.next} />}
+        {spec.next && <NextStep next={spec.next} phase={PHASE_TITLE[spec.phase]} />}
       </div>
 
       <PhaseNav spec={spec} />
@@ -59,10 +60,14 @@ export function WorkItem() {
   );
 }
 
-function NextStep({ next }: { next: string }) {
+function NextStep({ next, phase }: { next: string; phase: string }) {
   const cmd = next.match(/^\/[\w-]+(?:\s+[^\s,;]+)*/)?.[0];
-  if (cmd && cmd === next.trim()) return <CopyButton text={cmd} />;
-  return <div className="max-w-sm text-right text-xs text-ink-3"><span className="font-medium text-ink-2">Next:</span> {next}</div>;
+  return (
+    <div className="flex max-w-md flex-col items-end gap-1 text-right">
+      <span className="text-xs text-ink-3">Next step for this work · {phase} phase</span>
+      {cmd && cmd === next.trim() ? <CopyButton text={cmd} /> : <span className="text-sm text-ink-2">{next}</span>}
+    </div>
+  );
 }
 
 
@@ -156,9 +161,13 @@ function TaskList({ rows, more, spec }: { rows: TaskRow[]; more?: number; spec: 
 
 function Design({ spec }: { spec: Spec }) {
   const [params, setParams] = useSearchParams();
-  const docs = [['plan', 'Design'], ['data-model', 'Data model'], ['test-plan', 'Test plan']].filter(([f]) => spec.files[f]);
+  const docs: [string, string][] = [
+    ...([['plan', 'Design'], ['data-model', 'Data model'], ['test-plan', 'Test plan']] as [string, string][]).filter(([f]) => spec.files[f]),
+    ...(spec.pages || []).map((p) => [`page:${p.id}`, p.title.replace(/\s+—.*$/, '')] as [string, string]),
+  ];
   const doc = params.get('doc') && docs.some(([f]) => f === params.get('doc')) ? params.get('doc')! : docs[0]?.[0];
   if (!doc) return <Empty action={<CopyButton text={`/design ${spec.key}`} />}>No design yet. It is written in the workspace with:</Empty>;
+  const page = doc.startsWith('page:') ? spec.pages?.find((p) => `page:${p.id}` === doc) : undefined;
   return (
     <div>
       {docs.length > 1 && (
@@ -169,7 +178,12 @@ function Design({ spec }: { spec: Spec }) {
           ))}
         </div>
       )}
-      <MarkdownFile path={specDoc(spec, `${doc}.md`)} />
+      {page ? (
+        <>
+          <p className="mb-3 text-xs text-ink-3">{page.title} · version {page.version.replace(/\.html$/, '')} · from <span className="font-mono">outputs/{page.source.replace(/^outputs\//, '')}</span></p>
+          <HtmlPage key={page.file} path={page.file} title={page.title} />
+        </>
+      ) : <MarkdownFile key={doc} path={specDoc(spec, `${doc}.md`)} sectioned />}
     </div>
   );
 }
@@ -329,6 +343,13 @@ function Documents({ spec, hub }: { spec: Spec; hub: Hub }) {
           {core.map(([f, l]) => <li key={f}><Link className="underline decoration-line-2 underline-offset-4 hover:decoration-ink" to={`/doc/${specDoc(spec, f + '.md')}`}>{l}</Link> <span className="font-mono text-[11px] text-ink-3">{f}.md</span></li>)}
         </ul>
       </Panel>
+      {!!spec.pages?.length && (
+        <Panel title="Pages">
+          <ul className="space-y-1.5 text-sm">
+            {spec.pages.map((p) => <li key={p.id}><Link className="underline decoration-line-2 underline-offset-4 hover:decoration-ink" to={`/work/${spec.key}/design?doc=page:${p.id}`}>{p.title}</Link> <span className="text-xs text-ink-3">{p.version.replace(/\.html$/, '')}</span></li>)}
+          </ul>
+        </Panel>
+      )}
       <Panel title="Outputs">
         {spec.outputs.length ? (
           <ul className="space-y-1.5 text-sm">

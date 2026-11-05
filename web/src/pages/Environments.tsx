@@ -31,7 +31,7 @@ export function Environments() {
             ))}
           </ul>
         </div>
-      ) : section ? <MarkdownFile path={section.doc} wide /> : <Navigate to="/environments" replace />}
+      ) : section ? <MarkdownFile path={section.doc} wide sectioned /> : <Navigate to="/environments" replace />}
     </div>
   );
 }

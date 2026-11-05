@@ -4,7 +4,7 @@ import { getText, specDoc, TASK_STATES, trackerUrl, useAsync, useHub, type Spec,
 import { renderInline } from '../lib/markdown';
 import { coveredNumbers, parseSpec, reqNumber, type Requirement } from '../lib/spec';
 import { parseTasks, type TaskRow } from '../lib/tasks';
-import { MarkdownText } from '../components/Markdown';
+import { MarkdownText, SectionedText } from '../components/Markdown';
 import { CopyButton, cx, Empty, ErrorNote, Pill, Select, Skeleton, StatusText, TASK_TONE } from '../components/ui';
 
 const STATE_LABEL: Record<TaskState, string> = { blocked: 'Blocked', doing: 'Doing', review: 'In review', todo: 'To do', done: 'Done' };
@@ -57,7 +57,7 @@ export function Requirements({ spec }: { spec: Spec }) {
       <div className="min-w-0">
         {section === 'requirements' && <RequirementList spec={spec} reqs={parsed.requirements} note={parsed.requirementsNote} tasks={tasks} path={path} />}
         {section === 'overview' && <><h2 className="mb-3 text-lg font-semibold">About this spec</h2><MarkdownText src={parsed.intro} path={path} /></>}
-        {current && <><h2 className="mb-3 text-lg font-semibold">{current.title}</h2><MarkdownText src={current.body} path={path} wide /></>}
+        {current && <><h2 className="mb-3 text-lg font-semibold">{current.title}</h2><SectionedText src={current.body} path={path} wide minLines={50} /></>}
       </div>
     </div>
   );

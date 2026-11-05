@@ -208,7 +208,7 @@ function Decision({ id }: { id: string }) {
     <div>
       <div className="mb-4 text-xs text-ink-3"><Link to="/knowledge/decisions" className="hover:underline">Decision log</Link> / <span className="font-mono">{a.id}</span></div>
       <div className="mb-4 flex flex-wrap gap-2"><Pill tone={a.status === 'Accepted' ? 'ok' : 'wait'}>{a.status}</Pill><span className="text-xs text-ink-3">{a.date}</span></div>
-      {file ? <MarkdownFile path={file.startsWith('content/') ? file : `content/kb-src/${file}`} /> : <p className="max-w-3xl" dangerouslySetInnerHTML={{ __html: renderInline(a.summary) }} />}
+      {file ? <MarkdownFile path={file.startsWith('content/') ? file : `content/kb-src/${file}`} sectioned /> : <p className="max-w-3xl" dangerouslySetInnerHTML={{ __html: renderInline(a.summary) }} />}
     </div>
   );
 }

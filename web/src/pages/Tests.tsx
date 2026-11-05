@@ -1,6 +1,6 @@
 import { Link, useSearchParams } from 'react-router';
 import { getText, specDoc, useAsync, useHub, usePoll, type Spec, type TestLatest, type TestSession } from '../lib/data';
-import { MarkdownText } from '../components/Markdown';
+import { MarkdownText, SectionedText } from '../components/Markdown';
 import { CopyButton, cx, Empty, fmtDateTime, Meter, Panel, Pill, Skeleton, Stat, StatusText } from '../components/ui';
 
 function sectionsOf(md: string) {
@@ -56,7 +56,7 @@ export function TestsTab({ spec }: { spec: Spec }) {
                 </button>
               ))}
             </div>
-            {current && <MarkdownText src={current.body} path={section.doc} wide />}
+            {current && <SectionedText key={current.slug} src={current.body} path={section.doc} wide minLines={40} />}
           </div>
         )
       )}

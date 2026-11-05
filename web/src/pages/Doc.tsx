@@ -19,7 +19,7 @@ export function Doc() {
         crumb={<><Link to="/knowledge/library" className="hover:underline">Library</Link> / <span className="font-mono">{parts.slice(0, -1).join(' / ')}</span></>}
         title={entry?.title || parts[parts.length - 1].replace(/\.md$/, '').replace(/[-_]/g, ' ')}
       />
-      <MarkdownFile path={path} />
+      <MarkdownFile path={path} sectioned />
     </div>
   );
 }
@@ -32,7 +32,7 @@ export function SectionPage() {
   return (
     <div>
       <PageHeader crumb={s.eyebrow} title={s.title} />
-      <MarkdownFile path={s.doc} wide />
+      <MarkdownFile path={s.doc} wide sectioned />
     </div>
   );
 }

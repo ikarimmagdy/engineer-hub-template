@@ -61,10 +61,11 @@ export function renderMarkdown(src: string, docPath: string, hub: Hub): string {
     img.setAttribute('loading', 'lazy');
   });
   root.querySelectorAll('table').forEach((t) => {
+    const groups = groupTable(t, doc);
     const wrap = doc.createElement('div');
     wrap.className = 'table-wrap';
-    t.replaceWith(wrap);
-    wrap.appendChild(t);
+    t.replaceWith(groups || wrap);
+    if (!groups) wrap.appendChild(t);
   });
   root.querySelectorAll('td').forEach((td) => {
     const t = (td.textContent || '').trim();
@@ -101,6 +102,52 @@ export function renderMarkdown(src: string, docPath: string, hub: Hub): string {
     node.replaceWith(...Array.from(span.childNodes));
   }
   return root.innerHTML;
+}
+
+/**
+ * A table whose body has full-width group rows (one cell spanning every column) becomes one collapsible
+ * block per group, each with the table header and a pass/fail tally. Returns null for ordinary tables.
+ */
+function groupTable(t: HTMLTableElement, doc: Document): HTMLElement | null {
+  const rows = Array.from(t.tBodies[0]?.rows || []);
+  const cols = t.tHead?.rows[0]?.cells.length || 0;
+  const isGroup = (r: HTMLTableRowElement) => r.cells.length === 1 && (r.cells[0].colSpan >= cols || cols <= 1);
+  const heads = rows.filter(isGroup);
+  if (cols < 2 || heads.length < 2) return null;
+
+  const out = doc.createElement('div');
+  out.className = 'table-groups';
+  let current: { title: string; rows: HTMLTableRowElement[] } | null = null;
+  const blocks: { title: string; rows: HTMLTableRowElement[] }[] = [];
+  for (const r of rows) {
+    if (isGroup(r)) { current = { title: (r.textContent || '').replace(/^[\s▶·•-]+/, '').trim(), rows: [] }; blocks.push(current); }
+    else if (current) current.rows.push(r);
+    else { current = { title: 'Other', rows: [r] }; blocks.push(current); }
+  }
+  blocks.forEach((b, i) => {
+    const det = doc.createElement('details');
+    det.className = 'table-group';
+    if (i === 0) det.open = true;
+    const html = b.rows.map((r) => r.innerHTML).join(' ');
+    const ok = (html.match(/✅/g) || []).length;
+    const fail = (html.match(/❌/g) || []).length;
+    const sum = doc.createElement('summary');
+    sum.innerHTML = `<span class="tg-title"></span><span class="tg-meta">${b.rows.length} ${b.rows.length === 1 ? 'row' : 'rows'}` +
+      `${ok ? ` · <span class="st st-ok">${ok} passed</span>` : ''}${fail ? ` · <span class="st st-fail">${fail} failed</span>` : ''}</span>`;
+    sum.querySelector('.tg-title')!.textContent = b.title;
+    det.appendChild(sum);
+    const wrap = doc.createElement('div');
+    wrap.className = 'table-wrap';
+    const table = doc.createElement('table');
+    if (t.tHead) table.appendChild(t.tHead.cloneNode(true));
+    const body = doc.createElement('tbody');
+    b.rows.forEach((r) => body.appendChild(r.cloneNode(true)));
+    table.appendChild(body);
+    wrap.appendChild(table);
+    det.appendChild(wrap);
+    out.appendChild(det);
+  });
+  return out;
 }
 
 /** One line of markdown (a table cell, a title) as safe inline HTML. */

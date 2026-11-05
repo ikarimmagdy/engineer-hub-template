@@ -56,6 +56,7 @@ export interface Spec {
   inputs: string[];
   sources: string[];
   findingsFile: string | null;
+  pages?: { id: string; title: string; file: string; version: string; source: string }[];
 }
 
 export interface Loop { generated: string; workspace: string; specs: Spec[] }
