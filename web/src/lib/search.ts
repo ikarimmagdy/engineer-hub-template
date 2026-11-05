@@ -49,6 +49,8 @@ export function buildIndex(hub: Hub) {
     storeFields: ['group', 'title', 'hint', 'to', 'copy'],
     searchOptions: { prefix: true, fuzzy: 0.15, boost: { title: 3 }, combineWith: 'AND' },
   });
-  ms.addAll(docs);
-  return { ms, docs };
+  const seen = new Set<string>();
+  const unique = docs.filter((d) => !seen.has(d.id) && !!seen.add(d.id));
+  ms.addAll(unique);
+  return { ms, docs: unique };
 }

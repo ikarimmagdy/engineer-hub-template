@@ -205,9 +205,11 @@ export function usePoll<T>(path: string, ms: number) {
   const [data, setData] = useState<T | undefined>();
   useEffect(() => {
     let live = true;
-    const tick = () => getJson<T>(path, true).then((d) => live && setData(d)).catch(() => {});
+    let id: ReturnType<typeof setInterval> | undefined;
+    // A file the hub does not publish (live runs exist only on the laptop) answers 404: stop asking.
+    const tick = () => getJson<T>(path, true).then((d) => live && setData(d)).catch((e) => { if (/: 404$/.test(String(e.message))) clearInterval(id); });
     tick();
-    const id = setInterval(() => { if (!document.hidden) tick(); }, ms);
+    id = setInterval(() => { if (!document.hidden) tick(); }, ms);
     return () => { live = false; clearInterval(id); };
   }, [path, ms]);
   return data;
