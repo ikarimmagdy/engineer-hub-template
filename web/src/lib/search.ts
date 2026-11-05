@@ -30,6 +30,9 @@ export function buildIndex(hub: Hub) {
   ];
   pages.forEach(([to, title]) => docs.push({ id: `p:${to}`, group: 'Pages', title, to }));
   for (const s of hub.loop.specs) {
+    if (s.review.includes('ui-ux')) {
+      docs.push({ id: `sc:${s.key}`, group: 'Pages', title: 'Screens vs Figma (UI / UX)', hint: s.key, to: `/work/${s.key}/tests` });
+    }
     for (const p of s.pages || []) {
       docs.push({ id: `sp:${s.key}:${p.id}`, group: 'Pages', title: `${p.title}`, hint: s.key, to: `/work/${s.key}/design?doc=page:${p.id}` });
     }

@@ -1,6 +1,7 @@
 import { Link, useSearchParams } from 'react-router';
 import { getText, specDoc, useAsync, useHub, usePoll, type Spec, type TestLatest, type TestSession } from '../lib/data';
 import { MarkdownText, SectionedText } from '../components/Markdown';
+import { Screens } from './Screens';
 import { CopyButton, cx, Empty, fmtDateTime, Meter, Panel, Pill, Skeleton, Stat, StatusText } from '../components/ui';
 
 function sectionsOf(md: string) {
@@ -26,7 +27,11 @@ export function TestsTab({ spec }: { spec: Spec }) {
   const [params, setParams] = useSearchParams();
   const md = useAsync(section ? () => getText(section.doc) : null, [section?.doc]);
   const parsed = md.data ? sectionsOf(md.data) : null;
-  const parts = (parsed?.parts || []).filter((p) => !/^live now$/i.test(p.title));
+  const hasScreens = spec.review.includes('ui-ux');
+  const parts = [
+    ...(hasScreens ? [{ title: 'Screens vs Figma', slug: 'screens', body: '' }] : []),
+    ...(parsed?.parts || []).filter((p) => !/^live now$/i.test(p.title)),
+  ];
   const view = params.get('view') || parts[0]?.slug || '';
   const current = parts.find((p) => p.slug === view) || parts[0];
   const notTested = spec.criteria - spec.criteria_tested;
@@ -45,18 +50,18 @@ export function TestsTab({ spec }: { spec: Spec }) {
         <Stat value={notTested} tone={notTested ? 'block' : undefined} label="criteria with no test yet (nothing ships until each has one)" />
       </div>
 
-      {section && (
+      {(section || hasScreens) && (
         md.loading ? <Skeleton lines={8} /> : parts.length > 0 && (
           <div>
             <div role="group" aria-label="Test views" className="mb-5 flex flex-wrap gap-2">
               {parts.map((p) => (
-                <button key={p.slug} type="button" aria-pressed={current?.slug === p.slug} onClick={() => setParams({ view: p.slug }, { replace: true })}
+                <button key={p.slug} type="button" aria-pressed={current?.slug === p.slug} onClick={() => setParams(p.slug === parts[0].slug ? {} : { view: p.slug }, { replace: true })}
                   className={cx('rounded-md border px-3 py-1 text-sm', current?.slug === p.slug ? 'border-ink bg-ink text-paper' : 'border-line-2 bg-paper text-ink-2 hover:text-ink')}>
                   {p.title}
                 </button>
               ))}
             </div>
-            {current && <SectionedText key={current.slug} src={current.body} path={section.doc} wide minLines={40} />}
+            {current?.slug === 'screens' ? <Screens spec={spec} /> : current && section && <SectionedText key={current.slug} src={current.body} path={section.doc} wide minLines={40} />}
           </div>
         )
       )}
