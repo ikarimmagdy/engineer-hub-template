@@ -56,7 +56,22 @@ export interface Spec {
   inputs: string[];
   sources: string[];
   findingsFile: string | null;
-  pages?: { id: string; title: string; file: string; version: string; source: string }[];
+  pages?: { id: string; title: string; file: string; version: string; source: string; phase?: string | null }[];
+  docs?: SpecDoc[];
+}
+
+export interface DocFile { name: string; file: string }
+/** A loop-config "docs" entry: a document of the hub's own repo shown on a phase of a spec (tools/sync_loop.py). */
+export interface SpecDoc {
+  id: string;
+  title: string;
+  phase: Phase;
+  kind: 'md' | 'html' | 'images';
+  source: string;
+  file: string | null;
+  version: string;
+  versions: DocFile[];
+  images: DocFile[];
 }
 
 export interface Loop { generated: string; workspace: string; specs: Spec[] }
@@ -67,13 +82,35 @@ export interface Section { id: string; title: string; eyebrow?: string; lede?: s
 export interface Adr { id: string; title: string; status: string; date: string; summary: string; file?: string; doc?: string }
 export interface KbEntry { title: string; path: string; group: string; summary?: string; version?: string }
 
+export interface SdlcBox { t: string; d?: string; go?: string }
+
 export interface LoopConfig {
   title: string;
   lede: string;
   trackerBase?: string;
   intake?: { key: string; title: string; what: string; command: string; via: string }[];
   phases?: { key: string; title: string; command: string; does: string; gate?: string; tools?: string; outputs?: string }[];
+  entries?: { key: string; title: string; what?: string; command?: string; example?: string; via?: string }[];
+  flows?: { key: string; title: string; steps: { nodes: string[]; text: string }[] }[];
+  sdlc?: { title?: string; workspace?: string; sources?: SdlcBox[]; delivers?: SdlcBox[] };
   [k: string]: unknown;
+}
+
+export interface AgCommand { id: string; name: string; description: string; args?: string; phase: number | null; agents: string[]; tools: string[]; files: string[]; path: string }
+export interface AgNode { id: string; name: string; description?: string; path?: string; tools?: string; kind?: string; configured?: boolean; used?: boolean; source?: string; event?: string; matcher?: string }
+/** The workspace's .claude wiring, read from the command, agent, hook and skill files (manifest "agentic"). */
+export interface Agentic {
+  generated: string;
+  workspace: string;
+  commands: AgCommand[];
+  agents: AgNode[];
+  tools: AgNode[];
+  files: AgNode[];
+  hooks: AgNode[];
+  rules: AgNode[];
+  skills: AgNode[];
+  constitution?: string[];
+  edges: [string, string][];
 }
 
 export interface Manifest {
@@ -83,6 +120,7 @@ export interface Manifest {
   adrs: Adr[];
   kb: KbEntry[];
   loopConfig: LoopConfig;
+  agentic?: Agentic;
 }
 
 export interface Finding {

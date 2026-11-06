@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react';
-import { Link, Navigate, useParams } from 'react-router';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, Navigate, useParams, useSearchParams } from 'react-router';
 import { useHub, type Hub, type NavItem } from '../lib/data';
 import { legacyRoute } from '../lib/routes';
 import { renderInline } from '../lib/markdown';
 import { MarkdownFile } from '../components/Markdown';
+import { AgenticGraph, phaseWiring, SdlcOverview, useModel, type GraphState } from '../components/Sdlc';
 import { CopyButton, cx, Empty, fmtDate, PageHeader, Panel, Pill } from '../components/ui';
 
 const V4 = import.meta.env.VITE_V4_URL as string | undefined;
@@ -86,26 +87,102 @@ export function Knowledge() {
   );
 }
 
+function focusGraph(id: string | null, smooth = false) {
+  const g = document.getElementById('how-graph');
+  if (!g) return;
+  const top = (el: Element) => el.getBoundingClientRect().top + scrollY - 80;
+  const n = id ? g.querySelector(`[data-id="${CSS.escape(id)}"]`) : null;
+  // the graph's top, or the selected box when that would still be below the fold
+  scrollTo({ top: n && top(n) - top(g) > innerHeight * 0.6 ? top(n) - innerHeight * 0.25 : top(g), behavior: smooth ? 'smooth' : 'auto' });
+  const sc = n?.closest('[data-scroll]');
+  if (n && sc) {
+    const r = n.getBoundingClientRect(), b = sc.getBoundingClientRect();
+    sc.scrollLeft += r.left - b.left - (b.width - r.width) / 2;
+  }
+}
+
 function HowWeWork() {
-  const { manifest } = useHub();
+  const hub = useHub();
+  const { manifest, loop } = hub;
   const c = manifest.loopConfig;
+  const ag = manifest.agentic;
+  const model = useModel(hub);
+  const { id: mode, sub } = useParams();
+  const [params] = useSearchParams();
+  const asked = mode === 'cmd' && sub ? sub : params.get('cmd');
+  const target = asked ? `cmd:${asked.replace(/^\//, '')}` : mode === 'node' && sub ? sub : null;
+  const flow = mode === 'flow' && sub ? sub : null;
+  const [graph, setGraph] = useState<GraphState>({ sel: target, flow, step: 0 });
+  useEffect(() => {
+    setGraph({ sel: target, flow, step: 0 });
+    if (!target && !flow && mode !== 'start') return;
+    const t = setTimeout(() => (mode === 'start' ? document.getElementById('start')?.scrollIntoView() : focusGraph(target)), 80);
+    return () => clearTimeout(t);
+  }, [target, flow, mode]);
+  const go = (id: string) => { setGraph({ sel: id, flow: null, step: 0 }); requestAnimationFrame(() => focusGraph(id, true)); };
+  const unused = ag ? ag.tools.filter((t) => t.configured && !t.used) : [];
+  const idle = ag ? ag.commands.filter((x) => !x.agents.length && !x.tools.length) : [];
   const start = c.start as { title: string; lede: string; steps: { title: string; where?: string; text?: string[]; commands?: { cmd: string; note?: string }[] }[] } | undefined;
   return (
     <div>
       <PageHeader crumb={<Link to="/knowledge" className="hover:underline">Knowledge</Link>} title="How we work" lede={c.lede} />
-      <h2 className="mb-3 text-lg font-semibold">The loop</h2>
+      {model && (
+        <>
+          <h2 className="mb-1 text-lg font-semibold">{c.sdlc?.title || 'The SDLC at a glance'}</h2>
+          <p className="mb-3 max-w-3xl text-sm text-ink-2">Where work comes from, what Claude Code does with it in the workspace, and what it delivers. Click a box to find it in the detail below.</p>
+          <SdlcOverview hub={hub} model={model} onGo={go} />
+
+          <h2 id="how-graph" className="mb-1 mt-10 scroll-mt-20 text-lg font-semibold">How it works, in detail</h2>
+          <p className="mb-3 max-w-3xl text-sm text-ink-2">
+            Read from <code className="font-mono text-[12px]">{model.ag.workspace}/.claude</code> and <code className="font-mono text-[12px]">.mcp.json</code> on {fmtDate(model.ag.generated)}.
+            A line means the command file names that agent, tool or file. Click any box, or pick an entry point to walk through its flow.
+          </p>
+          <AgenticGraph hub={hub} model={model} state={graph} setState={setGraph} />
+        </>
+      )}
+
+      <h2 className="mb-1 mt-10 text-lg font-semibold">The loop, one gate per step</h2>
+      <p className="mb-3 text-sm text-ink-2">{loop.specs.length} work items are in it now: see them by phase on the <Link to="/work" className="underline decoration-line-2 underline-offset-4 hover:decoration-ink">Work board</Link>.</p>
       <ol className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        {(c.phases || []).map((p, i) => (
-          <li key={p.key} className="rounded-lg border border-line bg-paper px-4 py-3">
-            <div className="flex items-baseline justify-between gap-2">
-              <span className="font-semibold"><span className="mr-1.5 tabular-nums text-ink-3">{i + 1}</span>{p.title}</span>
-              <code className="font-mono text-[11.5px] text-ink-2">{p.command}</code>
-            </div>
-            <p className="mt-1.5 text-sm text-ink-2 text-pretty" dangerouslySetInnerHTML={{ __html: renderInline(p.does) }} />
-            {p.gate && <p className="mt-2 text-xs"><span className="font-medium">Gate:</span> <span className="text-ink-2">{p.gate}</span></p>}
-          </li>
-        ))}
+        {(c.phases || []).map((p, i) => {
+          const w = phaseWiring(ag, p.command, i);
+          return (
+            <li key={p.key} className="rounded-lg border border-line bg-paper px-4 py-3">
+              <div className="flex items-baseline justify-between gap-2">
+                <span className="font-semibold"><span className="mr-1.5 tabular-nums text-ink-3">{i + 1}</span>{p.title}</span>
+                <span className="flex flex-wrap justify-end gap-1">
+                  {p.command.split(/[,\s]+/).filter((x) => x.startsWith('/')).map((x) => (
+                    model?.all[`cmd:${x.slice(1)}`]
+                      ? <button key={x} type="button" onClick={() => go(`cmd:${x.slice(1)}`)} title="Show it in the diagram" className="font-mono text-[11.5px] text-ink-2 underline decoration-line-2 underline-offset-4 hover:decoration-ink">{x}</button>
+                      : <code key={x} className="font-mono text-[11.5px] text-ink-2">{x}</code>
+                  ))}
+                </span>
+              </div>
+              <p className="mt-1.5 text-sm text-ink-2 text-pretty" dangerouslySetInnerHTML={{ __html: renderInline(p.does) }} />
+              {(w.agents.length > 0 || w.tools.length > 0) && (
+                <div className="mt-2 flex flex-wrap gap-1">
+                  {w.agents.map((a) => <span key={a} className="rounded border border-line border-l-[3px] border-l-ok px-1.5 py-px text-[11.5px] text-ink-2">{a}</span>)}
+                  {w.tools.map((t) => <span key={t} className="rounded border border-line border-l-[3px] border-l-sev-high px-1.5 py-px text-[11.5px] text-ink-2">{t}</span>)}
+                </div>
+              )}
+              {p.gate && <p className="mt-2 text-xs"><span className="font-medium">Gate:</span> <span className="text-ink-2">{p.gate}</span></p>}
+            </li>
+          );
+        })}
       </ol>
+      <p className="mt-2 text-xs text-ink-3">↺ Maintain feeds new intents: incidents, feedback and review findings start the loop again.</p>
+
+      {unused.length > 0 && (
+        <>
+          <h2 className="mb-3 mt-10 text-lg font-semibold">Wiring gaps</h2>
+          <div className="max-w-3xl rounded-lg border border-line-2 bg-sunk px-4 py-3 text-sm">
+            <span className="font-medium">Installed, but no command uses them yet:</span>{' '}
+            {unused.map((t, i) => <span key={t.id}>{i > 0 && ', '}{t.name} <span className="text-ink-3">({t.source || t.kind})</span></span>)}.
+            {' '}Until a command names them, Claude only uses them when someone asks in the session.
+          </div>
+          {idle.length > 0 && <p className="mt-2 text-sm text-ink-3">Commands that call no agent or tool: {idle.map((x) => <code key={x.id} className="mr-1.5 font-mono text-[12px]">{x.name}</code>)}</p>}
+        </>
+      )}
 
       {!!c.intake?.length && (
         <>

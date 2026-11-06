@@ -1,6 +1,6 @@
 import MiniSearch from 'minisearch';
 import type { Hub } from './data';
-import { TABS, ENV_PAGES } from './routes';
+import { TABS, ENV_PAGES, docTabRoute, howRoute } from './routes';
 
 export interface Hit {
   id: string;
@@ -33,9 +33,15 @@ export function buildIndex(hub: Hub) {
     if (s.review.includes('ui-ux')) {
       docs.push({ id: `sc:${s.key}`, group: 'Pages', title: 'Screens vs Figma (UI / UX)', hint: s.key, to: `/work/${s.key}/tests` });
     }
+    for (const d of s.docs || []) {
+      docs.push({ id: `sd:${s.key}:${d.id}`, group: 'Pages', title: d.title, hint: s.key, to: docTabRoute(s.key, d.phase, d.id) });
+    }
     for (const p of s.pages || []) {
       docs.push({ id: `sp:${s.key}:${p.id}`, group: 'Pages', title: `${p.title}`, hint: s.key, to: `/work/${s.key}/design?doc=page:${p.id}` });
     }
+  }
+  for (const c of hub.manifest.agentic?.commands || []) {
+    docs.push({ id: `h:${c.name}`, group: 'Pages', title: `How ${c.name} works`, hint: c.description, to: howRoute(c.name.slice(1)) });
   }
   for (const sec of hub.manifest.sections) {
     if (/^(spec-|te-|test-executions-|delivery-loop)/.test(sec.id)) continue;

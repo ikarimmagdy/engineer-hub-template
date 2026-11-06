@@ -1,7 +1,7 @@
-import { NavLink } from 'react-router';
+import { Link, NavLink } from 'react-router';
 import { PHASES, PHASE_TITLE, useHub, type Phase, type Spec } from '../lib/data';
 import { taskTotal } from '../lib/attention';
-import type { Tab } from '../lib/routes';
+import { howRoute, phaseCommand, type Tab } from '../lib/routes';
 import { CopyButton, cx } from './ui';
 
 /** Which work-item tab holds what each phase produces. Overview, Documents and Activity span every phase. */
@@ -104,12 +104,14 @@ const isCommand = (s?: string): s is string => !!s && s.match(/^\/[\w-]+(?:\s+[^
 
 /** One line at the top of a phase's tab: where the phase stands, its gate, and the command that moves it. */
 export function PhaseBanner({ spec, tab }: { spec: Spec; tab: Tab }) {
-  const { manifest } = useHub();
+  const hub = useHub();
+  const { manifest } = hub;
   const p = TAB_PHASE[tab];
   if (!p) return null;
   const st = phaseState(spec, p);
   const cfg = manifest.loopConfig.phases?.find((x) => x.key === p);
   const cmd = cfg?.command.split(',')[0]?.trim();
+  const how = phaseCommand(hub, p);
   return (
     <div className={cx('mb-6 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border px-4 py-2.5 text-sm',
       st.state === 'now' ? 'border-brand/50 bg-paper' : 'border-line bg-sunk/50')}>
@@ -119,6 +121,7 @@ export function PhaseBanner({ spec, tab }: { spec: Spec; tab: Tab }) {
         {st.approval ? `, approved by ${st.approval.by.replace(/\s*\(.*\)$/, '')} on ${st.approval.date}` : st.state === 'now' ? `, ${st.note}` : ''}
       </span>
       {cfg?.gate && <span className="text-ink-3">Gate: <span className="text-ink-2">{cfg.gate}</span></span>}
+      {how && <Link to={howRoute(how)} className="text-ink-2 underline decoration-line-2 underline-offset-4 hover:decoration-ink">How this phase works</Link>}
       {st.state === 'now' && cmd && (
         <span className="ml-auto">
           <CopyButton text={isCommand(spec.next) && spec.next.startsWith(cmd) ? spec.next.trim() : `${cmd} ${spec.key}`} />

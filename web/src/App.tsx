@@ -50,7 +50,7 @@ export function App() {
             <Route path="/work/:key/:tab?" element={<WorkItem />} />
             <Route path="/quality/:view?" element={<Quality />} />
             <Route path="/environments/:page?" element={<Environments />} />
-            <Route path="/knowledge/:page?/:id?" element={<Knowledge />} />
+            <Route path="/knowledge/:page?/:id?/:sub?" element={<Knowledge />} />
             <Route path="/doc/*" element={<Doc />} />
             <Route path="/section/:id" element={<SectionPage />} />
             <Route path="*" element={<Legacy />} />

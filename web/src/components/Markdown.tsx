@@ -103,7 +103,11 @@ export function HtmlPage({ path, title }: { path: string; title: string }) {
   const fit = () => {
     try {
       const d = ref.current?.contentDocument;
-      if (d?.documentElement) setH(Math.max(400, d.documentElement.scrollHeight + 8));
+      if (!d?.documentElement) return;
+      // the hub's theme toggle carries into the framed page, as in v4
+      const t = document.documentElement.dataset.theme;
+      if (t !== d.documentElement.dataset.theme) { if (t) d.documentElement.dataset.theme = t; else delete d.documentElement.dataset.theme; }
+      setH(Math.max(400, d.documentElement.scrollHeight + 8));
     } catch { /* cross-origin: keep the default height */ }
   };
   useEffect(() => {

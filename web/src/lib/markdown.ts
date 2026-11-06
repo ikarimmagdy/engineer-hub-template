@@ -1,6 +1,6 @@
 import { Marked } from 'marked';
 import type { Hub } from './data';
-import { legacyRoute } from './routes';
+import { docRoute, legacyRoute } from './routes';
 
 const marked = new Marked({ gfm: true, breaks: false });
 
@@ -34,6 +34,8 @@ export function resolveLink(href: string, docPath: string, hub: Hub): { href: st
   if (href.startsWith('#')) return { href };
   const [path, anchor] = href.split('#');
   const abs = joinPath(dirOf(docPath), path);
+  const phaseDoc = docRoute(hub, abs.replace(/\/$/, ''));
+  if (phaseDoc) return { href: '#' + phaseDoc };
   if (/\.(md|markdown)$/i.test(abs)) return { href: '#/doc/' + abs + (anchor ? `#${anchor}` : '') };
   return { href: abs + (anchor ? `#${anchor}` : ''), external: /\.(html?|pdf)$/i.test(abs) };
 }

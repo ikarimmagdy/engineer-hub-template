@@ -1,30 +1,33 @@
 import { Link, Navigate, useLocation, useParams, useSearchParams } from 'react-router';
 import {
-  getText, PHASE_TITLE, SEVERITIES, severityOf, specDoc, TASK_STATES, trackerUrl, useAsync, useFindings, useHub, useSpec,
-  type Finding, type Hub, type Spec, type TaskState,
+  getText, PHASES, PHASE_TITLE, SEVERITIES, severityOf, specDoc, TASK_STATES, trackerUrl, useAsync, useFindings, useHub, useSpec,
+  type Finding, type Hub, type Spec, type SpecDoc, type TaskState,
 } from '../lib/data';
 import { taskTotal } from '../lib/attention';
 import { renderInline } from '../lib/markdown';
 import { parseTasks, type TaskRow } from '../lib/tasks';
-import { TABS, type Tab } from '../lib/routes';
+import { docTabRoute, howRoute, PHASE_TAB, phaseCommand, TABS, type Tab } from '../lib/routes';
 import { HtmlPage, MarkdownFile, MarkdownText } from '../components/Markdown';
 import {
   CopyButton, cx, Empty, ErrorNote, fmtDate, Meter, Panel, Pill, SEV_LABEL, SEV_TONE, Select, Skeleton, Stat, StatusText, TASK_TONE,
 } from '../components/ui';
 import { TestsTab, LatestRun } from './Tests';
 import { Requirements } from './Requirements';
-import { PhaseBanner, PhaseNav } from '../components/PhaseNav';
+import { PhaseBanner, PhaseNav, TAB_PHASE } from '../components/PhaseNav';
 
 export function WorkItem() {
   const { key, tab = 'overview' } = useParams();
   const spec = useSpec(key);
   const hub = useHub();
   const { search } = useLocation();
+  const [params] = useSearchParams();
   if (!spec) return <Empty action={<Link className="underline" to="/work">All work</Link>}>No work item {key} in the workspace.</Empty>;
   if (key !== spec.key) return <Navigate to={`/work/${spec.key}/${tab}${search}`} replace />;
   if (!TABS.some(([t]) => t === tab)) return <Navigate to={`/work/${spec.key}/overview`} replace />;
 
   const jira = trackerUrl(hub, spec.tracker?.initiative || spec.key);
+  const docId = params.get('doc');
+  const phaseDoc = tab !== 'design' && docId?.startsWith('doc:') ? spec.docs?.find((d) => `doc:${d.id}` === docId) : undefined;
 
   return (
     <div>
@@ -47,14 +50,19 @@ export function WorkItem() {
 
       <div className="pt-6">
         <PhaseBanner spec={spec} tab={tab as Tab} />
-        {tab === 'overview' && <Overview spec={spec} />}
-        {tab === 'requirements' && <Requirements spec={spec} />}
-        {tab === 'design' && <Design spec={spec} />}
-        {tab === 'tasks' && <Tasks spec={spec} />}
-        {tab === 'tests' && <TestsTab spec={spec} />}
-        {tab === 'findings' && <Findings spec={spec} />}
-        {tab === 'documents' && <Documents spec={spec} hub={hub} />}
-        {tab === 'activity' && <Activity spec={spec} />}
+        <PhaseDocs spec={spec} tab={tab as Tab} open={phaseDoc} />
+        {phaseDoc ? <PhaseDocView key={phaseDoc.id} spec={spec} doc={phaseDoc} version={params.get('v')} /> : (
+          <>
+            {tab === 'overview' && <Overview spec={spec} />}
+            {tab === 'requirements' && <Requirements spec={spec} />}
+            {tab === 'design' && <Design spec={spec} />}
+            {tab === 'tasks' && <Tasks spec={spec} />}
+            {tab === 'tests' && <TestsTab spec={spec} />}
+            {tab === 'findings' && <Findings spec={spec} />}
+            {tab === 'documents' && <Documents spec={spec} hub={hub} />}
+            {tab === 'activity' && <Activity spec={spec} />}
+          </>
+        )}
       </div>
     </div>
   );
@@ -149,7 +157,7 @@ function TaskList({ rows, more, spec }: { rows: TaskRow[]; more?: number; spec: 
         <li key={r.id} className="grid grid-cols-[48px_minmax(0,1fr)] gap-3 py-2 text-sm">
           <span className="font-mono text-[11.5px] text-ink-3">{r.id}</span>
           <div className="min-w-0">
-            <div className="text-pretty" dangerouslySetInnerHTML={{ __html: renderInline(r.task) }} />
+            <div className="text-pretty [overflow-wrap:anywhere]" dangerouslySetInnerHTML={{ __html: renderInline(r.task) }} />
             {r.depends && r.depends !== '—' && <div className="mt-0.5 text-xs text-ink-3">waits on: <span dangerouslySetInnerHTML={{ __html: renderInline(r.depends) }} /></div>}
           </div>
         </li>
@@ -164,10 +172,12 @@ function Design({ spec }: { spec: Spec }) {
   const docs: [string, string][] = [
     ...([['plan', 'Design'], ['data-model', 'Data model'], ['test-plan', 'Test plan']] as [string, string][]).filter(([f]) => spec.files[f]),
     ...(spec.pages || []).map((p) => [`page:${p.id}`, p.title.replace(/\s+—.*$/, '')] as [string, string]),
+    ...(spec.docs || []).filter((d) => d.phase === 'design').map((d) => [`doc:${d.id}`, d.title] as [string, string]),
   ];
   const doc = params.get('doc') && docs.some(([f]) => f === params.get('doc')) ? params.get('doc')! : docs[0]?.[0];
   if (!doc) return <Empty action={<CopyButton text={`/design ${spec.key}`} />}>No design yet. It is written in the workspace with:</Empty>;
   const page = doc.startsWith('page:') ? spec.pages?.find((p) => `page:${p.id}` === doc) : undefined;
+  const phaseDoc = doc.startsWith('doc:') ? spec.docs?.find((d) => `doc:${d.id}` === doc) : undefined;
   return (
     <div>
       {docs.length > 1 && (
@@ -178,7 +188,7 @@ function Design({ spec }: { spec: Spec }) {
           ))}
         </div>
       )}
-      {page ? (
+      {phaseDoc ? <PhaseDocView key={phaseDoc.id} spec={spec} doc={phaseDoc} version={params.get('v')} /> : page ? (
         <>
           <p className="mb-3 text-xs text-ink-3">{page.title} · version {page.version.replace(/\.html$/, '')} · from <span className="font-mono">outputs/{page.source.replace(/^outputs\//, '')}</span></p>
           <HtmlPage key={page.file} path={page.file} title={page.title} />
@@ -350,6 +360,18 @@ function Documents({ spec, hub }: { spec: Spec; hub: Hub }) {
           </ul>
         </Panel>
       )}
+      {!!spec.docs?.length && (
+        <Panel title="Phase documents">
+          <ul className="space-y-1.5 text-sm">
+            {spec.docs.map((d) => (
+              <li key={d.id}>
+                <Link className="underline decoration-line-2 underline-offset-4 hover:decoration-ink" to={docTabRoute(spec.key, d.phase, d.id)}>{d.title}</Link>{' '}
+                <span className="text-xs text-ink-3">{PHASE_TITLE[d.phase] || d.phase} · {d.version.replace(/\.(md|html?)$/i, '')}{d.versions.length > 1 && ` · ${d.versions.length} versions`}</span>
+              </li>
+            ))}
+          </ul>
+        </Panel>
+      )}
       <Panel title="Outputs">
         {spec.outputs.length ? (
           <ul className="space-y-1.5 text-sm">
@@ -374,6 +396,70 @@ function Documents({ spec, hub }: { spec: Spec; hub: Hub }) {
           })}
         </ul>
       </Panel>
+    </div>
+  );
+}
+
+/** The loop-config "docs" of the phases this tab holds, and how each phase works when the tab has no phase banner. */
+function PhaseDocs({ spec, tab, open }: { spec: Spec; tab: Tab; open?: SpecDoc }) {
+  const hub = useHub();
+  const phases = PHASES.filter((p) => PHASE_TAB[p] === tab);
+  const docs = tab === 'design' ? [] : (spec.docs || []).filter((d) => phases.includes(d.phase));
+  const how = phases.filter((p) => p !== TAB_PHASE[tab]).map((p) => [p, phaseCommand(hub, p)] as const).filter(([, c]) => c);
+  if (!docs.length && !how.length) return null;
+  const label = TABS.find(([t]) => t === tab)?.[1];
+  return (
+    <div className="mb-6 flex flex-wrap items-center gap-2">
+      {docs.length > 0 && <span className="mr-1 text-xs font-medium text-ink-3">Phase documents</span>}
+      {docs.map((d) => (
+        <Link key={d.id} to={docTabRoute(spec.key, d.phase, d.id)} aria-current={open?.id === d.id ? 'page' : undefined}
+          className={cx('min-w-0 max-w-full rounded-md border border-l-[3px] border-l-brand px-3 py-1.5', open?.id === d.id ? 'border-ink bg-sunk' : 'border-line bg-paper hover:border-line-2')}>
+          <span className="block truncate text-sm font-medium">{d.title}</span>
+          <span className="block truncate text-[11px] text-ink-3">{PHASE_TITLE[d.phase]} · {d.version.replace(/\.(md|html?)$/i, '')}</span>
+        </Link>
+      ))}
+      {open && <Link to={`/work/${spec.key}/${tab}`} className="text-sm text-ink-2 underline decoration-line-2 underline-offset-4 hover:decoration-ink">Back to {label}</Link>}
+      <span className="ml-auto flex flex-wrap gap-x-4 gap-y-1">
+        {how.map(([p, c]) => <Link key={p} to={howRoute(c!)} className="text-sm text-ink-2 underline decoration-line-2 underline-offset-4 hover:decoration-ink">How the {PHASE_TITLE[p]} phase works</Link>)}
+      </span>
+    </div>
+  );
+}
+
+/** One phase document: markdown rendered here, HTML framed, an image folder as a gallery; every version one click away. */
+function PhaseDocView({ spec, doc, version }: { spec: Spec; doc: SpecDoc; version: string | null }) {
+  const v = doc.versions.find((x) => x.name === version) || { name: doc.version, file: doc.file || '' };
+  const html = /\.html?$/i.test(v.name);
+  return (
+    <div className="min-w-0">
+      <div className="mb-3 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <h2 className="text-lg font-semibold">{doc.title}</h2>
+        <span className="text-xs text-ink-3">{v.name}</span>
+        <code className="min-w-0 max-w-full truncate font-mono text-[11px] text-ink-3" title={doc.source}>{doc.source}</code>
+      </div>
+      {doc.versions.length > 1 && (
+        <nav aria-label="Versions" className="mb-5 flex flex-wrap gap-1.5">
+          {doc.versions.map((x) => (
+            <Link key={x.name} to={docTabRoute(spec.key, doc.phase, doc.id, x.name === doc.version ? undefined : x.name)} aria-current={x.name === v.name ? 'page' : undefined}
+              className={cx('max-w-full break-all rounded-full border px-2.5 py-0.5 text-xs', x.name === v.name ? 'border-ink bg-ink font-medium text-paper' : 'border-line-2 bg-paper text-ink-2 hover:text-ink')}>
+              {x.name.replace(/\.(md|html?)$/i, '')}
+            </Link>
+          ))}
+        </nav>
+      )}
+      {doc.kind === 'images' ? (
+        <ul className="grid grid-cols-2 gap-4 sm:grid-cols-[repeat(auto-fill,minmax(160px,1fr))]">
+          {doc.images.map((i) => (
+            <li key={i.name}>
+              <a href={i.file} target="_blank" rel="noopener" className="block">
+                <img src={i.file} alt={i.name} loading="lazy" className="block h-auto w-full rounded-md border border-line bg-sunk" />
+              </a>
+              <span className="mt-1 block break-all text-[11px] text-ink-3">{i.name}</span>
+            </li>
+          ))}
+        </ul>
+      ) : html ? <HtmlPage key={v.file} path={v.file} title={doc.title} />
+        : <MarkdownFile key={v.file} path={v.file} sectioned />}
     </div>
   );
 }
