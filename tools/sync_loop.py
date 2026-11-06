@@ -11,6 +11,8 @@ Writes, and never edits the workspace:
                                     the hub can show (intent, spec, plan, tasks, tests,
                                     review areas, feedback batches, other outputs)
   content/specs/<dir>/...           copies of those markdown files and outputs/findings.json
+                                    loop-config "docs" are listed in loop.json only: build.mjs mirrors
+                                    them into content/kb-src
 
 Status comes only from spec.py (status.json, tasks.md). This script adds nothing to it.
 Standard library only, Python 3.9+.
@@ -129,8 +131,53 @@ def spec_pages(cfg: dict, d: Path, name: str, dest: Path) -> list:
         (dest / "pages").mkdir(parents=True, exist_ok=True)
         shutil.copy2(src, dest / "pages" / f"{pid}.html")
         out.append({"id": pid, "title": p.get("title") or pid.replace("-", " ").capitalize(),
-                    "file": f"content/specs/{name}/pages/{pid}.html", "version": src.name,
+                    "file": f"content/specs/{name}/pages/{pid}.html", "version": src.name, "phase": p.get("phase"),
                     "source": raw.rstrip("/") + ("/" + src.name if not raw.endswith(".html") else "")})
+    return out
+
+
+VFILE = re.compile(r"^v(\d+)-(\d{4}-\d{2}-\d{2})(.*)\.(md|html?)$", re.I)
+IMG = (".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp")
+
+
+def repo_root() -> Path:
+    brand = json.loads((C / "brand.json").read_text(encoding="utf-8"))
+    return (HUB / (brand.get("repoRoot") or "../..")).resolve()
+
+
+def spec_docs(cfg: dict, name: str) -> list:
+    """loop-config "docs": markdown or HTML documents of the hub's own repo shown as tabs of a phase of a spec
+    and in its Documents bar. "src" is relative to the repo root (brand.json "repoRoot"): a file, or a folder
+    whose newest v<N>-<date>.md|html is shown with every other file listed as a version ("match", a regex on
+    the file name, narrows the folder); a folder with only images is a gallery. The hub reads the copies
+    build.mjs mirrors into content/kb-src, so links and images resolve like knowledge-base documents."""
+    repo, out = repo_root(), []
+    for e in (cfg.get("docs") or {}).get(name, []):
+        did, raw = e.get("id"), (e.get("src") or "").strip("/")
+        src = repo / raw
+        # test-data folders hold personal data and are never mirrored (build.mjs skips them too)
+        if not did or not raw or "test-data" in Path(raw).parts or not src.exists():
+            print(f"docs: {name} {did}: {raw} not found", file=sys.stderr)
+            continue
+        files = [src] if src.is_file() else [f for f in src.iterdir() if f.is_file() and f.suffix.lower() in (".md", ".html", ".htm") and f.name != "CLAUDE.md"]
+        if e.get("match"):
+            files = [f for f in files if re.search(e["match"], f.name)]
+        vers = sorted((f for f in files if VFILE.match(f.name)), reverse=True,
+                      key=lambda f: (int(VFILE.match(f.name)[1]), VFILE.match(f.name)[2], -len(f.name)))
+        index = [f for f in files if f.name.lower() in ("readme.md", "index.html")]
+        rest = sorted(f for f in files if f not in vers and f not in index)
+        exact = [f for f in vers if not VFILE.match(f.name)[3]]
+        main = (exact or vers or index or rest or [None])[0]
+        images = sorted(f for f in src.iterdir() if f.suffix.lower() in IMG) if src.is_dir() and not files else []
+        if not main and not images:
+            print(f"docs: {name} {did}: no document in {raw}", file=sys.stderr)
+            continue
+        kb = lambda f: {"name": f.name, "file": "content/kb-src/" + f.relative_to(repo).as_posix()}
+        out.append({"id": did, "title": e.get("title") or did.replace("-", " ").capitalize(), "phase": e.get("phase") or "intent",
+                    "kind": "images" if not main else ("html" if main.suffix.lower().startswith(".htm") else "md"),
+                    "source": raw, "file": kb(main)["file"] if main else None,
+                    "version": main.name if main else f"{len(images)} images",
+                    "versions": [kb(f) for f in vers + rest + index], "images": [kb(f) for f in images]})
     return out
 
 
@@ -226,7 +273,7 @@ def main() -> None:
                       "intake": r.get("intake", status.get("intake")), "approved": status.get("approved", r.get("approved")),
                       "tracker": status.get("tracker", r.get("tracker")), "sources": status.get("sources", []),
                       "repos": status.get("repos", []), "history": status.get("history", []),
-                      "pages": spec_pages(loop_cfg, d, name, dest)})
+                      "pages": spec_pages(loop_cfg, d, name, dest), "docs": spec_docs(loop_cfg, name)})
     figures = extract_figures()
     loop = {"generated": dt.date.today().isoformat(), "workspace": ws.name, "specs": specs, "figures": figures}
     (C / "data").mkdir(parents=True, exist_ok=True)

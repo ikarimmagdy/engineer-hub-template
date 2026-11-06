@@ -63,9 +63,10 @@
     return { agents: [...new Set(cmds.flatMap(c => c.agents))], tools: uniqTools.map(t => (ag.tools.find(x => x.id === 'tool:' + t) || {}).name || t) };
   }
   function renderLoop(arg) {
-    // #/loop/flow/<key> opens a walkthrough, #/loop/node/<id> selects a box (shareable links)
+    // #/loop/flow/<key> opens a walkthrough, #/loop/node/<id> selects a box, #/loop/cmd/<name> selects that command (shareable links)
     const [mode, ...rest] = String(arg || '').split('/');
     if (mode === 'flow') { AX.flow = rest[0]; AX.sel = null; AX.step = 0; } else if (mode === 'node') { AX.sel = rest.join('/'); AX.flow = null; }
+    else if (mode === 'cmd') { AX.sel = 'cmd:' + rest[0]; AX.flow = null; }
     const c = $('#content'), C = cfg(), S = specs(), ag = A();
     const byPhase = Object.fromEntries(phases().map(p => [p.key, S.filter(s => s.phase === p.key)]));
     const unused = ag ? ag.tools.filter(t => t.configured && !t.used) : [];
@@ -111,6 +112,11 @@
       </section>`;
     wireCopy(c);
     if (ag) drawArch();
+    if (ag && ['flow', 'node', 'cmd'].includes(mode)) requestAnimationFrame(() => { const x = $('#ax'), top = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--topbar-h')) || 0;
+      if (!x) return;
+      // the diagram's top, or the selected box when that would still be below the fold (phone)
+      const n = $('.ax-n.sel', x), y = r => r.getBoundingClientRect().top + window.scrollY - top - 12;
+      window.scrollTo(0, n && y(n) - y(x) > window.innerHeight * .6 ? y(n) - window.innerHeight * .25 : y(x)); });
     $$('[data-axgo]', c).forEach(b => b.onclick = () => { AX.flow = null; AX.sel = b.dataset.axgo; const x = $('#ax'); if (x) { x.scrollIntoView({ behavior: 'smooth', block: 'start' }); paint(archModel()); } });
   }
 
@@ -275,7 +281,9 @@
       deploy: [['release', 'Release notes', (s.outputs || []).includes('release-notes.md')]],
       maintain: [['runbook', 'Runbook', (s.outputs || []).includes('runbook.md')], ['history', 'History', (s.history || []).length]]
     };
-    return S[phase] || [];
+    // loop-config "docs" and "pages" with a phase are extra tabs of that phase
+    return (S[phase] || []).concat((s.docs || []).filter(d => d.phase === phase).map(d => ['doc:' + d.id, d.title, true]),
+      (s.pages || []).filter(p => p.phase === phase).map(p => ['page:' + p.id, p.title, true]));
   }
   async function renderSpec(arg) {
     const parts = String(arg || '').split('/');
@@ -309,11 +317,12 @@
       </section>
       <nav class="ws-phases">${phases().map((p, i) => { const st = phaseState(s, p.key);
         return `<a href="#/spec/${esc(s.dir)}/${p.key}" class="${p.key === phase ? 'on' : ''} st-${st.cls}"><span class="n">${i + 1}</span><span class="t">${esc(p.title)}</span><span class="s">${esc(st.label)}</span></a>`; }).join('')}</nav>
-      ${(s.pages || []).length ? `<nav class="ws-docbar" aria-label="Documents"><span class="ws-docbar__h">Documents</span>${s.pages.map(pg => `<a href="#/spec/${esc(s.dir)}/page/${esc(pg.id)}"><b>${esc(pg.title)}</b><span>${esc(pg.version || '')}</span></a>`).join('')}</nav>` : ''}
+      ${(s.pages || []).length || (s.docs || []).length ? `<nav class="ws-docbar" aria-label="Documents"><span class="ws-docbar__h">Documents</span>${(s.pages || []).map(pg => `<a href="#/spec/${esc(s.dir)}/page/${esc(pg.id)}"><b>${esc(pg.title)}</b><span>${pg.phase ? esc(phaseTitle(pg.phase)) + ' · ' : ''}${esc(pg.version || '')}</span></a>`).join('')}${(s.docs || []).map(d => `<a href="#/spec/${esc(s.dir)}/${esc(d.phase)}/doc:${esc(d.id)}" class="${sec === 'doc:' + d.id ? 'on' : ''}"><b>${esc(d.title)}</b><span>${esc(phaseTitle(d.phase))} · ${esc(d.version || '')}</span></a>`).join('')}</nav>` : ''}
       <div class="ws-body"><aside class="ws-side">${secs.map(([k, t, n, subs]) => `
           <a href="#/spec/${esc(s.dir)}/${phase}/${k}" class="${k === sec ? 'on' : ''} ${n ? '' : 'empty'}">${esc(t)}${typeof n === 'number' && n ? ` <span>${n}</span>` : ''}</a>
           ${k === sec && subs ? `<div class="ws-sub">${subs.map(a => `<a href="#/spec/${esc(s.dir)}/${phase}/${k}/${a}" class="${(item || 'scope') === a ? 'on' : ''} ${(s.review || []).includes(a) ? '' : 'empty'}">${esc(a === 'scope' ? 'Scope' : areaTitle(a))}</a>`).join('')}</div>` : ''}`).join('')}
           <p class="ws-gate"><b>Gate</b> ${esc((phases().find(p => p.key === phase) || {}).gate || '')}</p>
+          ${(() => { const c = String((phases().find(p => p.key === phase) || {}).command || '').split(/[,\s]+/)[0].replace('/', ''); return c ? `<a class="ws-how" href="#/loop/cmd/${esc(c)}">How this phase works</a>` : ''; })()}
           ${phaseState(s, phase).cls === 'review' && ['intent', 'spec', 'design'].includes(phase) ? `<div class="ws-approve"><b>Approve ${esc(phaseTitle(phase))}</b>
             <p>Read it here, then run in the workspace terminal:</p>
             ${copyBtn(`python3 tools/spec.py approve ${s.key} ${phase} --by "<your name>"`)}
@@ -359,6 +368,8 @@
       const h = (s.history || []).slice().reverse();
       m.innerHTML = h.length ? `<table class="lp-table"><thead><tr><th>Date</th><th>Event</th><th>Detail</th></tr></thead><tbody>${h.map(e => `<tr><td>${esc(e.date || '')}</td><td>${esc(e.event || '')}</td><td>${esc(Object.entries(e).filter(([k]) => !['date', 'event'].includes(k)).map(([k, v]) => `${k}: ${typeof v === 'object' ? JSON.stringify(v) : v}`).join(' · '))}</td></tr>`).join('')}</tbody></table>` : notYet('History', '');
     }
+    else if (sec.startsWith('doc:')) await docTab(s, (s.docs || []).find(d => 'doc:' + d.id === sec), item, m);
+    else if (sec.startsWith('page:')) { const pg = (s.pages || []).find(x => 'page:' + x.id === sec); areaDoc(s, pg, m); }
     else m.innerHTML = notYet(phaseTitle(phase), (phases().find(p => p.key === phase) || {}).command);
     wireCopy(m);
   }
@@ -372,13 +383,13 @@
   // mirrored back into the hub URL, so every view of the document has a shareable hub link
   // relative links inside a framed spec document point at its workspace folder, which the hub flattens:
   // resolve each one like a markdown link (another document's page, the workspace repo, or plain text)
-  function fixFrameLinks(f, s, pg) {
+  function fixFrameLinks(f, base) {
     try {
       const d = f.contentDocument, top = location.href.split('#')[0];
       $$('a[href]', d).forEach(a => {
         const h = a.getAttribute('href');
         if (!h || /^(#|[a-z][a-z0-9+.-]*:)/i.test(h)) return;
-        const r = H().hubLink(h, `content/specs/${s.dir}/${pg.source || ''}`);
+        const r = H().hubLink(h, base);
         if (r === undefined) return;
         if (r && r.route) { a.href = top + r.route; a.target = '_top'; }
         else if (r && r.url) { a.href = r.url; a.target = '_blank'; a.rel = 'noopener'; }
@@ -406,7 +417,7 @@
     window.addEventListener('hashchange', function off() { if (!/^#\/spec\/[^/]+\/page\//.test(location.hash)) { document.body.classList.remove('hub-docpage'); window.removeEventListener('hashchange', off); } });
     const keep = () => requestAnimationFrame(() => window.scrollTo(0, 0));
     f.addEventListener('load', () => {
-      themeFrame(f); keep(); fixFrameLinks(f, s, pg);
+      themeFrame(f); keep(); fixFrameLinks(f, `content/specs/${s.dir}/${pg.source || ''}`);
       try {
         const w = f.contentWindow;
         w.addEventListener('hashchange', () => {
@@ -416,6 +427,32 @@
         });
       } catch (_) {}
     });
+  }
+
+  /* ---------- a loop-config "pages" document on its phase tab, framed ---------- */
+  function areaDoc(s, pg, m) {
+    if (!pg) { m.innerHTML = '<div class="ws-empty"><b>Document not found.</b></div>'; return; }
+    m.innerHTML = `<div class="ws-areadoc"><div class="ws-areadoc__bar"><b>${esc(pg.title)}</b><span>${esc(pg.version || '')}</span><a href="#/spec/${esc(s.dir)}/page/${esc(pg.id)}">Open as a page</a></div>
+      <iframe class="ws-areadoc__frame" src="${esc(pg.file + '?v=' + encodeURIComponent(pg.version || ''))}" title="${esc(pg.title)}" loading="lazy"></iframe></div>`;
+    const af = $('.ws-areadoc__frame', m); af.addEventListener('load', () => { themeFrame(af); fixFrameLinks(af, `content/specs/${s.dir}/${pg.source || ''}`); });
+  }
+  /* ---------- #/spec/<dir>/<phase>/doc:<id>[/<version file>]: a loop-config "docs" document ----------
+     Markdown renders natively, HTML is framed, an image folder is a gallery; every version of the folder is one click away. */
+  async function docTab(s, d, item, m) {
+    if (!d) { m.innerHTML = '<div class="ws-empty"><b>Document not found.</b> Run the hub sync.</div>'; return; }
+    const vs = d.versions || [], v = vs.find(x => x.name === item) || { name: d.version, file: d.file };
+    const tab = `#/spec/${esc(s.dir)}/${esc(d.phase)}/doc:${esc(d.id)}`;
+    const imgs = d.images || [];
+    m.innerHTML = `<div class="ws-areadoc ws-doctab"><div class="ws-areadoc__bar"><b>${esc(d.title)}</b><span>${esc(v.name || '')}</span>
+        <code class="ws-doctab__src" title="${esc(d.source || '')}">${esc(d.source || '')}</code>${d.kind === 'html' ? `<a href="${esc(v.file)}" target="_blank" rel="noopener">Open full page</a>` : ''}</div>
+      ${vs.length > 1 ? `<nav class="ws-docvers" aria-label="Versions">${vs.map(x => `<a href="${tab}/${esc(x.name)}" class="${x.name === v.name ? 'on' : ''}">${esc(x.name.replace(/\.(md|html?)$/i, ''))}</a>`).join('')}</nav>` : ''}
+      ${d.kind === 'images' ? `<div class="ws-gallery">${imgs.map(i => `<figure><a href="${esc(i.file)}" target="_blank" rel="noopener"><img src="${esc(i.file)}" alt="${esc(i.name)}" loading="lazy"></a><figcaption>${esc(i.name)}</figcaption></figure>`).join('')}</div>`
+        : /\.html?$/i.test(v.name || '') ? `<iframe class="ws-areadoc__frame" src="${esc(v.file)}" title="${esc(d.title)}" loading="lazy"></iframe>` : '<div class="md" id="lpmd"></div>'}</div>`;
+    const af = $('.ws-areadoc__frame', m);
+    if (af) { af.addEventListener('load', () => { themeFrame(af); fixFrameLinks(af, v.file); }); return; }
+    if (d.kind === 'images') return;
+    try { H().renderMarkdown(await H().loadMD(v.file), $('#lpmd'), v.file); }
+    catch (_) { $('#lpmd').innerHTML = `<div class="callout warn">Missing <code>${esc(v.file)}</code>. Run the hub sync.</div>`; }
   }
 
   async function reviewArea(s, area, m, base) {
@@ -433,7 +470,7 @@
       <section class="ws-docpart first"><p class="ws-docsrc">From <a href="${esc(b.src)}" target="_blank" rel="noopener">${esc(b.title)}</a></p>
       <div class="ws-doc ${esc(b.scope)}">${b.figures.map(f => f.html).join('')}</div></section>`).join('')}
       ${blocks.length ? '<p class="ws-docsrc ws-docpart">Review of this area: findings, gaps and unknowns</p>' : ''}<div class="md" id="lpmd"></div>`;
-    const af = $('.ws-areadoc__frame', m); if (af) af.addEventListener('load', () => { themeFrame(af); fixFrameLinks(af, s, pg); });
+    const af = $('.ws-areadoc__frame', m); if (af) af.addEventListener('load', () => { themeFrame(af); fixFrameLinks(af, `content/specs/${s.dir}/${pg.source || ''}`); });
     H().renderMarkdown(await H().loadMD(base + 'review/' + area + '.md'), $('#lpmd'), base + 'review/' + area + '.md');
   }
 
@@ -562,5 +599,5 @@
 
   window.HUB_ROUTES = Object.assign(window.HUB_ROUTES || {}, { start: renderStart, loop: renderLoop, spec: renderSpec, findings: renderFindings });
   window.HUB_WIDE = (window.HUB_WIDE || []).concat(['loop', 'spec', 'findings']);
-  window.HUB_SEARCH = (window.HUB_SEARCH || []).concat([data => ((data.loop || {}).specs || []).map(s => ({ kind: 'Spec', title: `${s.key} ${s.title || ''}`, sub: `${s.phase || ''} ${(s.intake || {}).ref || ''}`, href: `#/spec/${s.dir}` })), data => ((data.loop || {}).specs || []).flatMap(s => (s.pages || []).map(pg => ({ kind: 'Document', title: `${s.key} ${pg.title}`, sub: pg.version || '', href: `#/spec/${s.dir}/page/${pg.id}` })))]);
+  window.HUB_SEARCH = (window.HUB_SEARCH || []).concat([data => ((data.loop || {}).specs || []).map(s => ({ kind: 'Spec', title: `${s.key} ${s.title || ''}`, sub: `${s.phase || ''} ${(s.intake || {}).ref || ''}`, href: `#/spec/${s.dir}` })), data => ((data.loop || {}).specs || []).flatMap(s => (s.pages || []).map(pg => ({ kind: 'Document', title: `${s.key} ${pg.title}`, sub: pg.version || '', href: `#/spec/${s.dir}/page/${pg.id}` }))), data => ((data.loop || {}).specs || []).flatMap(s => (s.docs || []).map(d => ({ kind: 'Document', title: `${s.key} ${d.title}`, sub: d.version || '', href: `#/spec/${s.dir}/${d.phase}/doc:${d.id}` })))]);
 })();

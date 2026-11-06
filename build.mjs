@@ -138,6 +138,18 @@ const VRE = /^v(\d+)-[\d-]+\.(html?|md|pdf)$/i;
 });
 kb.sort((a, b) => ((a.order || 0) - (b.order || 0)) || (a.group + a.title).localeCompare(b.group + b.title));
 
+/* ---- 1c. spec documents (loop-config "docs", listed in loop.json by tools/sync_loop.py) ----
+   mirrored too when they sit outside docsDir and kbRoots, so every one opens on its phase tab */
+{
+  const have = new Set(kbFiles);
+  ((readIf(join(D, 'loop.json')) || {}).specs || []).forEach(s => (s.docs || []).forEach(d => [...(d.versions || []), ...(d.images || [])].forEach(v => {
+    const rel = String(v.file || '').replace(/^content\/kb-src\//, '');
+    if (!rel || have.has(rel) || !existsSync(join(REPO, rel))) return;
+    mkdirSync(dirname(join(C, 'kb-src', rel)), { recursive: true }); copyFileSync(join(REPO, rel), join(C, 'kb-src', rel));
+    kbFiles.push(rel); have.add(rel);
+  })));
+}
+
 /* ---- 2. assemble manifest ---- */
 const nav = read(join(C, 'nav.json'));
 const overview = read(join(C, 'overview.json'));

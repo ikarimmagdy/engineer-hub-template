@@ -24,7 +24,7 @@ its own status: phase, approvals and tasks come only from `spec.py`.
 | Page | Route | Source |
 |---|---|---|
 | The loop: intakes (idea, tracker ticket, GitHub issue, PR), the phases with command, tools and gate, every spec by phase | `#/loop` | `content/data/loop-config.json` + `content/data/loop.json` |
-| One piece of work, fixed tabs: Overview, Intent, Code review (per area), Findings, Feedback, Spec, Design, Tasks, Tests, History | `#/spec/<dir>/<tab>` | the spec's files, copied by `tools/sync_loop.py` |
+| One piece of work, fixed tabs: Overview, Intent, Code review (per area), Findings, Feedback, Spec, Design, Tasks, Tests, History; each phase links to its command in the loop diagram (`#/loop/cmd/<name>`) | `#/spec/<dir>/<tab>` | the spec's files, copied by `tools/sync_loop.py` |
 | Findings across work, all or by review area (architecture, infra, APIs, data, localization, UI/UX, security, tests) | `#/findings/<area>` | each spec's `outputs/findings.json` |
 
 Set up: in `brand.json` add `"home": "loop"` and `"workspace": "<path to the workspace from this folder>"`;
@@ -89,7 +89,39 @@ sections into review areas. Declare them in `content/data/loop-config.json`:
   (`body` scrolls; sticky, not fixed, side menu). Inline SVG uses `viewBox` with `width:100%` and
   colours from the tokens or `currentColor`. Fonts: Poppins and JetBrains Mono (Google Fonts) or
   the system stack.
+- `"phase": "<phase key>"` on a page also makes it a tab of that phase, framed, with a link to
+  the full page.
 - The older `attachments` (sections of a document copied into a review area) still work.
+
+## Phase documents (`docs`)
+
+Documents that already exist in the hub's own repo (an initiative README with its updates log,
+a gap analysis, user stories, an implementation plan, a folder of design screenshots) become tabs
+of the phase they belong to, rendered with the hub's markdown renderer, and cards in the
+Documents bar. Declare them in `content/data/loop-config.json`:
+
+```json
+"docs": {
+  "<spec dir>": [
+    { "id": "overview", "title": "Initiative summary", "phase": "intent", "src": "engineering-hub/KEY-1/README.md" },
+    { "id": "gap-analysis", "title": "Gap analysis", "phase": "intent", "src": "engineering-hub/KEY-1/gap-analysis" },
+    { "id": "team-feedback", "title": "Team feedback", "phase": "intent", "src": "engineering-hub/KEY-1/gap-analysis", "match": "team-feedback" },
+    { "id": "designs", "title": "Figma designs", "phase": "design", "src": "engineering-hub/KEY-1/designs" }
+  ]
+}
+```
+
+- `src` is relative to the repo root (`brand.json` `repoRoot`): a `.md` or `.html` file, or a
+  folder. A folder shows its newest exact `v<N>-<YYYY-MM-DD>` file (else the newest `v<N>-…`
+  companion, else `README.md` / `index.html`), and lists every other file as a version, newest
+  first. `match` is a regex on file names that narrows the folder. A folder with only images is
+  a gallery. Paths under a `test-data` folder are refused (personal data).
+- `tools/sync_loop.py` lists them in `loop.json` (`docs`, with the version and every version
+  file); `build.mjs` mirrors any that sit outside `docsDir` and `kbRoots` into `content/kb-src`.
+- Route `#/spec/<dir>/<phase>/doc:<id>[/<version file>]`. Markdown renders natively; HTML is
+  framed and themed. Relative links and images resolve like knowledge-base documents, and a link
+  to any version of a phase document (from a spec tab or the knowledge base) opens that tab.
+- Each document is in search. The knowledge base still lists it.
 
 ## Use it in a project (5 minutes)
 

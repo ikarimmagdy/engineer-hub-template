@@ -478,8 +478,16 @@
     const files = new Set(DATA.kbFiles || []);
     if (rel.startsWith('content/kb-src/')) {
       let p = rel.slice('content/kb-src/'.length).replace(/\/$/, '');
+      for (const s of ((DATA.loop || {}).specs || [])) { const d = (s.docs || []).find(x => x.source === p); if (d) return { route: `#/spec/${s.dir}/${d.phase}/doc:${d.id}` }; }
       if (!files.has(p)) p = [p + '/README.md', p + '/index.html'].find(x => files.has(x)) || '';
       if (!p) return null;
+      // a document a spec shows on a phase tab (loop-config "docs") opens there; a version index opens the current version
+      for (const s of ((DATA.loop || {}).specs || [])) {
+        const d = (s.docs || []).find(x => (x.versions || []).some(v => v.file === 'content/kb-src/' + p));
+        if (!d) continue;
+        const n = p.split('/').pop();
+        return { route: `#/spec/${s.dir}/${d.phase}/doc:${d.id}` + (n === d.version || /^(readme\.md|index\.html)$/i.test(n) ? '' : '/' + n) };
+      }
       return /\.(md|html?|pdf)$/i.test(p) ? { route: '#/doc/' + p } : { url: 'content/kb-src/' + p };
     }
     const sm = rel.match(/^content\/specs\/([^/]+)\/(.*)$/);
