@@ -9,6 +9,7 @@ const NAV: [string, string][] = [
   ['/work', 'Work'],
   ['/questions', 'Questions'],
   ['/quality', 'Quality'],
+  ['/system', 'System'],
   ['/environments', 'Environments'],
   ['/knowledge', 'Knowledge'],
   ['/learn', 'Learning'],
@@ -94,7 +95,7 @@ export function Shell({ children, onSignOut }: { children: ReactNode; onSignOut:
       </header>
       <main id="main" className="mx-auto max-w-[1320px] px-4 pb-24 pt-6 md:px-6 md:pt-8">{children}</main>
       <footer className="mx-auto max-w-[1320px] px-4 pb-8 text-xs text-ink-3 md:px-6">
-        {brand.name} · content generated {manifest.meta.generated} · template {manifest.meta.template} · front-end 5.0 preview
+        {brand.name} · content generated {manifest.meta.generated} · template {manifest.meta.template}
       </footer>
       <Palette open={palette} onClose={() => setPalette(false)} />
     </div>

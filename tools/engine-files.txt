@@ -1,20 +1,21 @@
 # Engine files: hub-update.sh replaces exactly these in a hub, nothing else.
 # Never listed: content/ (brand.json, data, docs), assets/img/, README.md, .gitignore,
 # project deploy scripts (deploy-*.sh). Keep this list in the template only.
+# A line ending in / is a folder, replaced whole. Files a release removes: tools/engine-retired.txt.
+# index.html and assets/app/ are the v5 front-end, built from web/ (cd web && npm run build).
 index.html
-assets/js/hub.js
-assets/js/loop.js
-assets/js/comments.js
-assets/css/hub.css
+assets/app/
 assets/css/mockup-kit.css
 build.mjs
 sync.sh
 tools/dispatch.py
 tools/sync_loop.py
 tools/sync_agentic.py
+tools/sync_system.py
 tools/hub-update.sh
 tools/hub-migrate.mjs
 tools/engine-files.txt
+tools/engine-retired.txt
 ci/engineer-hub.yml
 backend/comments/README.md
 backend/comments/handler.mjs

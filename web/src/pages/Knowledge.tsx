@@ -7,13 +7,11 @@ import { MarkdownFile } from '../components/Markdown';
 import { AgenticGraph, phaseWiring, SdlcOverview, useModel, type GraphState } from '../components/Sdlc';
 import { CopyButton, cx, Empty, fmtDate, PageHeader, Panel, Pill } from '../components/ui';
 
-const V4 = import.meta.env.VITE_V4_URL as string | undefined;
-
 function target(item: NavItem, hub: Hub): { to?: string; href?: string } {
   if (/^https?:/.test(item.route)) return { href: item.route };
   const mapped = legacyRoute(item.route.replace(/^#/, ''), hub);
   if (mapped && mapped !== '/knowledge/archive') return { to: mapped };
-  return V4 ? { href: `${V4}${item.route}` } : {};
+  return {};
 }
 
 function NavCard({ item, hub, note }: { item: NavItem; hub: Hub; note?: string }) {
@@ -27,7 +25,7 @@ function NavCard({ item, hub, note }: { item: NavItem; hub: Hub; note?: string }
   const cls = 'block rounded-lg border border-line bg-paper px-4 py-3 hover:border-line-2';
   if (t.to) return <Link to={t.to} className={cls}>{body}</Link>;
   if (t.href) return <a href={t.href} target="_blank" rel="noopener" className={cls}>{body}</a>;
-  return <div className={cx(cls, 'opacity-60')}>{body}<div className="text-xs text-ink-3">Only in the v4 hub</div></div>;
+  return <div className={cx(cls, 'opacity-60')}>{body}<div className="text-xs text-ink-3">Retired with the v4 hub</div></div>;
 }
 
 export function Knowledge() {
@@ -44,6 +42,14 @@ export function Knowledge() {
   return (
     <div>
       <PageHeader title="Knowledge" lede="How the team works, the architecture and platform, every decision, and the library of documents behind the hub." />
+      {hub.system && (
+        <Link to="/system" className="mb-3 block rounded-lg border border-ink bg-paper px-4 py-4 hover:bg-sunk">
+          <div className="font-semibold">System</div>
+          <div className="mt-1 text-xs text-ink-2">
+            The architecture, communication matrix, infrastructure, screens and use cases, built up by every work item: {hub.system.components.length} components, {hub.system.flows.length} flows, {hub.system.works.length} work items recorded
+          </div>
+        </Link>
+      )}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Link to="/knowledge/how-we-work" className="rounded-lg border border-ink bg-paper px-4 py-4 hover:bg-sunk">
           <div className="font-semibold">How we work</div><div className="mt-1 text-xs text-ink-2">The delivery loop, its gates, and how to start a work item</div>

@@ -41,7 +41,7 @@ function counts(spec: Spec): Partial<Record<Tab, number>> {
 }
 
 const SIDE: [Tab, string][] = [['overview', 'Overview']];
-const AFTER: [Tab, string][] = [['documents', 'Documents'], ['activity', 'Activity']];
+const AFTER: [Tab, string][] = [['impact', 'Impact'], ['documents', 'Documents'], ['activity', 'Activity']];
 
 export function PhaseNav({ spec }: { spec: Spec }) {
   const c = counts(spec);
@@ -56,7 +56,7 @@ export function PhaseNav({ spec }: { spec: Spec }) {
   );
   return (
     <nav aria-label="Phases and views" className="relative -mx-4 mt-6 overflow-x-auto px-4 pb-1 md:mx-0 md:px-0">
-      <div className="flex min-w-[980px] items-stretch gap-2">
+      <div className="flex min-w-[1060px] items-stretch gap-2">
         {SIDE.map(([t, l]) => side(t, l))}
         <ol className="grid flex-1 grid-cols-7 overflow-hidden rounded-lg border border-line">
           {PHASES.map((p) => {

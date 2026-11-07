@@ -19,6 +19,7 @@ if node -e "process.exit(JSON.parse(require('fs').readFileSync('content/brand.js
   echo "==> reading the workspace (specs, findings, commands, agents, hooks)"
   python3 tools/sync_loop.py
   python3 tools/sync_agentic.py
+  python3 tools/sync_system.py
 fi
 echo "==> building hub (manifest, docs, code traceability)"
 node build.mjs

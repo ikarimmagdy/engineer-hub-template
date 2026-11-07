@@ -50,7 +50,13 @@ echo "==> hub: $HUB (engine ${OLD:-pre-v3} -> $VER $SHA)"
 FILES=$(grep -v '^\s*#' "$SRC/tools/engine-files.txt" | sed '/^\s*$/d')
 if [ "$DRY" = 1 ]; then
   for f in $FILES; do
-    if [ ! -f "$HUB/$f" ]; then echo "  add     $f"; elif ! cmp -s "$SRC/$f" "$HUB/$f"; then echo "  update  $f"; fi
+    case "$f" in
+      */) if [ ! -d "$HUB/$f" ]; then echo "  add     $f"; elif ! diff -rq "$SRC/$f" "$HUB/$f" >/dev/null; then echo "  update  $f"; fi ;;
+      *) if [ ! -f "$HUB/$f" ]; then echo "  add     $f"; elif ! cmp -s "$SRC/$f" "$HUB/$f"; then echo "  update  $f"; fi ;;
+    esac
+  done
+  [ -f "$SRC/tools/engine-retired.txt" ] && for f in $(grep -v '^\s*#' "$SRC/tools/engine-retired.txt" | sed '/^\s*$/d'); do
+    [ -e "$HUB/$f" ] && echo "  retire  $f"
   done
   echo "==> dry run: nothing changed"; exit 0
 fi
@@ -59,9 +65,17 @@ echo "==> migrating content (adds missing brand.json keys only)"
 node "$SRC/tools/hub-migrate.mjs" "$HUB"
 
 for f in $FILES; do
-  mkdir -p "$HUB/$(dirname "$f")"
-  cp "$SRC/$f" "$HUB/$f"
+  case "$f" in
+    */) rm -rf "${HUB:?}/$f"; mkdir -p "$HUB/$f"; cp -R "$SRC/$f." "$HUB/$f" ;;
+    *) mkdir -p "$HUB/$(dirname "$f")"; cp "$SRC/$f" "$HUB/$f" ;;
+  esac
 done
+# files and folders earlier engines installed and this one no longer has (5.0.0: the v4 front-end)
+if [ -f "$SRC/tools/engine-retired.txt" ]; then
+  for f in $(grep -v '^\s*#' "$SRC/tools/engine-retired.txt" | sed '/^\s*$/d'); do
+    if [ -e "$HUB/$f" ]; then rm -rf "${HUB:?}/$f"; echo "  retired $f"; fi
+  done
+fi
 chmod +x "$HUB/sync.sh" "$HUB/tools/hub-update.sh" 2>/dev/null || true
 echo "$VER $SHA $(date +%Y-%m-%d)" > "$HUB/content/.template-version"
 echo "==> engine files replaced ($(echo "$FILES" | wc -l | tr -d ' ')), version recorded in content/.template-version"

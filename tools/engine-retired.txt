@@ -1,0 +1,7 @@
+# Retired engine files: hub-update.sh deletes these from a hub when they are present.
+# 5.0.0: the v4 front-end (one page, hub.js + loop.js) is replaced by the v5 app in index.html + assets/app/.
+assets/js/hub.js
+assets/js/loop.js
+assets/js/comments.js
+assets/css/hub.css
+web/

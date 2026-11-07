@@ -7,6 +7,7 @@ export const TABS = [
   ['tasks', 'Tasks'],
   ['tests', 'Tests'],
   ['findings', 'Findings'],
+  ['impact', 'Impact'],
   ['documents', 'Documents'],
   ['activity', 'Activity'],
 ] as const;

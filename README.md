@@ -1,19 +1,37 @@
-# Engineering Hub, template (v4)
+# Engineering Hub, template (v5)
 
 One engine, many hubs: the engine files come from this repo and are updated in place with
 `tools/hub-update.sh`; each project keeps only its content (`content/`, `assets/img/`).
 Never edit engine files inside a hub; fix them here, tag a release, and update the hubs.
 
-A reusable, branded internal engineering portal. Drop it into any project to give the
-team one place for: an overview, **learning paths** (courses in sequence), a roadmap task-board, per-feature dossiers (product,
-BRD, PRD, UX/mockup, technical, status, security/perf, tests), architecture,
-infrastructure, CI/CD, observability, an ADR log, a gaps/quality board, security,
-performance, a GTM / production-readiness board, and a knowledge base that links every
-local doc in the repo.
+## v5 (5.0.0): one web app, the v4 page retired
 
-It is a static site (HTML, CSS, one JS file) whose **content is data**: markdown +
-JSON under `content/`. No framework, no build server. A small `build.mjs` assembles a
-manifest and copies your repo docs in so they are viewable in the hub.
+The hub is a React app (source in `web/`, built with `cd web && npm ci && npm run build`, which
+places `index.html` and `assets/app/` at the template root). It reads the same `content/`
+contract as v4: `brand.json`, `manifest.json` (from `node build.mjs`), `data/loop.json`
+(`tools/sync_loop.py`), `data/system.json` (`tools/sync_system.py`), the spec copies under
+`content/specs/`, sections and the library. v4 hash links (`#/loop`, `#/spec/...`, section ids)
+redirect to their v5 pages. `hub-update.sh` removes the v4 files listed in `tools/engine-retired.txt`.
+
+Views: Home, Work (board and table, one page per work item with the phases as tabs and an
+Impact tab), Quality, **System**, Environments, Knowledge.
+
+### System: the picture every work item adds to
+
+Each spec in the workspace records what it changes in `outputs/impact.json` (components, flows,
+infrastructure, screens, use cases, decisions, and where in the code). The workspace's
+`tools/impact.py json` merges them over `repos.yaml` and `docs/architecture/baseline.json`;
+`tools/sync_system.py` writes the result to `content/data/system.json`. The hub shows:
+
+- on a work item, the Impact tab: its part of the system map coloured by change, its
+  communication-matrix rows, infrastructure, screens, use cases and the files and branches it touches;
+- under System (`#/system`): the whole map by layer, the communication matrix, infrastructure,
+  screens, use cases, and how the system grew, work item by work item. Click any component for
+  what it talks to and every change made to it.
+
+Local preview against a hub: `cd web && HUB_DIR=<hub folder> npx vite` (port 8906).
+
+The v4 notes below still describe the content contract and `build.mjs`.
 
 ## v4: the agentic engineering loop as the front door
 
