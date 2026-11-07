@@ -41,6 +41,5 @@ export default defineConfig({
   plugins: [react(), tailwindcss(), hubContent(), hubDataApi(HUB_DIR)],
   server: { host: '127.0.0.1', port: PORT, strictPort: true },
   preview: { host: '127.0.0.1', port: PORT, strictPort: true },
-  // assets/app/ keeps the bundle apart from a hub's assets/img/; place.mjs puts index.html and assets/app/ at the hub root
-  build: { outDir: 'dist', assetsDir: 'assets/app', emptyOutDir: true, chunkSizeWarningLimit: 900 },
+  build: { outDir: 'dist', emptyOutDir: true, chunkSizeWarningLimit: 900 },
 });

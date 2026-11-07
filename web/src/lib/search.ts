@@ -2,10 +2,11 @@ import MiniSearch from 'minisearch';
 import type { Hub } from './data';
 import { TABS, ENV_PAGES, docTabRoute, howRoute } from './routes';
 import { courseRoute, learningOf, lessonRoute } from './learning';
+import { releaseRoute, releasesOf } from './releases';
 
 export interface Hit {
   id: string;
-  group: 'Work' | 'Commands' | 'Pages' | 'Decisions' | 'Library' | 'Learning';
+  group: 'Work' | 'Commands' | 'Pages' | 'Decisions' | 'Library' | 'Learning' | 'Releases';
   title: string;
   hint?: string;
   to?: string;
@@ -41,14 +42,6 @@ export function buildIndex(hub: Hub) {
       docs.push({ id: `sp:${s.key}:${p.id}`, group: 'Pages', title: `${p.title}`, hint: s.key, to: `/work/${s.key}/design?doc=page:${p.id}` });
     }
   }
-  if (hub.system) {
-    const sys = hub.system;
-    [['/system', 'System map'], ['/system/matrix', 'Communication matrix, whole system'], ['/system/infra', 'Infrastructure, whole system'],
-      ['/system/screens', 'Screens, whole system'], ['/system/use-cases', 'Use cases'], ['/system/timeline', 'How the system grew']]
-      .forEach(([to, title]) => docs.push({ id: `sys:${to}`, group: 'Pages', title, to }));
-    for (const c of sys.components) docs.push({ id: `sc:c:${c.id}`, group: 'Pages', title: c.name, hint: `component · ${c.layer}`, to: `/system?c=${encodeURIComponent(c.id)}` });
-    for (const w of sys.works) docs.push({ id: `w:${w.key}:impact`, group: 'Work', title: `${w.key} · Impact`, hint: w.title, to: `/work/${w.key}/impact` });
-  }
   for (const c of hub.manifest.agentic?.commands || []) {
     docs.push({ id: `h:${c.name}`, group: 'Pages', title: `How ${c.name} works`, hint: c.description, to: howRoute(c.name.slice(1)) });
   }
@@ -64,6 +57,14 @@ export function buildIndex(hub: Hub) {
       for (const x of c.lessons) {
         docs.push({ id: `ll:${c.id}/${x.id}`, group: 'Learning', title: x.title, hint: `${c.code || c.title} ${(x.objectives || []).join(' ')}`, to: lessonRoute(c.id, x.id) });
       }
+    }
+  }
+  const releases = releasesOf(hub);
+  if (releases.length) {
+    docs.push({ id: 'p:/releases', group: 'Pages', title: 'Releases', to: '/releases' });
+    docs.push({ id: 'p:/releases/live', group: 'Pages', title: 'Releases · Live now', to: '/releases/live' });
+    for (const r of releases) {
+      docs.push({ id: `r:${r.id}`, group: 'Releases', title: `${r.id} ${r.title || ''}`, hint: [r.env, r.date, ...(r.tickets || [])].filter(Boolean).join(' '), to: releaseRoute(r.id) });
     }
   }
   for (const a of hub.manifest.adrs) {

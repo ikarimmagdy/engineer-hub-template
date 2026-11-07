@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { PHASES, PHASE_TITLE, useHub, type Spec } from '../lib/data';
 import { taskTotal } from '../lib/attention';
+import { releaseRoute, releasesFor } from '../lib/releases';
 import { Empty, fmtDate, Meter, PageHeader, Pill, Segmented, Select } from '../components/ui';
 
 type View = 'board' | 'table';
@@ -53,6 +54,8 @@ export function Work() {
 }
 
 function Card({ s }: { s: Spec }) {
+  const hub = useHub();
+  const rel = releasesFor(hub, s.key)[0];
   const crit = s.findings?.bySeverity.critical || 0;
   const gate = (['intent', 'spec', 'design'] as const).find((g) => g === s.phase && !s.approved?.[g]);
   return (
@@ -65,6 +68,7 @@ function Card({ s }: { s: Spec }) {
           <div className="mt-1 text-[11px] tabular-nums text-ink-3">{s.criteria_passing}/{s.criteria} criteria</div>
         </div>
       )}
+      {rel && <div className="mt-2 truncate text-[11px] text-ink-3" title={rel.title}>Shipped in <span className="font-mono">{rel.id}</span></div>}
       {(gate || s.tasks.blocked > 0 || crit > 0) && (
         <div className="mt-2 flex flex-wrap gap-1.5">
           {gate && <Pill tone="wait">needs approval</Pill>}
@@ -105,6 +109,7 @@ const COLS: [SortKey, string, boolean][] = [
 ];
 
 function Table({ specs, sort, onSort }: { specs: Spec[]; sort: SortKey; onSort: (s: SortKey) => void }) {
+  const hub = useHub();
   const val = (s: Spec, k: SortKey): string | number => ({
     key: s.key, phase: PHASES.indexOf(s.phase), tasks: s.tasks.done / (taskTotal(s) || 1), criteria: s.criteria_passing / (s.criteria || 1),
     findings: s.findings?.open || 0, critical: s.findings?.bySeverity.critical || 0, updated: s.updated,
@@ -126,6 +131,7 @@ function Table({ specs, sort, onSort }: { specs: Spec[]; sort: SortKey; onSort: 
                 </button>
               </th>
             ))}
+            <th scope="col" className="px-3 py-2 text-left font-semibold">Last release</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-line">
@@ -142,6 +148,7 @@ function Table({ specs, sort, onSort }: { specs: Spec[]; sort: SortKey; onSort: 
               <td className="px-3 py-2 text-right tabular-nums">{s.findings?.open ?? '–'}</td>
               <td className={`px-3 py-2 text-right tabular-nums ${s.findings?.bySeverity.critical ? 'font-semibold text-sev-critical' : 'text-ink-3'}`}>{s.findings?.bySeverity.critical || 0}</td>
               <td className="px-3 py-2 text-right text-ink-3">{fmtDate(s.updated)}</td>
+              <td className="px-3 py-2">{(() => { const r = releasesFor(hub, s.key)[0]; return r ? <Link to={releaseRoute(r.id)} className="font-mono text-[11.5px] underline" title={r.title}>{r.id}</Link> : <span className="text-ink-3">–</span>; })()}</td>
             </tr>
           ))}
         </tbody>

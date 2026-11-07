@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { NavLink, useLocation } from 'react-router';
 import { useHub } from '../lib/data';
+import { releasesOf } from '../lib/releases';
 import { Palette } from './Palette';
 import { cx, Logo } from './ui';
 
@@ -9,10 +10,10 @@ const NAV: [string, string][] = [
   ['/work', 'Work'],
   ['/questions', 'Questions'],
   ['/quality', 'Quality'],
-  ['/system', 'System'],
   ['/environments', 'Environments'],
   ['/knowledge', 'Knowledge'],
   ['/learn', 'Learning'],
+  ['/releases', 'Releases'],
 ];
 
 function useTheme() {
@@ -28,8 +29,11 @@ function useTheme() {
 }
 
 export function Shell({ children, onSignOut }: { children: ReactNode; onSignOut: () => void }) {
-  const { brand, manifest } = useHub();
+  const hub = useHub();
+  const { brand, manifest } = hub;
   const hasLearning = !!manifest.learning?.courses?.length;
+  const hasReleases = releasesOf(hub).length > 0;
+  const shown = NAV.filter(([to]) => (to !== '/learn' || hasLearning) && (to !== '/releases' || hasReleases));
   const [palette, setPalette] = useState(false);
   const [menu, setMenu] = useState(false);
   const toggleTheme = useTheme();
@@ -68,10 +72,10 @@ export function Shell({ children, onSignOut }: { children: ReactNode; onSignOut:
             <Logo brand={brand} className="h-6 w-auto" />
             <span className="hidden text-sm font-semibold sm:inline">Engineering Hub</span>
           </NavLink>
-          <nav aria-label="Main" className="hidden items-center gap-0.5 md:flex">{NAV.filter(([to]) => to !== '/learn' || hasLearning).map(([to, l]) => link(to, l))}</nav>
+          <nav aria-label="Main" className="hidden items-center gap-0.5 md:flex">{shown.map(([to, l]) => link(to, l))}</nav>
           <div className="ml-auto flex items-center gap-2">
             <button type="button" onClick={() => setPalette(true)}
-              className="flex h-8 items-center gap-2 whitespace-nowrap rounded-md border border-line bg-sunk px-2.5 text-sm text-ink-3 hover:border-line-2 md:w-72">
+              className="flex h-8 items-center gap-2 whitespace-nowrap rounded-md border border-line bg-sunk px-2.5 text-sm text-ink-3 hover:border-line-2 md:w-44 2xl:w-72">
               <svg aria-hidden viewBox="0 0 20 20" className="size-4 shrink-0"><circle cx="9" cy="9" r="6" fill="none" stroke="currentColor" strokeWidth="1.6" /><path d="m14 14 4 4" stroke="currentColor" strokeWidth="1.6" /></svg>
               <span className="hidden md:inline">Search work and commands</span>
               <kbd className="ml-auto hidden rounded border border-line-2 px-1 font-mono text-[11px] md:inline">⌘K</kbd>
@@ -88,14 +92,14 @@ export function Shell({ children, onSignOut }: { children: ReactNode; onSignOut:
         </div>
         {menu && (
           <nav id="mobile-nav" aria-label="Main" className="flex flex-col gap-1 border-t border-line px-4 py-2 md:hidden">
-            {NAV.filter(([to]) => to !== '/learn' || hasLearning).map(([to, l]) => link(to, l))}
+            {shown.map(([to, l]) => link(to, l))}
             <button type="button" onClick={onSignOut} className="rounded-md px-2.5 py-1.5 text-left text-sm text-ink-2">Sign out</button>
           </nav>
         )}
       </header>
       <main id="main" className="mx-auto max-w-[1320px] px-4 pb-24 pt-6 md:px-6 md:pt-8">{children}</main>
       <footer className="mx-auto max-w-[1320px] px-4 pb-8 text-xs text-ink-3 md:px-6">
-        {brand.name} · content generated {manifest.meta.generated} · template {manifest.meta.template}
+        {brand.name} · content generated {manifest.meta.generated} · template {manifest.meta.template} · front-end 5.0 preview
       </footer>
       <Palette open={palette} onClose={() => setPalette(false)} />
     </div>

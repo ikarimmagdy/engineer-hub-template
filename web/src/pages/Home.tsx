@@ -1,6 +1,7 @@
 import { Link } from 'react-router';
 import { PHASE_TITLE, useHub, usePoll, type TestLatest } from '../lib/data';
 import { attention, taskTotal, type AttentionKind } from '../lib/attention';
+import { LatestRelease } from './Releases';
 import { Empty, fmtDate, fmtDateTime, KeyLink, Meter, Panel, Pill, type Tone } from '../components/ui';
 
 const TONE: Record<AttentionKind, Tone> = { gate: 'wait', blocked: 'block', critical: 'critical', ready: 'ok', failing: 'block' };
@@ -30,6 +31,8 @@ export function Home() {
         </div>
         <Link to="/work" className="text-sm font-medium underline decoration-line-2 underline-offset-4 hover:decoration-ink">All work</Link>
       </header>
+
+      <LatestRelease />
 
       {running.length > 0 && (
         <div className="flex flex-wrap items-center gap-3 rounded-lg border border-run/40 bg-paper px-4 py-3 text-sm">

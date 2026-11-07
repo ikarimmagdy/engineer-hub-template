@@ -4,7 +4,7 @@ import { useHub } from '../lib/data';
 import { buildIndex, type Hit } from '../lib/search';
 import { cx } from './ui';
 
-const GROUPS: Hit['group'][] = ['Work', 'Commands', 'Pages', 'Learning', 'Decisions', 'Library'];
+const GROUPS: Hit['group'][] = ['Work', 'Commands', 'Pages', 'Releases', 'Learning', 'Decisions', 'Library'];
 
 export function Palette({ open, onClose }: { open: boolean; onClose: () => void }) {
   const hub = useHub();

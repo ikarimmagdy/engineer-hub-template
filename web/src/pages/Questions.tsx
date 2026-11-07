@@ -1,6 +1,8 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router';
 import { useHub } from '../lib/data';
+import { releaseRoute, releasesFor } from '../lib/releases';
+import { WorkReleases } from './Releases';
 import {
   gapsMentioning, isOpen, linkage, PRIORITIES, resolveTarget, uniq, useQa, writeData,
   type QaData, type Question, type Target, type WorkLink,
@@ -86,6 +88,7 @@ function QuestionList({ data, reload }: { data: QaData; reload: () => void }) {
         {data.writable && <button type="button" onClick={() => setAdding((a) => !a)} className="ml-auto rounded-md bg-ink px-3 py-1.5 text-sm font-medium text-paper">{adding ? 'Close' : 'New question'}</button>}
       </div>
       {adding && <NewQuestion data={data} onDone={() => { setAdding(false); reload(); }} />}
+      {work && <WorkReleases ids={[work]} title={`Releases that shipped ${work}`} />}
       {rows.length === 0
         ? <Empty action={<button type="button" className="underline" onClick={() => setParams({}, { replace: true })}>Clear filters</button>}>No questions match these filters.</Empty>
         : <ul className="space-y-2">{rows.map((q) => <QuestionRow key={q.id} q={q} data={data} reload={reload} />)}</ul>}
@@ -163,6 +166,7 @@ function TargetLine({ t, data, reload }: { t: Target; data: QaData; reload: () =
       <span className="flex flex-wrap items-center gap-2">
         {t.spec ? <Link to={`/work/${t.spec}/overview`} className="font-mono text-[11.5px] underline">{f.fid || f.id}</Link> : <span className="font-mono text-[11.5px]">{f.fid || f.id}</span>}
         <span>{f.title}</span>
+        <ReleaseChip ids={[f.fid, f.id]} />
         {data.writable && data.stages.length ? (
           <select aria-label={`Stage of ${f.fid || f.id}`} value={f.lifecycle || ''} className="rounded-md border border-line-2 bg-paper px-1.5 py-0.5 text-xs"
             onChange={(e) => save(writeData('features.json', { op: 'update', id: f.id, set: { lifecycle: e.target.value } }))}>
@@ -174,7 +178,7 @@ function TargetLine({ t, data, reload }: { t: Target; data: QaData; reload: () =
       </span>
     );
   }
-  if (t.kind === 'work') return <span className="flex gap-2"><Link to={`/work/${t.spec}/overview`} className="font-mono text-[11.5px] underline">{t.spec}</Link><span>work item</span></span>;
+  if (t.kind === 'work') return <span className="flex flex-wrap items-center gap-2"><Link to={`/work/${t.spec}/overview`} className="font-mono text-[11.5px] underline">{t.spec}</Link><span>work item</span><ReleaseChip ids={[t.spec]} /></span>;
   if (t.kind === 'gap') return <GapLine t={t} data={data} reload={reload} />;
   return <span className="font-mono text-[11.5px] text-ink-3">{t.id}</span>;
 }
@@ -401,4 +405,12 @@ export function WorkQuestions({ workId }: { workId: string }) {
       </div>
     </Panel>
   );
+}
+
+/** The newest release that shipped this work, as a small link. */
+function ReleaseChip({ ids }: { ids: (string | undefined)[] }) {
+  const hub = useHub();
+  const r = releasesFor(hub, ...ids)[0];
+  if (!r) return null;
+  return <Link to={releaseRoute(r.id)} className="rounded-full border border-line-2 px-2 py-px font-mono text-[11px] text-ink-3 hover:text-ink" title={r.title}>{r.id}</Link>;
 }

@@ -1,8 +1,9 @@
-import { Navigate, useParams } from 'react-router';
+import { Link, Navigate, useParams } from 'react-router';
 import { isLocal, useHub } from '../lib/data';
 import { ENV_PAGES } from '../lib/routes';
 import { MarkdownFile } from '../components/Markdown';
 import { Empty, PageHeader, TabBar } from '../components/ui';
+import { LatestRelease } from './Releases';
 
 export function Environments() {
   const { page } = useParams();
@@ -16,6 +17,7 @@ export function Environments() {
   return (
     <div>
       <PageHeader title="Environments" lede="Where the stack runs, the accounts and test data for each environment, and the tools the team signs in to." />
+      <div className="mb-4 space-y-2"><LatestRelease /><Link to="/releases/live" className="text-xs underline">What runs in each environment now</Link></div>
       <TabBar label="Environments" className="mb-6" tabs={tabs.map(([id, t]) => ({ to: `/environments/${id}`, label: t }))} />
       {page === 'local' ? (
         <div>

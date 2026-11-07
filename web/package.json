@@ -1,11 +1,11 @@
 {
   "name": "engineer-hub-web",
   "private": true,
-  "version": "5.0.0",
+  "version": "5.0.0-alpha.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build && node place.mjs",
+    "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit"
   },

@@ -13,9 +13,9 @@ import {
 } from '../components/ui';
 import { TestsTab, LatestRun } from './Tests';
 import { Requirements } from './Requirements';
-import { ImpactCard, WorkImpact } from './System';
 import { PhaseBanner, PhaseNav, TAB_PHASE } from '../components/PhaseNav';
 import { WorkQuestions } from './Questions';
+import { WorkReleases } from './Releases';
 
 export function WorkItem() {
   const { key, tab = 'overview' } = useParams();
@@ -61,7 +61,6 @@ export function WorkItem() {
             {tab === 'tasks' && <Tasks spec={spec} />}
             {tab === 'tests' && <TestsTab spec={spec} />}
             {tab === 'findings' && <Findings spec={spec} />}
-            {tab === 'impact' && <WorkImpact spec={spec} />}
             {tab === 'documents' && <Documents spec={spec} hub={hub} />}
             {tab === 'activity' && <Activity spec={spec} />}
           </>
@@ -108,8 +107,9 @@ function Overview({ spec }: { spec: Spec }) {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-        <div className="space-y-6">
+        <div className="min-w-0 space-y-6">
           <WorkQuestions workId={spec.key} />
+          <WorkReleases ids={[spec.key]} />
           <Panel title="Blocked" action={blocked.length > 0 && <Link to={`/work/${spec.key}/tasks?status=blocked`} className="text-xs underline">All tasks</Link>}>
             {tasksMd.loading ? <Skeleton /> : blocked.length ? <TaskList rows={blocked.slice(0, 6)} more={blocked.length - 6} spec={spec} /> : <p className="text-sm text-ink-3">Nothing is blocked.</p>}
           </Panel>
@@ -119,8 +119,7 @@ function Overview({ spec }: { spec: Spec }) {
             </Panel>
           )}
         </div>
-        <div className="space-y-6">
-          <ImpactCard spec={spec} />
+        <div className="min-w-0 space-y-6">
           <LatestRun spec={spec} />
           {f && (
             <Panel title="Findings by area" action={<Link to={`/work/${spec.key}/findings`} className="text-xs underline">All findings</Link>}>
