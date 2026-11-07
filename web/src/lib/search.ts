@@ -1,10 +1,11 @@
 import MiniSearch from 'minisearch';
 import type { Hub } from './data';
 import { TABS, ENV_PAGES, docTabRoute, howRoute } from './routes';
+import { courseRoute, learningOf, lessonRoute } from './learning';
 
 export interface Hit {
   id: string;
-  group: 'Work' | 'Commands' | 'Pages' | 'Decisions' | 'Library';
+  group: 'Work' | 'Commands' | 'Pages' | 'Decisions' | 'Library' | 'Learning';
   title: string;
   hint?: string;
   to?: string;
@@ -46,6 +47,16 @@ export function buildIndex(hub: Hub) {
   for (const sec of hub.manifest.sections) {
     if (/^(spec-|te-|test-executions-|delivery-loop)/.test(sec.id)) continue;
     docs.push({ id: `s:${sec.id}`, group: 'Pages', title: sec.title, hint: sec.eyebrow, to: `/section/${sec.id}` });
+  }
+  const learning = learningOf(hub);
+  if (learning) {
+    docs.push({ id: 'p:/learn', group: 'Pages', title: learning.title || 'Learning paths', to: '/learn' });
+    for (const c of learning.courses) {
+      docs.push({ id: `lc:${c.id}`, group: 'Learning', title: `${c.code ? `${c.code} ` : ''}${c.title}`, hint: c.goal, to: courseRoute(c.id) });
+      for (const x of c.lessons) {
+        docs.push({ id: `ll:${c.id}/${x.id}`, group: 'Learning', title: x.title, hint: `${c.code || c.title} ${(x.objectives || []).join(' ')}`, to: lessonRoute(c.id, x.id) });
+      }
+    }
   }
   for (const a of hub.manifest.adrs) {
     docs.push({ id: `a:${a.id}`, group: 'Decisions', title: `${a.id} ${a.title}`, hint: a.status, to: `/knowledge/decisions/${a.id}` });

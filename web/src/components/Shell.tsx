@@ -11,6 +11,7 @@ const NAV: [string, string][] = [
   ['/quality', 'Quality'],
   ['/environments', 'Environments'],
   ['/knowledge', 'Knowledge'],
+  ['/learn', 'Learning'],
 ];
 
 function useTheme() {
@@ -27,6 +28,7 @@ function useTheme() {
 
 export function Shell({ children, onSignOut }: { children: ReactNode; onSignOut: () => void }) {
   const { brand, manifest } = useHub();
+  const hasLearning = !!manifest.learning?.courses?.length;
   const [palette, setPalette] = useState(false);
   const [menu, setMenu] = useState(false);
   const toggleTheme = useTheme();
@@ -65,7 +67,7 @@ export function Shell({ children, onSignOut }: { children: ReactNode; onSignOut:
             <Logo brand={brand} className="h-6 w-auto" />
             <span className="hidden text-sm font-semibold sm:inline">Engineering Hub</span>
           </NavLink>
-          <nav aria-label="Main" className="hidden items-center gap-0.5 md:flex">{NAV.map(([to, l]) => link(to, l))}</nav>
+          <nav aria-label="Main" className="hidden items-center gap-0.5 md:flex">{NAV.filter(([to]) => to !== '/learn' || hasLearning).map(([to, l]) => link(to, l))}</nav>
           <div className="ml-auto flex items-center gap-2">
             <button type="button" onClick={() => setPalette(true)}
               className="flex h-8 items-center gap-2 whitespace-nowrap rounded-md border border-line bg-sunk px-2.5 text-sm text-ink-3 hover:border-line-2 md:w-72">
@@ -85,7 +87,7 @@ export function Shell({ children, onSignOut }: { children: ReactNode; onSignOut:
         </div>
         {menu && (
           <nav id="mobile-nav" aria-label="Main" className="flex flex-col gap-1 border-t border-line px-4 py-2 md:hidden">
-            {NAV.map(([to, l]) => link(to, l))}
+            {NAV.filter(([to]) => to !== '/learn' || hasLearning).map(([to, l]) => link(to, l))}
             <button type="button" onClick={onSignOut} className="rounded-md px-2.5 py-1.5 text-left text-sm text-ink-2">Sign out</button>
           </nav>
         )}

@@ -85,8 +85,10 @@ export function legacyRoute(path: string, hub: Hub): string | null {
   if (ENV_PAGES.some(([id]) => id === head)) return `/environments/${head}`;
   if (head === 'adr') return seg[1] ? `/knowledge/decisions/${seg[1]}` : '/knowledge/decisions';
   if (head === 'kb') return '/knowledge/library';
+  if (head === 'course' && seg[1]) return `/learn/${encodeURIComponent(seg[1])}`;
+  if (head === 'lesson' && seg[1]) return `/learn/${seg.slice(1, 3).map(encodeURIComponent).join('/')}`;
   if (head === 'doc' || head === '' ) return null;
-  if (['work', 'quality', 'environments', 'knowledge', 'section'].includes(head)) return null;
+  if (['work', 'quality', 'environments', 'knowledge', 'section', 'learn'].includes(head)) return null;
   if (hub.manifest.sections.some((s) => s.id === head)) return `/section/${head}${query ? `?${query}` : ''}`;
   return '/knowledge/archive';
 }

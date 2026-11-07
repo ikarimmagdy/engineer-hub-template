@@ -121,6 +121,7 @@ export interface Manifest {
   kb: KbEntry[];
   loopConfig: LoopConfig;
   agentic?: Agentic;
+  learning?: import('./learning').Learning;
 }
 
 export interface Finding {
