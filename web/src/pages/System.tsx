@@ -115,7 +115,7 @@ function MatrixLens({ sys, work }: { sys: SystemModel; work: string }) {
 
 function Timeline({ sys }: { sys: SystemModel }) {
   const { loop } = useHub();
-  const works = [...sys.works].sort((a, b) => b.updated.localeCompare(a.updated));
+  const works = [...sys.works].sort((a, b) => (b.started || b.updated).localeCompare(a.started || a.updated));
   return (
     <ol className="relative space-y-4 border-l border-line-2 pl-6">
       {works.map((w) => {
@@ -126,7 +126,7 @@ function Timeline({ sys }: { sys: SystemModel }) {
             <span className="absolute -left-[31px] top-1.5 size-2.5 rounded-full border-2 border-paper bg-ink" />
             <div className="rounded-lg border border-line bg-paper px-4 py-3">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="text-xs text-ink-3">{fmtDate(w.updated)}</span>
+                <span className="text-xs text-ink-3" title={`impact recorded ${w.updated}`}>started {fmtDate(w.started || w.updated)}</span>
                 <Link to={`/work/${w.key}/impact`} className="font-mono text-[12px] font-medium hover:underline">{w.key}</Link>
                 <span className="font-medium">{w.title}</span>
                 {spec && <Pill>{PHASE_TITLE[spec.phase as Phase] || spec.phase}</Pill>}

@@ -10,7 +10,7 @@ export interface Flow { id: string; from: string; to: string; protocol: string; 
 export interface Infra { id: string; kind: string; name: string; component: string; env: string[]; changes: ChangeRec[] }
 export interface Screen { id: string; name: string; app: string; platforms: string[]; image: string | null; changes: ChangeRec[] }
 export interface UseCase { id: string; key: string; name: string; actor?: string; change: Change; summary?: string; reqs?: string[]; components?: string[]; date: string }
-export interface Work { key: string; dir: string; title: string; phase: string; updated: string; summary: string; decisions: string[]; counts: Record<string, number> }
+export interface Work { key: string; dir: string; title: string; phase: string; started?: string; updated: string; summary: string; decisions: string[]; counts: Record<string, number> }
 export interface SystemModel {
   generated: string;
   layers: Layer[];

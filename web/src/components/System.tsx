@@ -6,6 +6,7 @@ import {
 } from '../lib/system';
 import { cx, Dot, Empty, fmtDate, Pill } from './ui';
 
+const CAP = 8;
 const W = 1200, LABEL = 168, BW = 160, BH = 50, GX = 12, GY = 12, PAD = 16;
 const PER_ROW = Math.floor((W - LABEL - PAD + GX) / (BW + GX));
 
@@ -274,11 +275,14 @@ export function UseCaseList({ sys, items, showKey }: { sys: SystemModel; items: 
 
 /** What one component talks to, its infrastructure and screens, and every change made to it by work item. */
 export function ComponentDetail({ sys, id, onClose, focus }: { sys: SystemModel; id: string; onClose: () => void; focus?: string }) {
+  const [all, setAll] = useState(false);
   const c = sys.components.find((x) => x.id === id);
   if (!c) return null;
-  const out = sys.flows.filter((f) => f.from === id);
-  const inn = sys.flows.filter((f) => f.to === id);
-  const infra = sys.infra.filter((x) => x.component === id);
+  // with a work item in focus, its part first; long lists stop at CAP until "Show all"
+  const first = <T extends { changes: ChangeRec[] }>(xs: T[]) => (focus ? [...xs].sort((a, b) => +b.changes.some((x) => x.key === focus) - +a.changes.some((x) => x.key === focus)) : xs);
+  const cap = <T,>(xs: T[]) => (all ? xs : xs.slice(0, CAP));
+  const flows = first([...sys.flows.filter((f) => f.from === id), ...sys.flows.filter((f) => f.to === id)]);
+  const infra = first(sys.infra.filter((x) => x.component === id));
   const screens = sys.screens.filter((s) => s.app === id);
   const layer = sys.layers.find((l) => l.id === c.layer)?.name || c.layer;
   const row = (f: Flow, other: string, dir: string) => (
@@ -299,31 +303,35 @@ export function ComponentDetail({ sys, id, onClose, focus }: { sys: SystemModel;
       </header>
       <div className="space-y-4 px-4 py-3 text-sm">
         {c.summary && <p className="text-ink-2">{c.summary}</p>}
-        <Block title={`Talks to (${out.length + inn.length})`}>
-          {out.length + inn.length ? <ul className="divide-y divide-line">{out.map((f) => row(f, f.to, '→'))}{inn.map((f) => row(f, f.from, '←'))}</ul> : <p className="text-ink-3">No flows recorded.</p>}
+        <Block title={`Talks to (${flows.length})`}>
+          {flows.length ? <ul className="divide-y divide-line">{cap(flows).map((f) => (f.from === id ? row(f, f.to, '→') : row(f, f.from, '←')))}</ul> : <p className="text-ink-3">No flows recorded.</p>}
         </Block>
         {infra.length > 0 && (
           <Block title={`Infrastructure (${infra.length})`}>
-            <ul className="space-y-1">{infra.map((x) => <li key={x.id} className="flex flex-wrap items-baseline justify-between gap-2"><span className="min-w-0 break-all"><span className="text-xs text-ink-3">{x.kind}</span> <span className="font-mono text-[12px]">{x.name}</span></span><ChangedBy el={x} current={focus} /></li>)}</ul>
+            <ul className="space-y-1">{cap(infra).map((x) => <li key={x.id} className="flex flex-wrap items-baseline justify-between gap-2"><span className="min-w-0 break-all"><span className="text-xs text-ink-3">{x.kind}</span> <span className="font-mono text-[12px]">{x.name}</span></span><ChangedBy el={x} current={focus} /></li>)}</ul>
           </Block>
         )}
         {screens.length > 0 && <Block title={`Screens (${screens.length})`}><p className="text-ink-2">{screens.map((s) => s.name).join(' · ')}</p></Block>}
         <Block title={`History (${c.changes.length})`}>
           {c.changes.length ? (
             <ol className="space-y-2.5">
-              {[...c.changes].reverse().map((ch, i) => (
+              {cap([...c.changes].reverse()).map((ch, i) => (
                 <li key={i} className="border-l-2 pl-3" style={{ borderColor: CHANGE_COLOR[ch.change] }}>
                   <div className="flex flex-wrap items-center gap-2 text-xs">
                     <Link to={`/work/${ch.key}/impact`} className="font-mono font-medium hover:underline">{ch.key}</Link>
                     <span className="text-ink-3">{CHANGE_LABEL[ch.change]} · {fmtDate(ch.date)}</span>
                   </div>
                   {ch.summary && <p className="mt-0.5 text-ink-2">{ch.summary}</p>}
-                  <WhereList where={ch.where} />
+                  <WhereList where={all ? ch.where : ch.where?.slice(0, 3)} />
+                  {!all && (ch.where?.length || 0) > 3 && <div className="text-[11px] text-ink-3">+{ch.where!.length - 3} more files</div>}
                 </li>
               ))}
             </ol>
           ) : <p className="text-ink-3">No work item has changed it yet.</p>}
         </Block>
+        {Math.max(flows.length, infra.length, c.changes.length) > CAP && (
+          <button type="button" onClick={() => setAll(!all)} className="text-xs text-ink-2 underline decoration-line-2 underline-offset-4 hover:decoration-ink">{all ? 'Show less' : 'Show all'}</button>
+        )}
       </div>
     </aside>
   );
