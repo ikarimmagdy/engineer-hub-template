@@ -1,6 +1,7 @@
 import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
+import { hubDataApi } from './hub-data-api';
 import { createReadStream, statSync } from 'node:fs';
 import { extname, join, normalize, resolve } from 'node:path';
 
@@ -37,7 +38,7 @@ function hubContent(): Plugin {
 
 export default defineConfig({
   base: './',
-  plugins: [react(), tailwindcss(), hubContent()],
+  plugins: [react(), tailwindcss(), hubContent(), hubDataApi(HUB_DIR)],
   server: { host: '127.0.0.1', port: PORT, strictPort: true },
   preview: { host: '127.0.0.1', port: PORT, strictPort: true },
   build: { outDir: 'dist', emptyOutDir: true, chunkSizeWarningLimit: 900 },

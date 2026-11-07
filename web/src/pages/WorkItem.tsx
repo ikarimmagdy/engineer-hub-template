@@ -14,6 +14,7 @@ import {
 import { TestsTab, LatestRun } from './Tests';
 import { Requirements } from './Requirements';
 import { PhaseBanner, PhaseNav, TAB_PHASE } from '../components/PhaseNav';
+import { WorkQuestions } from './Questions';
 
 export function WorkItem() {
   const { key, tab = 'overview' } = useParams();
@@ -106,6 +107,7 @@ function Overview({ spec }: { spec: Spec }) {
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
         <div className="space-y-6">
+          <WorkQuestions workId={spec.key} />
           <Panel title="Blocked" action={blocked.length > 0 && <Link to={`/work/${spec.key}/tasks?status=blocked`} className="text-xs underline">All tasks</Link>}>
             {tasksMd.loading ? <Skeleton /> : blocked.length ? <TaskList rows={blocked.slice(0, 6)} more={blocked.length - 6} spec={spec} /> : <p className="text-sm text-ink-3">Nothing is blocked.</p>}
           </Panel>

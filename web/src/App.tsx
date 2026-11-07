@@ -12,6 +12,7 @@ import { Quality } from './pages/Quality';
 import { Environments } from './pages/Environments';
 import { Knowledge } from './pages/Knowledge';
 import { Doc, SectionPage } from './pages/Doc';
+import { Questions } from './pages/Questions';
 
 function Legacy() {
   const hub = useHub();
@@ -51,6 +52,7 @@ export function App() {
             <Route path="/quality/:view?" element={<Quality />} />
             <Route path="/environments/:page?" element={<Environments />} />
             <Route path="/knowledge/:page?/:id?/:sub?" element={<Knowledge />} />
+            <Route path="/questions/:view?" element={<Questions />} />
             <Route path="/doc/*" element={<Doc />} />
             <Route path="/section/:id" element={<SectionPage />} />
             <Route path="*" element={<Legacy />} />

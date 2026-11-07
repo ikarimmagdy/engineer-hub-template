@@ -7,6 +7,7 @@ import { cx, Logo } from './ui';
 const NAV: [string, string][] = [
   ['/', 'Home'],
   ['/work', 'Work'],
+  ['/questions', 'Questions'],
   ['/quality', 'Quality'],
   ['/environments', 'Environments'],
   ['/knowledge', 'Knowledge'],
