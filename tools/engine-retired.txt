@@ -5,3 +5,6 @@ assets/js/loop.js
 assets/js/comments.js
 assets/css/hub.css
 web/
+# 5.0.1: the comments widget went with v4; its AWS backend and config were never wired to the v5 app.
+backend/comments/
+content/comments-config.json

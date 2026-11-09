@@ -73,7 +73,7 @@ done
 # files and folders earlier engines installed and this one no longer has (5.0.0: the v4 front-end)
 if [ -f "$SRC/tools/engine-retired.txt" ]; then
   for f in $(grep -v '^\s*#' "$SRC/tools/engine-retired.txt" | sed '/^\s*$/d'); do
-    if [ -e "$HUB/$f" ]; then rm -rf "${HUB:?}/$f"; echo "  retired $f"; fi
+    if [ -e "$HUB/$f" ]; then rm -rf "${HUB:?}/$f"; rmdir -p "$(dirname "$HUB/$f")" 2>/dev/null || true; echo "  retired $f"; fi
   done
 fi
 chmod +x "$HUB/sync.sh" "$HUB/tools/hub-update.sh" 2>/dev/null || true
