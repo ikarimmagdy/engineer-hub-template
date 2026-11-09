@@ -13,6 +13,7 @@ import {
 } from '../components/ui';
 import { TestsTab, LatestRun } from './Tests';
 import { Requirements } from './Requirements';
+import { ImpactCard, WorkImpact } from './System';
 import { PhaseBanner, PhaseNav, TAB_PHASE } from '../components/PhaseNav';
 import { WorkQuestions } from './Questions';
 import { WorkReleases } from './Releases';
@@ -61,6 +62,7 @@ export function WorkItem() {
             {tab === 'tasks' && <Tasks spec={spec} />}
             {tab === 'tests' && <TestsTab spec={spec} />}
             {tab === 'findings' && <Findings spec={spec} />}
+            {tab === 'impact' && <WorkImpact spec={spec} />}
             {tab === 'documents' && <Documents spec={spec} hub={hub} />}
             {tab === 'activity' && <Activity spec={spec} />}
           </>
@@ -120,6 +122,7 @@ function Overview({ spec }: { spec: Spec }) {
           )}
         </div>
         <div className="min-w-0 space-y-6">
+          <ImpactCard spec={spec} />
           <LatestRun spec={spec} />
           {f && (
             <Panel title="Findings by area" action={<Link to={`/work/${spec.key}/findings`} className="text-xs underline">All findings</Link>}>

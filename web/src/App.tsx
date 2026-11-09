@@ -14,6 +14,7 @@ import { Knowledge } from './pages/Knowledge';
 import { Doc, SectionPage } from './pages/Doc';
 import { Questions } from './pages/Questions';
 import { Learning } from './pages/Learning';
+import { SystemPage } from './pages/System';
 import { Releases } from './pages/Releases';
 
 function Legacy() {
@@ -53,6 +54,7 @@ export function App() {
             <Route path="/work/:key/:tab?" element={<WorkItem />} />
             <Route path="/quality/:view?" element={<Quality />} />
             <Route path="/environments/:page?" element={<Environments />} />
+            <Route path="/system/:lens?" element={<SystemPage />} />
             <Route path="/knowledge/:page?/:id?/:sub?" element={<Knowledge />} />
             <Route path="/questions/:view?" element={<Questions />} />
             <Route path="/learn/:course?/:lesson?" element={<Learning />} />

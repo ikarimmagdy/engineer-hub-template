@@ -30,7 +30,7 @@ HUB="$(cd "${HUB:-.}" && pwd)"
 [ -f "$HUB/content/brand.json" ] || { echo "Not a hub folder (no content/brand.json): $HUB" >&2; exit 1; }
 
 TMP=""
-cleanup() { [ -n "$TMP" ] && rm -rf "$TMP"; }
+cleanup() { [ -z "$TMP" ] || rm -rf "$TMP"; }
 trap cleanup EXIT
 if [ -n "${HUB_TEMPLATE_DIR:-}" ]; then
   SRC="$(cd "$HUB_TEMPLATE_DIR" && pwd)"
