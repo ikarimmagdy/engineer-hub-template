@@ -117,3 +117,5 @@ body { font-family: var(--font-sans); font-size: 14.5px; line-height: 1.55; -web
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; animation: none !important; }
 }
+
+@keyframes dash { to { stroke-dashoffset: -20; } }

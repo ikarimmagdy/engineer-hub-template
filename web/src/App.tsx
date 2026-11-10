@@ -18,6 +18,7 @@ import { SystemPage } from './pages/System';
 import { Releases } from './pages/Releases';
 import { Architecture } from './pages/Architecture';
 import { Agents } from './pages/Agents';
+import { AgentWidget } from './pages/AgentStudio';
 
 function Legacy() {
   const hub = useHub();
@@ -49,8 +50,9 @@ export function App() {
   return (
     <HubContext.Provider value={hub}>
       <HashRouter>
-        <Shell onSignOut={signOut}>
-          <Routes>
+        <Routes>
+          <Route path="/embed/:name" element={<AgentWidget />} />
+          <Route path="*" element={<Shell onSignOut={signOut}><Routes>
             <Route path="/" element={<Home />} />
             <Route path="/work" element={<Work />} />
             <Route path="/work/:key/:tab?" element={<WorkItem />} />
@@ -66,8 +68,8 @@ export function App() {
             <Route path="/doc/*" element={<Doc />} />
             <Route path="/section/:id" element={<SectionPage />} />
             <Route path="*" element={<Legacy />} />
-          </Routes>
-        </Shell>
+          </Routes></Shell>} />
+        </Routes>
       </HashRouter>
     </HubContext.Provider>
   );

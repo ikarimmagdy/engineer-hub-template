@@ -23,15 +23,19 @@ const RUN_LIMIT_MS = 10 * 60 * 1000;
 const DENY_READ = ['**/.env', '**/.env.*', '**/*.pem', '**/*.key', '**/*.p12', '**/*.pfx', '**/*.jks', '**/credentials*', '**/secrets/**',
   '**/test-data/**', '**/local-env/backups/**', '**/*.bak'];
 // No shell: Claude Code auto-approves read-only commands such as cat, which would get past the Read
-// deny rules. Recent git history goes into the prompt instead (history()).
+// deny rules. Recent git history goes into the prompt instead (history()). The read tools are not
+// pre-approved: Claude Code allows them inside the working and added directories only, so a read
+// anywhere else on the laptop is refused (and shown on the run as blocked).
 const TOOLS = ['Read', 'Grep', 'Glob'];
 
 interface RunRec { ts: string; event: 'start' | 'end'; id: string; agent: string; description: string; key: string | null; source: string; ok?: boolean }
-interface Step { tool: string; target: string; at: string }
+interface Step { tool: string; target: string; at: string; path?: string }
+/** What a run can reach, stated by the server so the hub never guesses: code, docs, edits, and the systems it cannot touch. */
+interface Reach { repos: string[]; docs: boolean; edits: string | null; shell: false; mcp: string[]; databases: false; clusters: false; network: false }
 interface Live {
   id: string; agent: string; module?: string; key: string | null; question: string; state: 'running' | 'done' | 'failed';
   started: string; ended?: string; text: string; steps: Step[]; error?: string; cost?: number;
-  mode?: string; repo?: string; worktree?: string; branch?: string; base?: string; diffStat?: string; diff?: string;
+  mode?: string; repo?: string; worktree?: string; branch?: string; base?: string; diffStat?: string; diff?: string; reach?: Reach;
 }
 
 const live = new Map<string, Live>();
@@ -169,10 +173,12 @@ const MODE_RULES: Record<string, string> = {
     'Finish with: what you changed and why (path:line), how to verify it, and what else must change outside this repo.', ...COMMON]),
 };
 
-function teamPrompt(a: TeamAgent, mode: string, brand: string, focus: string | undefined, key: string | null) {
+function teamPrompt(a: TeamAgent, mode: string, brand: string, focus: string | undefined, key: string | null, repos: string[]) {
   return `${a.prompt}\n\nYou are running from the ${brand} Engineering Hub in ${mode} mode`
     + `${focus ? `, focused on the ${focus} repository` : ''}${key ? `, for work item ${key} (specs/${key}-*/ has its intent, spec and design)` : ''}. `
-    + `Repositories in your scope are added directories (code/<name>/ in the workspace); the workspace documents are under docs/ and the work items under specs/. `
+    + (mode === 'propose' ? `The current directory is the worktree of ${focus}; the workspace documents and work items are added directories. `
+      : `Your repositories are cloned at ${repos.map((r) => `code/${r}/`).join(', ') || '(none cloned)'}. code/ is gitignored, so a search of the workspace root skips them: `
+      + `always pass one of these paths to Grep and Glob. The workspace documents are under docs/ and the work items under specs/. `)
     + `You have no shell here: the recent commits are listed below, and builds and tests are left to the engineer (say which to run).\n\nRules:\n${MODE_RULES[mode]}`;
 }
 
@@ -207,6 +213,16 @@ function history(ws: string, repos: string[]) {
   return out.length ? `\n\nRecent commits (last 60 days, newest first):\n${out.join('\n\n')}` : '';
 }
 
+/** Where a tool call looked, relative to the workspace (code/<repo>/..., docs/, specs/) or worktree/ for a propose run. '' is the whole working directory. */
+function where(input: any, cwd: string, ws: string, worktree: boolean): string {
+  const p = String(input?.file_path || input?.path || '');
+  const abs = !p ? cwd : p.startsWith('/') ? p : join(cwd, p);
+  if (worktree && (abs === cwd || abs.startsWith(cwd + '/'))) return `worktree/${abs.slice(cwd.length + 1)}`;
+  if (abs === ws) return '';
+  if (abs === ws || abs.startsWith(ws + '/')) return abs.slice(ws.length + 1);
+  return abs;
+}
+
 function target(input: any, base: string): string {
   return String(input?.file_path || input?.pattern || input?.path || input?.command || '').split(base + '/').join('').slice(0, 160);
 }
@@ -229,7 +245,7 @@ function launch(hubDir: string, ws: string, body: any): Live {
   } else if (body.agent !== 'team') throw new Error('agent must be oncall, module or team');
 
   const id = randomUUID();
-  let tools = TOOLS, dirs: string[] = [], mode: string | undefined, repo: string | undefined, wt: string | undefined, branch: string | undefined, base: string | undefined;
+  let tools: string[] = [], dirs: string[] = [], mode: string | undefined, repo: string | undefined, wt: string | undefined, branch: string | undefined, base: string | undefined;
   if (body.agent === 'team') {
     const a = teamAgents(ws).find((x) => x.name === body.name);
     if (!a) throw new Error(`no team agent ${body.name} in .claude/agents/`);
@@ -251,13 +267,13 @@ function launch(hubDir: string, ws: string, body: any): Live {
       const add = run('git', ['worktree', 'add', '-b', branch, wt, 'HEAD'], src);
       if (add.code !== 0) throw new Error(`could not create a worktree of ${repo}: ${add.out}`);
       cwd = wt;
-      tools = [...TOOLS, 'Edit(./**)'];
+      tools = ['Edit(./**)'];
       dirs = ['docs', 'specs'].map((d) => join(ws, d));
     } else {
       cwd = ws;
       dirs = [...(repo ? [repo] : []), ...cloned.filter((r) => r !== repo)].map((r) => join(ws, 'code', r));
     }
-    system = teamPrompt(a, mode, brand, repo, key) + history(ws, repo ? [repo] : cloned);
+    system = teamPrompt(a, mode, brand, repo, key, repo ? [repo, ...cloned.filter((r) => r !== repo)] : cloned) + history(ws, repo ? [repo] : cloned);
   } else if (agent !== 'oncall') dirs = [join(ws, 'docs')];
   // code/ is gitignored in the workspace, so search tools skip it unless each clone is its own added directory
   else dirs = mods.filter((m) => existsSync(join(ws, 'code', m.id))).map((m) => join(ws, 'code', m.id));
@@ -268,9 +284,12 @@ function launch(hubDir: string, ws: string, body: any): Live {
   const settings = JSON.stringify({ permissions: { deny } });
   const args = ['-p', question, '--output-format', 'stream-json', '--verbose', '--no-session-persistence', '--strict-mcp-config',
     '--settings', settings, '--setting-sources', 'project', '--append-system-prompt', system,
-    '--tools', ...TOOLS, ...(mode === 'propose' ? ['Edit', 'Write'] : []), '--allowedTools', ...tools];
+    '--tools', ...TOOLS, ...(mode === 'propose' ? ['Edit', 'Write'] : []), ...(tools.length ? ['--allowedTools', ...tools] : [])];
   for (const d of dirs) args.push('--add-dir', d);
-  const r: Live = { id, agent, module, key, question, state: 'running', started: new Date().toISOString(), text: '', steps: [], mode, repo, worktree: wt, branch, base };
+  const reach: Reach = { repos: wt && repo ? [repo] : dirs.filter((d) => d.startsWith(join(ws, 'code') + '/')).map((d) => d.slice(join(ws, 'code').length + 1)),
+    docs: true, edits: wt ? `${repo} worktree on ${branch}` : null, shell: false, mcp: [], databases: false, clusters: false, network: false };
+  if (module) reach.repos = [module];
+  const r: Live = { id, agent, module, key, question, state: 'running', started: new Date().toISOString(), text: '', steps: [], mode, repo, worktree: wt, branch, base, reach };
   live.set(r.id, r);
   logRun(ws, { ts: r.started, event: 'start', id: r.id, agent, description: question.slice(0, 200), key, source: 'hub' });
   const child = spawn('claude', args, { cwd, stdio: ['ignore', 'pipe', 'pipe'] });
@@ -287,12 +306,13 @@ function launch(hubDir: string, ws: string, body: any): Live {
       if (ev.type === 'assistant') {
         for (const b of ev.message?.content || []) {
           const at = new Date().toISOString();
-          if (b.type === 'tool_use') r.steps.push({ tool: b.name, target: target(b.input, cwd), at });
+          if (b.type === 'tool_use') r.steps.push({ tool: b.name, target: target(b.input, cwd), at, path: where(b.input, cwd, ws, !!wt) });
           else if (b.type === 'text' && String(b.text || '').trim()) r.steps.push({ tool: 'note', target: String(b.text).trim().split('\n')[0].slice(0, 200), at });
         }
       } else if (ev.type === 'result') {
         r.text = String(ev.result || r.text);
         r.cost = ev.total_cost_usd;
+        for (const d of ev.permission_denials || []) r.steps.push({ tool: 'blocked', target: `${d.tool_name} ${target(d.tool_input, cwd)}`, at: new Date().toISOString(), path: where(d.tool_input, cwd, ws, !!wt) });
         if (ev.is_error) r.error = r.text || 'the agent reported an error';
       }
     }

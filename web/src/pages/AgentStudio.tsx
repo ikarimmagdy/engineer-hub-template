@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { useSearchParams } from 'react-router';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useParams, useSearchParams } from 'react-router';
 import { useHub } from '../lib/data';
 import { createAgent, since, startAgent, teamAgents, useLive, useLoopApi, useRuns, type TeamAgent } from '../lib/loop';
 import { RunView, useRun } from '../components/RunView';
@@ -57,6 +57,7 @@ export function TeamAgents() {
       <div className="min-w-0 space-y-6">
         <AgentCard a={sel} />
         <Launcher key={sel.name} a={sel} api={!!api?.agents} />
+        <Expose a={sel} local={!!api?.agents} />
       </div>
     </div>
   );
@@ -90,15 +91,23 @@ function Launcher({ a, api }: { a: TeamAgent; api: boolean }) {
   const [repo, setRepo] = useState('');
   const [key, setKey] = useState('');
   const [question, setQuestion] = useState('');
-  const [ids, setIds] = useState<string[]>([]);
+  const [starting, setStarting] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [openId, setOpenId] = useState<string | null>(null);
+  // every run of this agent the hub server holds, so a run launched before you navigated away is still here
+  const mine = useLive(api).filter((r) => r.agent === `team:${a.name}`);
+  const dup = mine.some((r) => r.state === 'running' && r.question === question.trim());
   const open = loop.specs.filter((s) => ['build', 'test', 'deploy', 'maintain'].includes(s.phase) && s.approved.intent && s.approved.spec && s.approved.design);
   const keys = mode === 'propose' ? open : loop.specs;
+  // a ref, not state: a double click fires both handlers before React re-renders the button disabled
+  const busy = useRef(false);
   const launch = () => {
-    setErr(null);
-    startAgent({ agent: 'team', name: a.name, mode, repo: repo || undefined, key: key || undefined, question })
-      .then((r) => setIds((x) => [r.id, ...x]), (e) => setErr((e as Error).message));
+    if (busy.current) return;
+    busy.current = true; setErr(null); setStarting(true);
+    startAgent({ agent: 'team', name: a.name, mode, repo: repo || undefined, key: key || undefined, question: question.trim() })
+      .then((r) => setOpenId(r.id), (e) => setErr((e as Error).message)).finally(() => { busy.current = false; setStarting(false); });
   };
+  const shown = openId || mine[0]?.id;
   const cli = `claude ${JSON.stringify(`Use the ${a.name} agent (${mode} mode${repo ? `, ${repo}` : ''}${key ? `, ${key}` : ''}): ${question || '<what you need>'}`)}`;
   return (
     <Panel title="Launch">
@@ -119,16 +128,96 @@ function Launcher({ a, api }: { a: TeamAgent; api: boolean }) {
         className="mt-3 w-full rounded-md border border-line-2 bg-paper px-3 py-2 text-sm" />
       <div className="mt-2 flex flex-wrap items-center gap-3">
         {api ? (
-          <button type="button" disabled={!question.trim() || (mode === 'propose' && (!repo || !key))} onClick={launch}
-            className="rounded-md bg-ink px-3 py-1.5 text-sm font-medium text-paper disabled:opacity-50">Launch {title(a.name)}</button>
+          <button type="button" disabled={starting || dup || !question.trim() || (mode === 'propose' && (!repo || !key))} onClick={launch}
+            className="rounded-md bg-ink px-3 py-1.5 text-sm font-medium text-paper disabled:opacity-50">{starting ? 'Starting' : `Launch ${title(a.name)}`}</button>
         ) : (
           <span className="flex flex-wrap items-center gap-2 text-xs text-ink-3">Agents launch from the hub on your laptop. Or in Claude Code: <CopyButton text={cli} /></span>
         )}
-        {ids.length > 1 && <span className="text-xs text-ink-3">{ids.length} runs launched; all of them are on Runs.</span>}
+        {dup && <span className="text-xs text-ink-3">This task is already running below.</span>}
       </div>
       {err && <div className="mt-3"><ErrorNote>{err}</ErrorNote></div>}
-      {ids[0] && <div className="mt-4"><LiveRunView id={ids[0]} /></div>}
+      {mine.length > 0 && (
+        <div className="mt-4 rounded-lg border border-line">
+          <div className="border-b border-line px-3 py-1.5 text-xs text-ink-3">Runs of this agent ({mine.length}{mine.some((r) => r.state === 'running') ? `, ${mine.filter((r) => r.state === 'running').length} running` : ''})</div>
+          <ul className="divide-y divide-line">
+            {mine.map((r) => (
+              <li key={r.id}>
+                <button type="button" onClick={() => setOpenId(shown === r.id ? 'none' : r.id)} className={cx('flex w-full items-center gap-2 px-3 py-2 text-left text-sm', shown === r.id && 'bg-sunk')}>
+                  <Dot tone={r.state === 'running' ? 'run' : r.state === 'done' ? 'ok' : 'block'} className={r.state === 'running' ? 'animate-pulse' : undefined} />
+                  {r.mode && <Pill>{r.mode}</Pill>}
+                  <span className="min-w-0 flex-1 truncate text-ink-2">{r.question}</span>
+                  <span className="text-xs tabular-nums text-ink-3">{r.steps.filter((x) => x.tool !== 'note').length} calls · {since(r.started, r.ended)}</span>
+                </button>
+                {shown === r.id && <div className="px-3 pb-3"><LiveRunView id={r.id} /></div>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </Panel>
+  );
+}
+
+/** Where people can use the agent: what works today, and what needs agents hosted for the team. */
+function Expose({ a, local }: { a: TeamAgent; local: boolean }) {
+  const url = `${location.origin}${location.pathname}#/embed/${a.name}`;
+  const iframe = `<iframe src="${url}" title="${title(a.name)}" width="440" height="720" style="border:0"></iframe>`;
+  const rows: { where: string; who: string; state: 'live' | 'local' | 'next'; how: ReactNode }[] = [
+    { where: 'Engineering Hub', who: 'Engineers', state: local ? 'live' : 'local', how: 'This page: launch, watch, review the diff.' },
+    { where: 'Claude Code (terminal, VS Code, JetBrains)', who: 'Engineers', state: 'live', how: <>The same file is a subagent: <code>@{a.name}</code> or "use the {a.name} agent to ...".</> },
+    { where: 'Embedded widget', who: 'Anyone with the page open', state: local ? 'local' : 'next', how: <><a href={url} target="_blank" rel="noreferrer" className="underline">Open the widget</a> or embed it: <CopyButton text={iframe} label="iframe" /></> },
+    { where: 'Slack or Teams, Jira tickets, the support console', who: 'Support, on-call, product', state: 'next', how: 'Needs the agent hosted for the team (a runner service with sign-in and audit), so a run does not depend on one laptop.' },
+  ];
+  const tone = { live: 'ok', local: 'run', next: 'wait' } as const;
+  const label = { live: 'available', local: 'on this laptop', next: 'needs hosting' };
+  return (
+    <Panel title="Where this agent is available">
+      <ul className="divide-y divide-line">
+        {rows.map((r) => (
+          <li key={r.where} className="grid gap-1 py-2 text-sm sm:grid-cols-[minmax(0,1.1fr)_120px_minmax(0,1.6fr)] sm:items-center sm:gap-3">
+            <div><div className="font-medium">{r.where}</div><div className="text-xs text-ink-3">{r.who}</div></div>
+            <div><Pill tone={tone[r.state]}>{label[r.state]}</Pill></div>
+            <div className="min-w-0 text-xs text-ink-2">{r.how}</div>
+          </li>
+        ))}
+      </ul>
+    </Panel>
+  );
+}
+
+/** The agent on its own, without the hub around it: for an iframe in another page. Ask and plan modes only. */
+export function AgentWidget() {
+  const { name = '' } = useParams();
+  const { api, agents, loading } = useTeamAgents();
+  const [mode, setMode] = useState('ask');
+  const [question, setQuestion] = useState('');
+  const [id, setId] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [starting, setStarting] = useState(false);
+  const busy = useRef(false);
+  if (loading) return <div className="p-4"><Skeleton lines={3} /></div>;
+  const a = agents?.find((x) => x.name === name);
+  if (!a) return <div className="p-4"><Empty>No team agent {name}.</Empty></div>;
+  const modes = a.modes.filter((m) => m !== 'propose');
+  const go = () => {
+    if (busy.current) return;
+    busy.current = true; setErr(null); setStarting(true);
+    startAgent({ agent: 'team', name: a.name, mode, question: question.trim() }).then((r) => setId(r.id), (e) => setErr((e as Error).message)).finally(() => { busy.current = false; setStarting(false); });
+  };
+  return (
+    <div className="min-h-dvh bg-paper p-4 text-ink">
+      <div className="mb-1 flex items-center gap-2"><span className="font-semibold">{title(a.name)}</span><Pill>{a.team}</Pill></div>
+      <p className="mb-3 line-clamp-3 text-xs text-ink-3">{a.description}</p>
+      {modes.length > 1 && <div className="mb-2"><Segmented label="Mode" value={mode} onChange={setMode} options={modes.map((m) => [m, m] as [string, string])} /></div>}
+      <div className="mb-2 flex flex-wrap gap-1.5">{a.starters.slice(0, 3).map((s) => <button key={s} type="button" onClick={() => setQuestion(s)} className="rounded-full border border-line-2 px-2 py-0.5 text-left text-[11px] text-ink-2">{s.length > 70 ? `${s.slice(0, 68)}...` : s}</button>)}</div>
+      <textarea value={question} onChange={(e) => setQuestion(e.target.value)} rows={3} aria-label="Ask the agent" placeholder="Describe the problem. No customer personal data."
+        className="w-full rounded-md border border-line-2 bg-paper px-3 py-2 text-sm" />
+      {api?.agents
+        ? <button type="button" onClick={go} disabled={starting || !question.trim()} className="mt-2 w-full rounded-md bg-ink px-3 py-1.5 text-sm font-medium text-paper disabled:opacity-50">{starting ? 'Starting' : 'Ask'}</button>
+        : <p className="mt-2 text-xs text-ink-3">This widget runs agents only where the hub runs with agents enabled.</p>}
+      {err && <div className="mt-2"><ErrorNote>{err}</ErrorNote></div>}
+      {id && <div className="mt-3"><LiveRunView id={id} /></div>}
+    </div>
   );
 }
 

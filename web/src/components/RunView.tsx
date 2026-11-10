@@ -1,20 +1,103 @@
 import { useEffect, useState } from 'react';
-import { agentRun, discardChange, since, stopAgent, type LiveRun } from '../lib/loop';
+import { agentRun, discardChange, since, stopAgent, type LiveRun, type Reach } from '../lib/loop';
 import { MarkdownText } from './Markdown';
 import { CopyButton, cx, Dot, ErrorNote, Pill } from './ui';
 
-type Kind = 'read' | 'search' | 'git' | 'edit' | 'note' | 'other';
+type Kind = 'read' | 'search' | 'git' | 'edit' | 'note' | 'blocked' | 'other';
 const KIND: Record<Kind, { label: string; cls: string }> = {
   read: { label: 'read', cls: 'bg-run' },
   search: { label: 'search', cls: 'bg-sev-low' },
   git: { label: 'git', cls: 'bg-sev-medium' },
   edit: { label: 'edit', cls: 'bg-ok' },
   note: { label: 'thinking', cls: 'bg-line-2' },
+  blocked: { label: 'blocked by a guardrail', cls: 'bg-block' },
   other: { label: 'tool', cls: 'bg-sev-high' },
 };
 const kindOf = (s: { tool: string; target: string }): Kind =>
-  s.tool === 'note' ? 'note' : s.tool === 'Read' ? 'read' : s.tool === 'Grep' || s.tool === 'Glob' ? 'search'
+  s.tool === 'note' ? 'note' : s.tool === 'blocked' ? 'blocked' : s.tool === 'Read' ? 'read' : s.tool === 'Grep' || s.tool === 'Glob' ? 'search'
     : /^(Edit|Write|MultiEdit)$/.test(s.tool) ? 'edit' : s.tool === 'Bash' && /^git /.test(s.target) ? 'git' : 'other';
+
+const STROKE: Record<Kind, string> = { read: 'var(--run)', search: 'var(--sev-low)', git: 'var(--sev-medium)', edit: 'var(--ok)', note: 'var(--line-2)', blocked: 'var(--block)', other: 'var(--sev-high)' };
+
+/** The system a step's path belongs to: a repo, the workspace docs, the work items, the worktree being edited. */
+function areaOf(path: string | undefined, run: LiveRun): string {
+  if (path === undefined) return 'Workspace';
+  if (path.startsWith('worktree/')) return `${run.repo} (worktree)`;
+  const m = path.match(/^code\/([^/]+)(\/)?/);
+  if (m && (m[2] || run.reach?.repos.includes(m[1]))) return m[1];
+  if (/^docs(\/|$)/.test(path)) return 'Workspace docs';
+  if (/^specs(\/|$)/.test(path)) return 'Work items';
+  if (path === '' || path === 'code') return 'Whole workspace';
+  return path.startsWith('/') ? 'Outside the workspace' : 'Workspace';
+}
+
+/** Agent → every system it touched (edge weight by calls, the latest one animated) and the systems it can and cannot reach. */
+function ActivityMap({ run, steps }: { run: LiveRun; steps: { kind: Kind; path?: string; tool: string }[] }) {
+  const tools = steps.filter((s) => s.kind !== 'note');
+  const areas = new Map<string, Record<string, number>>();
+  for (const s of tools) {
+    const a = areaOf(s.path, run);
+    const c = areas.get(a) || {};
+    c[s.kind] = (c[s.kind] || 0) + 1;
+    areas.set(a, c);
+  }
+  const rows = [...areas.entries()].map(([name, c]) => ({ name, c, n: Object.values(c).reduce((x, y) => x + y, 0) })).sort((a, b) => b.n - a.n).slice(0, 10);
+  const last = tools.length ? areaOf(tools[tools.length - 1].path, run) : '';
+  const max = Math.max(1, ...rows.map((r) => r.n));
+  const RH = 34, H = Math.max(rows.length, 1) * RH, W = 140;
+  const name = run.agent.replace(/^(team|module):/, '');
+  return (
+    <div className="rounded-md border border-line p-3">
+      <div className="mb-2 text-xs font-medium text-ink-2">What the agent is touching</div>
+      <div className="grid grid-cols-[150px_140px_minmax(0,1fr)] items-center">
+        <div className="flex justify-center">
+          <div className={cx('rounded-full border-2 px-3 py-3 text-center text-xs font-semibold', run.state === 'running' ? 'animate-pulse border-run' : run.state === 'done' ? 'border-ok' : 'border-block')} style={{ maxWidth: 140 }}>
+            {name}<div className="mt-0.5 text-[10px] font-normal text-ink-3">{run.mode || 'ask'} · {run.state}</div>
+          </div>
+        </div>
+        <svg width={W} height={H} className="overflow-visible" aria-hidden>
+          {rows.map((r, i) => {
+            const y = i * RH + RH / 2, top = (r.c.blocked ? 'blocked' : Object.entries(r.c).sort((a, b) => b[1] - a[1])[0][0]) as Kind;
+            const live = run.state === 'running' && r.name === last;
+            return <path key={r.name} d={`M0 ${H / 2} C ${W / 2} ${H / 2}, ${W / 2} ${y}, ${W} ${y}`} fill="none" stroke={STROKE[top]}
+              strokeWidth={1 + (r.n / max) * 4} strokeOpacity={live ? 1 : 0.55} strokeDasharray={live ? '6 4' : undefined}
+              className={live ? 'animate-[dash_1s_linear_infinite]' : undefined} />;
+          })}
+        </svg>
+        <ul>
+          {!rows.length && <li className="text-xs text-ink-3" style={{ height: RH }}>Starting...</li>}
+          {rows.map((r) => (
+            <li key={r.name} className="flex items-center gap-2" style={{ height: RH }}>
+              <span className={cx('truncate rounded-md border px-2 py-1 text-xs', r.name === last && run.state === 'running' ? 'border-run font-medium' : 'border-line-2', (r.name === 'Outside the workspace' || !!r.c.blocked) && 'border-block text-block')}>{r.name}</span>
+              <span className="flex h-2 min-w-0 flex-1 overflow-hidden rounded-full bg-sunk" title={Object.entries(r.c).map(([k, v]) => `${KIND[k as Kind].label} ${v}`).join(', ')}>
+                {(Object.keys(KIND) as Kind[]).filter((k) => r.c[k]).map((k) => <span key={k} className={KIND[k].cls} style={{ width: `${(r.c[k] / max) * 100}%` }} />)}
+              </span>
+              <span className="w-8 text-right text-[11px] tabular-nums text-ink-3">{r.n}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+      {run.reach && <ReachRow reach={run.reach} />}
+    </div>
+  );
+}
+
+function ReachRow({ reach }: { reach: Reach }) {
+  const yes = [
+    `Code, read-only${reach.repos.length ? `: ${reach.repos.length > 4 ? `${reach.repos.slice(0, 4).join(', ')} +${reach.repos.length - 4}` : reach.repos.join(', ')}` : ''}`,
+    ...(reach.docs ? ['Workspace docs and work items'] : []), 'Git history (given in its instructions)',
+    ...(reach.edits ? [`Edits: ${reach.edits} only`] : []), ...reach.mcp.map((m) => `MCP: ${m}`),
+  ];
+  const no = [!reach.databases && 'Databases', !reach.clusters && 'Clusters (OKD, Rancher)', !reach.mcp.length && 'Jira, Confluence, Figma (MCP)', !reach.network && 'Internet', !reach.shell && 'Shell'].filter(Boolean) as string[];
+  return (
+    <div className="mt-3 flex flex-wrap gap-1.5 border-t border-line pt-3 text-[11px]">
+      <span className="mr-1 text-ink-3">Can reach</span>
+      {yes.map((x) => <span key={x} className="rounded-full bg-ok/10 px-2 py-0.5 text-ok">{x}</span>)}
+      <span className="ml-2 mr-1 text-ink-3">Not connected</span>
+      {no.map((x) => <span key={x} className="rounded-full border border-line-2 px-2 py-0.5 text-ink-3 line-through decoration-ink-3/50">{x}</span>)}
+    </div>
+  );
+}
 
 /** Polls one live run until it ends. */
 export function useRun(id: string | null) {
@@ -60,6 +143,8 @@ export function RunView({ run, live = true }: { run: LiveRun; live?: boolean }) 
             className="ml-auto rounded-md border border-line-2 px-2 py-0.5 text-xs text-ink-2 hover:text-ink">Stop</button>
         )}
       </div>
+
+      <ActivityMap run={run} steps={steps} />
 
       {steps.length > 0 && (
         <div className="rounded-md border border-line p-3">

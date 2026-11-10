@@ -4,7 +4,23 @@ One engine, many hubs: the engine files come from this repo and are updated in p
 `tools/hub-update.sh`; each project keeps only its content (`content/`, `assets/img/`).
 Never edit engine files inside a hub; fix them here, tag a release, and update the hubs.
 
-## Agent studio (5.3.0)
+## Agent studio (5.3.0, 5.3.1)
+
+5.3.1:
+- **What the agent is touching.** Each run shows the agent, every system it touched (a repo, the workspace docs,
+  the work items, its worktree) with edges weighted by calls, coloured by kind, and the latest one animated, and a
+  row of what it can reach and what it is not connected to (databases, clusters, MCP, internet, shell), stated by
+  the server (`reach` on the run). Each step carries the `path` it looked at.
+- **Reads stay in scope.** The read tools are no longer pre-approved in `--allowedTools`: Claude Code allows them
+  in the working and added directories only, so a read anywhere else on the laptop is refused. Refusals come back
+  as `blocked` steps, shown in red on the map. Team agents are told their repo paths, since a search of the
+  workspace root skips the gitignored `code/`.
+- **Launch guard and run list.** A double click launches once, and the same task does not launch while it is still
+  running. The launch panel lists every run of that agent the server holds, so none get lost when you navigate away.
+- **Where this agent is available.** Hub and Claude Code (available), embedded widget (`#/embed/<name>`, ask and
+  plan modes, an iframe snippet; it runs where the hub runs), and Slack or Teams, Jira and support consoles (need
+  agents hosted for the team).
+
 
 - **Team agents (`#/agents/team`).** Every `.claude/agents/<name>.md` in the workspace with `team:` in its front
   matter (flat keys: `team`, `family`, `scope` repos, `modes` of ask, plan and propose, `starters` split by `|`).
