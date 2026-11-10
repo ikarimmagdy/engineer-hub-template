@@ -115,7 +115,7 @@ def main() -> None:
         if f.get("team"):
             split = lambda k, sep=",": [x.strip() for x in f.get(k, "").split(sep) if x.strip()]
             a.update({"team": f["team"], "family": f.get("family", ""), "scope": split("scope"),
-                      "modes": split("modes") or ["ask"], "starters": split("starters", "|"), "prompt": body(text).strip()})
+                      "modes": split("modes") or ["ask"], "starters": split("starters", "|"), "mcp": split("mcp"), "prompt": body(text).strip()})
         agents.append(a)
     agent_names = [a["name"] for a in agents]
 

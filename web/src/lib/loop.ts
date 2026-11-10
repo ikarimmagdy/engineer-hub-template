@@ -9,10 +9,11 @@ export interface LiveRun {
   id: string; agent: string; module?: string; key: string | null; question: string; state: 'running' | 'done' | 'failed';
   started: string; ended?: string; text: string; steps: { tool: string; target: string; at?: string; path?: string }[]; error?: string; cost?: number;
   mode?: string; repo?: string; worktree?: string; branch?: string; base?: string; diffStat?: string; diff?: string; reach?: Reach;
+  launch?: { cwd: string; command: string; instructions: string };
 }
 export interface Reach { repos: string[]; docs: boolean; edits: string | null; shell: boolean; mcp: string[]; databases: boolean; clusters: boolean; network: boolean }
 /** A team agent from the workspace's .claude/agents/ (team: in the front matter), with the scope repos cloned on this laptop. */
-export interface TeamAgent { name: string; description: string; team: string; family: string; scope: string[]; modes: string[]; starters: string[]; prompt: string; path: string; cloned?: string[] }
+export interface TeamAgent { name: string; description: string; team: string; family: string; scope: string[]; modes: string[]; starters: string[]; mcp?: string[]; prompt: string; path: string; cloned?: string[] }
 
 async function call<T>(path: string, body?: unknown): Promise<T> {
   const r = await fetch(path, body === undefined ? { cache: 'no-store' } : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });

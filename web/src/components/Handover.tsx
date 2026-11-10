@@ -22,6 +22,8 @@ export function WorkAgents({ spec }: { spec: Spec }) {
   const byPhase = phases.map((_, i) => runs.filter((r) => phaseOfAgent(r.agent) === i));
   const other = runs.filter((r) => phaseOfAgent(r.agent) < 0);
   const running = runs.filter((r) => r.state === 'running');
+  // ADR 0029: only the current phase is open; the others are one line until clicked
+  const [open, setOpen] = useState<number>(cur);
 
   return (
     <div className="space-y-6">
@@ -34,20 +36,23 @@ export function WorkAgents({ spec }: { spec: Spec }) {
             const appr = APPROVED_IN[p.key as Phase];
             const rec = appr ? spec.approved[appr] : undefined;
             const live = byPhase[i].filter((r) => r.state === 'running');
+            const full = i === open;
             return (
-              <li key={p.key} className="relative grid grid-cols-[28px_minmax(0,1fr)] gap-3 pb-5 last:pb-0">
+              <li key={p.key} className={cx('relative grid grid-cols-[28px_minmax(0,1fr)] gap-3 last:pb-0', full ? 'pb-5' : 'pb-2')}>
                 {i < phases.length - 1 && <span aria-hidden className={cx('absolute left-[13px] top-7 bottom-0 w-0.5', i < cur ? 'bg-ok' : 'bg-line')} />}
                 <span className={cx('mt-0.5 flex size-7 items-center justify-center rounded-full border-2 text-xs font-semibold',
                   state === 'done' ? 'border-ok bg-ok text-paper' : state === 'now' ? 'border-ink bg-ink text-paper' : 'border-line-2 bg-paper text-ink-3')}>{i + 1}</span>
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                    <span className="font-semibold">{p.title}</span>
+                    <button type="button" aria-expanded={full} onClick={() => setOpen(full ? -1 : i)} className="font-semibold hover:underline">{p.title}</button>
                     {p.command.split(/[,\s]+/).filter((c) => c.startsWith('/')).map((c) => (
                       <Link key={c} to={howRoute(c.slice(1))} className="font-mono text-[12px] underline decoration-line-2 underline-offset-4">{c}</Link>
                     ))}
                     {state === 'now' && <Pill tone="run">current</Pill>}
                     {live.length > 0 && <span className="flex items-center gap-1.5 text-xs text-run"><Dot tone="run" className="animate-pulse" />{live.length} working</span>}
                   </div>
+                  {!full && (byPhase[i].length > 0 || (p.gate && rec)) && <span className="text-xs text-ink-3">{[byPhase[i].length ? `${byPhase[i].length} runs` : '', p.gate && rec ? `approved by ${rec.by}` : ''].filter(Boolean).join(' · ')}</span>}
+                  {full && <>
                   {p.does && <p className="mt-1 text-sm text-ink-2">{p.does}</p>}
                   <div className="mt-2 flex flex-wrap gap-1.5">
                     {w.agents.length ? w.agents.map((a) => {
@@ -67,6 +72,7 @@ export function WorkAgents({ spec }: { spec: Spec }) {
                     </div>
                   )}
                   {byPhase[i].length > 0 && <RunList runs={byPhase[i].slice(0, 6)} />}
+                  </>}
                 </div>
               </li>
             );

@@ -3,7 +3,7 @@ import { useParams, useSearchParams } from 'react-router';
 import { useHub } from '../lib/data';
 import { createAgent, since, startAgent, teamAgents, useLive, useLoopApi, useRuns, type TeamAgent } from '../lib/loop';
 import { RunView, useRun } from '../components/RunView';
-import { CopyButton, cx, Dot, Empty, ErrorNote, Panel, Pill, Segmented, Select, Skeleton } from '../components/ui';
+import { CopyButton, cx, Dot, Empty, ErrorNote, Panel, Pill, Segmented, Select, Skeleton, TabBar } from '../components/ui';
 
 const MODE_HELP: Record<string, string> = {
   ask: 'Reads the code and answers, with path:line evidence.',
@@ -25,9 +25,12 @@ function useTeamAgents() {
   return { api, agents: api ? live : synced, err, loading: api === undefined || (!!api && !live && !err) };
 }
 
+const AGENT_TABS = [['launch', 'Launch'], ['about', 'About'], ['available', 'Where it is available']] as const;
+
 export function TeamAgents() {
   const { api, agents, err, loading } = useTeamAgents();
   const [params, setParams] = useSearchParams();
+  const { sub = 'launch' } = useParams();
   if (loading) return <Skeleton lines={6} />;
   if (err) return <ErrorNote>{err}</ErrorNote>;
   if (!agents?.length) return <Empty>No team agents yet. A team agent is a <code>.claude/agents/&lt;name&gt;.md</code> file with <code>team:</code> in its front matter; create one in <strong>Create an agent</strong>.</Empty>;
@@ -55,9 +58,13 @@ export function TeamAgents() {
         <p className="text-xs text-ink-3">Defined in the workspace's <code>.claude/agents/</code>: the same file works in Claude Code ("use the {sel.name} agent to ...") and here.</p>
       </div>
       <div className="min-w-0 space-y-6">
-        <AgentCard a={sel} />
-        <Launcher key={sel.name} a={sel} api={!!api?.agents} />
-        <Expose a={sel} local={!!api?.agents} />
+        <div>
+          <div className="mb-1 flex flex-wrap items-center gap-2"><span className="text-lg font-semibold">{title(sel.name)}</span><Pill>{sel.team}</Pill>{sel.family && <Pill>{sel.family}</Pill>}</div>
+          <TabBar label={`${title(sel.name)} views`} tabs={AGENT_TABS.map(([t, l]) => ({ to: `/agents/team/${t}?a=${sel.name}`, label: l }))} />
+        </div>
+        {sub === 'about' && <AgentCard a={sel} />}
+        {sub === 'available' && <Expose a={sel} local={!!api?.agents} />}
+        {sub !== 'about' && sub !== 'available' && <Launcher key={sel.name} a={sel} api={!!api?.agents} />}
       </div>
     </div>
   );

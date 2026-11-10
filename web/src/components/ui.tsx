@@ -171,6 +171,19 @@ export function Select({ label, value, onChange, options }: { label: string; val
   );
 }
 
+/** Pages a long list (ADR 0029: a list is paged, not scrolled). page is 0-based. */
+export function Pager({ page, pages, total, size, onPage }: { page: number; pages: number; total: number; size: number; onPage: (p: number) => void }) {
+  if (pages <= 1) return null;
+  const btn = 'rounded-md border border-line-2 px-2.5 py-1 text-xs disabled:opacity-40';
+  return (
+    <nav aria-label="Pages" className="flex flex-wrap items-center gap-2 text-xs text-ink-3">
+      <button type="button" className={btn} disabled={page === 0} onClick={() => onPage(page - 1)}>Previous</button>
+      <span className="tabular-nums">{page * size + 1}-{Math.min(total, (page + 1) * size)} of {total}</span>
+      <button type="button" className={btn} disabled={page >= pages - 1} onClick={() => onPage(page + 1)}>Next</button>
+    </nav>
+  );
+}
+
 export function KeyLink({ to, k }: { to: string; k: string }) {
   return <Link to={to} className="font-mono text-[11.5px] text-ink-3 hover:text-ink">{k}</Link>;
 }

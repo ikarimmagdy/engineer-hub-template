@@ -4,6 +4,24 @@ One engine, many hubs: the engine files come from this repo and are updated in p
 `tools/hub-update.sh`; each project keeps only its content (`content/`, `assets/img/`).
 Never edit engine files inside a hub; fix them here, tag a release, and update the hubs.
 
+## Long pages split into tabs, how agents work (5.3.2)
+
+- **ADR 0029 (engineering workspace): a page is at most two screens (1800 px at 1440×900); longer is split into
+  tabs, one subject each, each a route.** Applied: Quality (`overview`, `findings` paged 20 at a time, `tests`);
+  Agents gets a second route level (`/agents/<view>/<tab>`): one agent's `launch`, `about`, `available`; MCP
+  servers `servers`, `what`, `design`, `build`, `ship` (the old `build-mcp` redirects); System map capped at one
+  screen; Matrix one source layer at a time, paged; Timeline paged; the work item's handover opens the current
+  phase only. A run opens as tabs: Answer, What it touched, Steps, Change, How it ran. `Pager` in `ui.tsx`.
+- **How agents work (`#/agents/how/<loop|apis|databases|guardrails>`).** The model-tool-permission loop, how an
+  agent calls an API or checks a database (through an MCP server built for it: named read-only tools, the
+  person's token, a masked copy, an audit line per call), and which guardrails are enforced.
+- **How it ran.** Each run records its directory, its exact command line and the instructions it was given
+  (`launch` on the run).
+- **`mcp:` in a team agent's front matter.** The hub loads only those servers from the workspace's `.mcp.json`
+  (`--strict-mcp-config --mcp-config`), allows their tools (`mcp__<name>`), and shows them under Can reach.
+  No team agent names one yet.
+- Not done yet: the automatic page-height check the ADR asks for; pages were measured by hand at release.
+
 ## Agent studio (5.3.0, 5.3.1)
 
 5.3.1:

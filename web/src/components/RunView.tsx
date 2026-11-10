@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { agentRun, discardChange, since, stopAgent, type LiveRun, type Reach } from '../lib/loop';
 import { MarkdownText } from './Markdown';
-import { CopyButton, cx, Dot, ErrorNote, Pill } from './ui';
+import { CopyButton, cx, Dot, ErrorNote, Pill, Segmented } from './ui';
 
 type Kind = 'read' | 'search' | 'git' | 'edit' | 'note' | 'blocked' | 'other';
 const KIND: Record<Kind, { label: string; cls: string }> = {
@@ -86,9 +86,9 @@ function ReachRow({ reach }: { reach: Reach }) {
   const yes = [
     `Code, read-only${reach.repos.length ? `: ${reach.repos.length > 4 ? `${reach.repos.slice(0, 4).join(', ')} +${reach.repos.length - 4}` : reach.repos.join(', ')}` : ''}`,
     ...(reach.docs ? ['Workspace docs and work items'] : []), 'Git history (given in its instructions)',
-    ...(reach.edits ? [`Edits: ${reach.edits} only`] : []), ...reach.mcp.map((m) => `MCP: ${m}`),
+    ...(reach.edits ? [`Edits: ${reach.edits} only`] : []), ...reach.mcp.map((m) => `MCP server: ${m} (its tools only)`),
   ];
-  const no = [!reach.databases && 'Databases', !reach.clusters && 'Clusters (OKD, Rancher)', !reach.mcp.length && 'Jira, Confluence, Figma (MCP)', !reach.network && 'Internet', !reach.shell && 'Shell'].filter(Boolean) as string[];
+  const no = [!reach.databases && 'Databases', !reach.clusters && 'Clusters (OKD, Rancher)', !reach.mcp.length && 'Other systems (no MCP server)', !reach.network && 'Internet', !reach.shell && 'Shell'].filter(Boolean) as string[];
   return (
     <div className="mt-3 flex flex-wrap gap-1.5 border-t border-line pt-3 text-[11px]">
       <span className="mr-1 text-ink-3">Can reach</span>
@@ -119,6 +119,11 @@ export function useRun(id: string | null) {
 export function RunView({ run, live = true }: { run: LiveRun; live?: boolean }) {
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
+  // ADR 0029: one view of the run at a time; while it works, what it touches; once done, the answer
+  const [pick, setPick] = useState<RunTab | null>(null);
+  const tab: RunTab = pick || (run.state === 'running' ? 'map' : run.mode === 'propose' && run.diff ? 'change' : 'answer');
+  const tabs: [RunTab, string][] = [['answer', 'Answer'], ['map', 'What it touched'], ['steps', `Steps ${run.steps.filter((x) => x.tool !== 'note').length}`],
+    ...(run.mode === 'propose' ? [['change', 'Change'] as [RunTab, string]] : []), ...(run.launch ? [['how', 'How it ran'] as [RunTab, string]] : [])];
   const t0 = Date.parse(run.started);
   const span = Math.max(1, (run.ended ? Date.parse(run.ended) : Date.now()) - t0);
   const steps = run.steps.map((s) => ({ ...s, kind: kindOf(s), off: s.at ? Date.parse(s.at) - t0 : 0 }));
@@ -144,9 +149,11 @@ export function RunView({ run, live = true }: { run: LiveRun; live?: boolean }) 
         )}
       </div>
 
-      <ActivityMap run={run} steps={steps} />
+      <Segmented label="Run view" value={tab} onChange={setPick} options={tabs} />
 
-      {steps.length > 0 && (
+      {tab === 'map' && <ActivityMap run={run} steps={steps} />}
+
+      {tab === 'steps' && steps.length > 0 && (
         <div className="rounded-md border border-line p-3">
           <div className="relative h-6 rounded bg-sunk" aria-label="Steps over time">
             {steps.map((s, i) => (
@@ -160,9 +167,8 @@ export function RunView({ run, live = true }: { run: LiveRun; live?: boolean }) 
               <span key={k} className="inline-flex items-center gap-1"><span className={cx('inline-block h-2.5 w-1 rounded-sm', KIND[k].cls)} />{KIND[k].label} {counts[k]}</span>
             ))}
           </div>
-          <details className="mt-2" open={run.state === 'running'}>
-            <summary className="cursor-pointer text-xs text-ink-2">Event history</summary>
-            <ol className="mt-1 max-h-64 overflow-auto border-l border-line pl-3 text-xs">
+          <div className="mt-2">
+            <ol className="mt-1 max-h-[50dvh] overflow-auto border-l border-line pl-3 text-xs">
               {steps.map((s, i) => (
                 <li key={i} className="relative py-0.5">
                   <span className={cx('absolute -left-[15px] top-1.5 size-1.5 rounded-full', KIND[s.kind].cls)} />
@@ -172,14 +178,18 @@ export function RunView({ run, live = true }: { run: LiveRun; live?: boolean }) 
                 </li>
               ))}
             </ol>
-          </details>
+          </div>
         </div>
       )}
 
       {run.error && <ErrorNote>{run.error}</ErrorNote>}
-      {run.text && <div className="rounded-lg border border-line bg-paper p-4"><MarkdownText src={run.text} path="" /></div>}
+      {tab === 'answer' && (run.text
+        ? <div className="max-h-[60dvh] overflow-auto rounded-lg border border-line bg-paper p-4"><MarkdownText src={run.text} path="" /></div>
+        : <p className="text-sm text-ink-3">{run.state === 'running' ? 'The answer shows here when the agent finishes. Watch it work in What it touched.' : 'No answer.'}</p>)}
 
-      {run.mode === 'propose' && run.state !== 'running' && (
+      {tab === 'how' && run.launch && <HowItRan launch={run.launch} />}
+
+      {tab === 'change' && (run.state === 'running' ? <p className="text-sm text-ink-3">The change shows here when the agent finishes.</p> : 
         <div className="rounded-lg border border-line p-3">
           <div className="mb-2 flex flex-wrap items-center gap-2 text-sm">
             <span className="font-medium">Proposed change</span>
@@ -206,6 +216,22 @@ export function RunView({ run, live = true }: { run: LiveRun; live?: boolean }) 
           {note && <p className="mt-2 text-xs text-ink-3">{note}</p>}
         </div>
       )}
+    </div>
+  );
+}
+
+type RunTab = 'answer' | 'map' | 'steps' | 'change' | 'how';
+
+/** The exact command line and instructions of a run: nothing about an agent is hidden. */
+function HowItRan({ launch }: { launch: NonNullable<LiveRun['launch']> }) {
+  return (
+    <div className="space-y-3 text-sm">
+      <p className="text-ink-2">The hub started this run as a Claude Code process on this laptop, signed in as you. Its tools, permissions and directories are all on this command line; nothing else is granted.</p>
+      <div><div className="mb-1 text-xs text-ink-3">Directory</div><code className="text-xs">{launch.cwd}</code></div>
+      <div><div className="mb-1 flex items-center gap-2 text-xs text-ink-3">Command <CopyButton text={launch.command} label="command" /></div>
+        <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-all rounded bg-sunk p-3 text-[11px]">{launch.command.replace(/ --/g, '\n  --')}</pre></div>
+      <details><summary className="cursor-pointer text-xs text-ink-2">The instructions below ({launch.instructions.length.toLocaleString()} characters: the agent file, the mode rules, the recent commits)</summary>
+        <pre className="mt-2 max-h-[50dvh] overflow-auto whitespace-pre-wrap rounded bg-sunk p-3 text-[11px]">{launch.instructions}</pre></details>
     </div>
   );
 }

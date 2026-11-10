@@ -43,7 +43,7 @@ export function SystemMap({ sys, focus, only, selected, onSelect, edges = 'auto'
 
   return (
     <div className="overflow-x-auto rounded-lg border border-line bg-paper" data-scroll>
-      <svg viewBox={`0 0 ${W} ${height}`} className="block min-w-[900px]" role="img" aria-label="System map: layers, components and the flows between them">
+      <svg viewBox={`0 0 ${W} ${height}`} className="mx-auto block max-h-[calc(100dvh-220px)] w-full min-w-[900px]" role="img" aria-label="System map: layers, components and the flows between them">
         <defs>
           {(['added', 'changed', 'removed', 'used'] as const).map((k) => (
             <marker key={k} id={`arrow-${k}`} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">

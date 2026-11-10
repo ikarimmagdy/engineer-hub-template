@@ -10,6 +10,7 @@ import { docTabRoute, howRoute, PHASE_TAB, phaseCommand, TABS, type Tab } from '
 import { HtmlPage, MarkdownFile, MarkdownText } from '../components/Markdown';
 import {
   CopyButton, cx, Empty, ErrorNote, fmtDate, Meter, Panel, Pill, SEV_LABEL, SEV_TONE, Select, Skeleton, Stat, StatusText, TASK_TONE,
+  Pager,
 } from '../components/ui';
 import { TestsTab, LatestRun } from './Tests';
 import { Requirements } from './Requirements';
@@ -283,7 +284,7 @@ export function FindingsTable({ findings, reviewBase, reviewed, showSpec }: { fi
   const hub = useHub();
   const [params, setParams] = useSearchParams();
   const f = { severity: params.get('severity') || '', area: params.get('area') || '', type: params.get('type') || '', team: params.get('team') || '', spec: params.get('spec') || '', q: (params.get('q') || '').toLowerCase() };
-  const set = (k: string, v: string) => setParams((p) => { if (v) p.set(k, v); else p.delete(k); return p; }, { replace: true });
+  const set = (k: string, v: string) => setParams((p) => { if (v) p.set(k, v); else p.delete(k); if (k !== 'p') p.delete('p'); return p; }, { replace: true });
   const opts = (key: keyof Finding | 'spec') => [...new Set(findings.map((x) => String((x as unknown as Record<string, unknown>)[key] ?? '')).filter(Boolean))].sort().map((v) => [v, v] as [string, string]);
   const open = findings.filter((x) => (x.status || 'open') === 'open');
   const shown = open.filter((x) =>
@@ -292,6 +293,7 @@ export function FindingsTable({ findings, reviewBase, reviewed, showSpec }: { fi
     (!f.q || `${x.id} ${x.title} ${x.location} ${x.detail}`.toLowerCase().includes(f.q)),
   ).sort((a, b) => SEVERITIES.indexOf(severityOf(a)) - SEVERITIES.indexOf(severityOf(b)));
   const count = (s: string) => open.filter((x) => severityOf(x) === s).length;
+  const SIZE = 20, pages = Math.ceil(shown.length / SIZE), page = Math.min(Math.max(0, Number(params.get('p') || 1) - 1), Math.max(0, pages - 1));
   const area = f.area && reviewed?.includes(f.area) ? f.area : '';
 
   return (
@@ -322,7 +324,7 @@ export function FindingsTable({ findings, reviewBase, reviewed, showSpec }: { fi
       )}
 
       <ul className="divide-y divide-line overflow-hidden rounded-lg border border-line bg-paper">
-        {shown.slice(0, 300).map((x, i) => (
+        {shown.slice(page * SIZE, (page + 1) * SIZE).map((x, i) => (
           <li key={`${x.spec || ''}${x.id}${i}`}>
             <details className="group">
               <summary className="grid cursor-pointer list-none grid-cols-[84px_minmax(0,1fr)] gap-x-3 gap-y-1 px-4 py-2.5 hover:bg-sunk md:grid-cols-[84px_minmax(0,1fr)_auto]">
@@ -352,6 +354,7 @@ export function FindingsTable({ findings, reviewBase, reviewed, showSpec }: { fi
         {shown.length > 300 && <li className="px-4 py-3 text-sm text-ink-3">Showing the first 300. Narrow the filters to see the rest.</li>}
         {!shown.length && <li className="px-4 py-8 text-center text-sm text-ink-3">No open findings match these filters.</li>}
       </ul>
+      <Pager page={page} pages={pages} total={shown.length} size={SIZE} onPage={(p) => set('p', p ? String(p + 1) : '')} />
     </div>
   );
 }

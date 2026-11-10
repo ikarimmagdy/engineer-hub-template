@@ -3,7 +3,7 @@ import { Link, Navigate, useParams, useSearchParams } from 'react-router';
 import { PHASE_TITLE, useHub, type Phase, type Spec } from '../lib/data';
 import { forWork, keysOf, type SystemModel } from '../lib/system';
 import { ChangedBy, ComponentDetail, FlowTable, InfraList, Legend, ScreenGrid, SystemMap, UseCaseList } from '../components/System';
-import { cx, Empty, fmtDate, PageHeader, Pill, Select, TabBar } from '../components/ui';
+import { cx, Empty, fmtDate, PageHeader, Pager, Pill, Select, TabBar } from '../components/ui';
 
 const LENSES = [
   ['map', 'Map'],
@@ -99,26 +99,34 @@ function MatrixLens({ sys, work }: { sys: SystemModel; work: string }) {
   const flows = sys.flows.filter((f) => (!work || f.changes.some((c) => c.key === work)) && (!comp || f.from === comp || f.to === comp));
   const used = [...new Set(sys.flows.flatMap((f) => [f.from, f.to]))].sort((a, b) => a.localeCompare(b));
   const byLayer = sys.layers.map((l) => ({ l, flows: flows.filter((f) => sys.components.find((c) => c.id === f.from)?.layer === l.id) })).filter((g) => g.flows.length);
+  const set = (k: string, v: string) => setParams((p) => { if (v) p.set(k, v); else p.delete(k); if (k !== 'p') p.delete('p'); return p; }, { replace: true });
+  // ADR 0029: one layer's flows at a time, paged
+  const g = byLayer.find((x) => x.l.id === params.get('from')) || byLayer[0];
+  const SIZE = 20, pages = g ? Math.ceil(g.flows.length / SIZE) : 0, page = Math.min(Math.max(0, Number(params.get('p') || 1) - 1), Math.max(0, pages - 1));
   return (
     <div className="space-y-4">
-      <Select label="Component" value={comp} onChange={(v) => setParams((p) => { if (v) p.set('with', v); else p.delete('with'); return p; }, { replace: true })}
-        options={[['', 'Any'], ...used.map((id) => [id, sys.components.find((c) => c.id === id)?.name || id] as [string, string])]} />
-      {byLayer.length ? byLayer.map(({ l, flows }) => (
-        <section key={l.id}>
-          <h3 className="mb-2 text-sm font-semibold">From {l.name} <span className="font-normal text-ink-3">{flows.length}</span></h3>
-          <FlowTable sys={sys} flows={flows} focus={work || undefined} />
-        </section>
-      )) : <Empty>No flows match.</Empty>}
+      <div className="flex flex-wrap items-center gap-3">
+        <Select label="From layer" value={g?.l.id || ''} onChange={(v) => set('from', v)} options={byLayer.map(({ l, flows }) => [l.id, `${l.name} (${flows.length})`] as [string, string])} />
+        <Select label="Component" value={comp} onChange={(v) => set('with', v)}
+          options={[['', 'Any'], ...used.map((id) => [id, sys.components.find((c) => c.id === id)?.name || id] as [string, string])]} />
+      </div>
+      {g ? <>
+        <FlowTable sys={sys} flows={g.flows.slice(page * SIZE, (page + 1) * SIZE)} focus={work || undefined} />
+        <Pager page={page} pages={pages} total={g.flows.length} size={SIZE} onPage={(n) => set('p', n ? String(n + 1) : '')} />
+      </> : <Empty>No flows match.</Empty>}
     </div>
   );
 }
 
 function Timeline({ sys }: { sys: SystemModel }) {
   const { loop } = useHub();
+  const [params, setParams] = useSearchParams();
   const works = [...sys.works].sort((a, b) => (b.started || b.updated).localeCompare(a.started || a.updated));
+  const SIZE = 5, pages = Math.ceil(works.length / SIZE), page = Math.min(Math.max(0, Number(params.get('p') || 1) - 1), Math.max(0, pages - 1));
   return (
+    <div className="space-y-4">
     <ol className="relative space-y-4 border-l border-line-2 pl-6">
-      {works.map((w) => {
+      {works.slice(page * SIZE, (page + 1) * SIZE).map((w) => {
         const spec = loop.specs.find((s) => s.key === w.key);
         const firsts = sys.components.filter((c) => c.changes[0]?.key === w.key && !c.baseline);
         return (
@@ -143,6 +151,8 @@ function Timeline({ sys }: { sys: SystemModel }) {
         );
       })}
     </ol>
+    <Pager page={page} pages={pages} total={works.length} size={SIZE} onPage={(n) => setParams((p) => { if (n) p.set('p', String(n + 1)); else p.delete('p'); return p; }, { replace: true })} />
+    </div>
   );
 }
 

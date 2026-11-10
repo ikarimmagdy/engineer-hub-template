@@ -5,21 +5,20 @@ import { cx, ErrorNote, Meter, PageHeader, Panel, SEV_LABEL, SEV_TONE, Skeleton,
 
 export function Quality() {
   const { view } = useParams();
-  if (!view) return <Navigate to="/quality/findings" replace />;
+  if (!view) return <Navigate to="/quality/overview" replace />;
   return (
     <div>
       <PageHeader title="Quality" lede="Open findings from every code review and test health across all work, in one place." />
-      <TabBar label="Quality" className="mb-6" tabs={[{ to: '/quality/findings', label: 'Findings' }, { to: '/quality/tests', label: 'Test health' }]} />
-      {view === 'tests' ? <TestHealth /> : <AllFindings />}
+      <TabBar label="Quality" className="mb-6" tabs={[{ to: '/quality/overview', label: 'By work item' }, { to: '/quality/findings', label: 'Findings' }, { to: '/quality/tests', label: 'Test health' }]} />
+      {view === 'tests' ? <TestHealth /> : view === 'findings' ? <AllFindings /> : <Overview />}
     </div>
   );
 }
 
-function AllFindings() {
+function Overview() {
   const { loop } = useHub();
-  const { data, loading, error } = useAllFindings();
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       <div className="overflow-x-auto rounded-lg border border-line bg-paper">
         <table className="w-full min-w-[640px] text-sm">
           <thead className="bg-sunk text-xs text-ink-2">
@@ -45,9 +44,14 @@ function AllFindings() {
           </tbody>
         </table>
       </div>
-      {loading ? <Skeleton lines={8} /> : error ? <ErrorNote>Could not load findings.</ErrorNote> : <FindingsTable findings={data!} showSpec />}
+      <p className="text-xs text-ink-3">Open a count to see those findings on <Link to="/quality/findings" className="underline">Findings</Link>.</p>
     </div>
   );
+}
+
+function AllFindings() {
+  const { data, loading, error } = useAllFindings();
+  return loading ? <Skeleton lines={8} /> : error ? <ErrorNote>Could not load findings.</ErrorNote> : <FindingsTable findings={data!} showSpec />;
 }
 
 function TestHealth() {

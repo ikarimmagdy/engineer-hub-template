@@ -4,6 +4,7 @@ import { getJson, useAsync, useHub } from '../lib/data';
 import { startAgent, useLoopApi, useRuns } from '../lib/loop';
 import { RunView, useRun } from '../components/RunView';
 import { CreateAgent, Runs, TeamAgents } from './AgentStudio';
+import { AgentsHow, HOW_TABS } from './AgentsHow';
 import { howRoute } from '../lib/routes';
 import { CopyButton, cx, Dot, Empty, ErrorNote, PageHeader, Panel, Pill, Skeleton, TabBar } from '../components/ui';
 
@@ -18,22 +19,36 @@ interface Module {
   changedBy?: { key: string; change: string; summary: string }[];
 }
 
-const VIEWS = [['team', 'Team agents'], ['runs', 'Runs'], ['create', 'Create an agent'], ['modules', 'Module agents'], ['oncall', 'On-call agent'], ['mcp', 'MCP servers'], ['build-mcp', 'Building an MCP server']] as const;
+const VIEWS = [['team', 'Team agents'], ['runs', 'Runs'], ['create', 'Create an agent'], ['modules', 'Module agents'], ['oncall', 'On-call agent'], ['mcp', 'MCP servers'], ['how', 'How agents work']] as const;
+// ADR 0029: the MCP guide is split into parts, each its own route under /agents/mcp/<part>
+const MCP_TABS = [['servers', 'Our servers'], ['what', 'What and when'], ['design', 'Designing tools'], ['build', 'Build and test'], ['ship', 'Register and secure']] as const;
 
 export function Agents() {
-  const { view = 'team' } = useParams();
+  const { view, sub } = useParams();
+  const [qs] = useSearchParams();
+  if (!view) return <Navigate to="/agents/team" replace />;
+  if (view === 'mcp' && !sub) return <Navigate to="/agents/mcp/servers" replace />;
+  if (view === 'how' && !sub) return <Navigate to="/agents/how/loop" replace />;
+  if (view === 'team' && !sub) return <Navigate to={`/agents/team/launch${qs.toString() ? `?${qs}` : ''}`} replace />;
+  if (view === 'build-mcp') return <Navigate to="/agents/mcp/what" replace />;
   if (!VIEWS.some(([v]) => v === view)) return <Navigate to="/agents" replace />;
   return (
     <div>
       <PageHeader title="Agents" lede="The agent studio: launch a team agent to investigate, plan or propose a change, watch every step it takes, create agents for your team, and ask any module or the on-call agent." />
-      <TabBar label="Agents" className="mb-6" tabs={VIEWS.map(([v, l]) => ({ to: `/agents/${v}`, label: l, end: v === 'team' }))} />
+      <TabBar label="Agents" className="mb-6" tabs={VIEWS.map(([v, l]) => ({ to: `/agents/${v}`, label: l }))} />
       {view === 'team' && <TeamAgents />}
       {view === 'runs' && <Runs />}
       {view === 'create' && <CreateAgent />}
       {view === 'modules' && <Modules />}
       {view === 'oncall' && <OnCall />}
-      {view === 'mcp' && <McpServers />}
-      {view === 'build-mcp' && <BuildMcp />}
+      {view === 'mcp' && <>
+        <TabBar label="MCP" className="mb-5" tabs={MCP_TABS.map(([t, l]) => ({ to: `/agents/mcp/${t}`, label: l }))} />
+        {sub === 'servers' ? <McpServers /> : <BuildMcp part={sub!} />}
+      </>}
+      {view === 'how' && <>
+        <TabBar label="How agents work" className="mb-5" tabs={HOW_TABS.map(([t, l]) => ({ to: `/agents/how/${t}`, label: l }))} />
+        <AgentsHow tab={sub!} />
+      </>}
     </div>
   );
 }
@@ -201,7 +216,7 @@ function McpServers() {
   );
 }
 
-function BuildMcp() {
+function BuildMcp({ part }: { part: string }) {
   const { manifest } = useHub();
   const servers = manifest.agentic?.mcpServers || [];
   const plugin = servers.find((s) => s.transport === 'plugin');
@@ -211,6 +226,7 @@ function BuildMcp() {
   const Code = ({ children }: { children: string }) => <pre className="mb-3 max-w-3xl overflow-auto rounded-md bg-sunk p-3 text-xs"><code>{children}</code></pre>;
   return (
     <div className="max-w-4xl">
+      {part === 'what' && <>
       <H>What an MCP server is</H>
       <P>The Model Context Protocol is a standard way for an agent to use a system. A server describes its <strong>tools</strong> (actions with typed inputs), <strong>resources</strong> (things to read) and <strong>prompts</strong> (ready-made instructions). The agent reads the descriptions and decides when to call a tool. One server works with Claude Code, the Agent SDK and any other MCP client.</P>
       <H>Build one when</H>
@@ -219,6 +235,8 @@ function BuildMcp() {
         'The system has an API, a CLI or a database the team already uses, and the rules for using it can be written down.',
         'No good server exists already. Check first: Jira, Confluence, Figma, GitHub and the cloud providers publish their own.',
       ]} />
+      </>}
+      {part === 'design' && <>
       <H>Design the tools</H>
       <L items={[
         'Name tools for the task, not the endpoint: find_failed_deploys rather than get_api_v2_runs.',
@@ -236,6 +254,8 @@ function BuildMcp() {
           <tr><td className="py-1.5 pr-4 font-mono">streamable HTTP</td><td className="py-1.5 pr-4">As a service, shared by many clients</td><td className="py-1.5">Central servers with sign-in (OAuth or Entra ID), audit and rate limits</td></tr>
         </tbody>
       </table></div>
+      </>}
+      {part === 'build' && <>
       <H>A first server in Python</H>
       <Code>{`# pip install mcp   (the official SDK; TypeScript: @modelcontextprotocol/sdk)
 from mcp.server.fastmcp import FastMCP
@@ -256,6 +276,8 @@ if __name__ == "__main__":
         'Unit-test each tool function like any other code, including bad input and an unreachable backend.',
         'Then ask Claude Code real questions with only your server enabled, and read which tools it picked and why. Fix the descriptions, not the prompt.',
       ]} />
+      </>}
+      {part === 'ship' && <>
       <H>Register it for the team</H>
       <Code>{`// .mcp.json at the workspace root: everyone who clones it gets the server
 { "mcpServers": {
@@ -272,7 +294,8 @@ if __name__ == "__main__":
         'Rate-limit and time out every call to the backend.',
       ]} />
       <H>The servers this workspace already uses</H>
-      <P>{servers.length ? <>See <Link to="/agents/mcp" className="underline">MCP servers</Link>: {servers.map((s) => s.name).join(', ')}.</> : 'None configured yet.'}</P>
+      <P>{servers.length ? <>See <Link to="/agents/mcp/servers" className="underline">Our servers</Link>: {servers.map((s) => s.name).join(', ')}.</> : 'None configured yet.'}</P>
+      </>}
     </div>
   );
 }

@@ -31,11 +31,13 @@ const TOOLS = ['Read', 'Grep', 'Glob'];
 interface RunRec { ts: string; event: 'start' | 'end'; id: string; agent: string; description: string; key: string | null; source: string; ok?: boolean }
 interface Step { tool: string; target: string; at: string; path?: string }
 /** What a run can reach, stated by the server so the hub never guesses: code, docs, edits, and the systems it cannot touch. */
-interface Reach { repos: string[]; docs: boolean; edits: string | null; shell: false; mcp: string[]; databases: false; clusters: false; network: false }
+interface Reach { repos: string[]; docs: boolean; edits: string | null; shell: false; mcp: string[]; databases: boolean; clusters: boolean; network: false }
 interface Live {
   id: string; agent: string; module?: string; key: string | null; question: string; state: 'running' | 'done' | 'failed';
   started: string; ended?: string; text: string; steps: Step[]; error?: string; cost?: number;
   mode?: string; repo?: string; worktree?: string; branch?: string; base?: string; diffStat?: string; diff?: string; reach?: Reach;
+  /** Exactly how the run was started: the directory, the command line, and the instructions appended to the system prompt. */
+  launch?: { cwd: string; command: string; instructions: string };
 }
 
 const live = new Map<string, Live>();
@@ -96,7 +98,7 @@ function runs(ws: string, key?: string) {
     .slice(0, 200);
 }
 
-interface TeamAgent { name: string; description: string; team: string; family: string; scope: string[]; modes: string[]; starters: string[]; prompt: string; path: string }
+interface TeamAgent { name: string; description: string; team: string; family: string; scope: string[]; modes: string[]; starters: string[]; mcp: string[]; prompt: string; path: string }
 
 /** The workspace's team agents: .claude/agents/*.md with team: in the front matter (flat key: value lines). */
 function teamAgents(ws: string): TeamAgent[] {
@@ -113,7 +115,7 @@ function teamAgents(ws: string): TeamAgent[] {
     const list = (v = '', sep = ',') => v.split(sep).map((x) => x.trim()).filter(Boolean);
     out.push({ name: fm.name || f.slice(0, -3), description: fm.description || '', team: fm.team, family: fm.family || '', scope: list(fm.scope),
       modes: list(fm.modes).filter((x) => MODES.includes(x)).length ? list(fm.modes).filter((x) => MODES.includes(x)) : ['ask'],
-      starters: list(fm.starters, '|'), prompt: text.slice(m[0].length).trim(), path: `.claude/agents/${f}` });
+      starters: list(fm.starters, '|'), mcp: list(fm.mcp), prompt: text.slice(m[0].length).trim(), path: `.claude/agents/${f}` });
   }
   return out;
 }
@@ -245,6 +247,7 @@ function launch(hubDir: string, ws: string, body: any): Live {
   } else if (body.agent !== 'team') throw new Error('agent must be oncall, module or team');
 
   const id = randomUUID();
+  let mcpFile: string | undefined, mcpNames: string[] = [];
   let tools: string[] = [], dirs: string[] = [], mode: string | undefined, repo: string | undefined, wt: string | undefined, branch: string | undefined, base: string | undefined;
   if (body.agent === 'team') {
     const a = teamAgents(ws).find((x) => x.name === body.name);
@@ -273,6 +276,18 @@ function launch(hubDir: string, ws: string, body: any): Live {
       cwd = ws;
       dirs = [...(repo ? [repo] : []), ...cloned.filter((r) => r !== repo)].map((r) => join(ws, 'code', r));
     }
+    // MCP servers the agent file names (mcp: in the front matter), taken from the workspace's .mcp.json; no other server is loaded
+    if (a.mcp.length) {
+      let all: Record<string, unknown> = {};
+      try { all = JSON.parse(readFileSync(join(ws, '.mcp.json'), 'utf8')).mcpServers || {}; } catch { /* no .mcp.json */ }
+      const picked = Object.fromEntries(a.mcp.filter((n) => all[n]).map((n) => [n, all[n]]));
+      const missing = a.mcp.filter((n) => !all[n]);
+      if (missing.length) throw new Error(`${a.name} names MCP servers that .mcp.json does not define: ${missing.join(', ')}`);
+      mcpFile = join(tmpdir(), `engineering-hub-mcp-${id.slice(0, 8)}.json`);
+      writeFileSync(mcpFile, JSON.stringify({ mcpServers: picked }));
+      mcpNames = Object.keys(picked);
+      tools.push(...mcpNames.map((n) => `mcp__${n}`));
+    }
     system = teamPrompt(a, mode, brand, repo, key, repo ? [repo, ...cloned.filter((r) => r !== repo)] : cloned) + history(ws, repo ? [repo] : cloned);
   } else if (agent !== 'oncall') dirs = [join(ws, 'docs')];
   // code/ is gitignored in the workspace, so search tools skip it unless each clone is its own added directory
@@ -286,10 +301,16 @@ function launch(hubDir: string, ws: string, body: any): Live {
     '--settings', settings, '--setting-sources', 'project', '--append-system-prompt', system,
     '--tools', ...TOOLS, ...(mode === 'propose' ? ['Edit', 'Write'] : []), ...(tools.length ? ['--allowedTools', ...tools] : [])];
   for (const d of dirs) args.push('--add-dir', d);
+  if (mcpFile) args.push('--mcp-config', mcpFile);
+  const home = (x: string) => x.split(process.env.HOME || '\u0000').join('~');
+  const shown = args.map((a) => (a === question ? '"<the task>"' : a === system ? '"<the instructions below>"' : /[\s{}"*()]/.test(a) ? `'${a}'` : a));
   const reach: Reach = { repos: wt && repo ? [repo] : dirs.filter((d) => d.startsWith(join(ws, 'code') + '/')).map((d) => d.slice(join(ws, 'code').length + 1)),
-    docs: true, edits: wt ? `${repo} worktree on ${branch}` : null, shell: false, mcp: [], databases: false, clusters: false, network: false };
+    docs: true, edits: wt ? `${repo} worktree on ${branch}` : null, shell: false, mcp: mcpNames,
+    // only through an MCP server the agent file names; the server's name says what it reaches
+    databases: mcpNames.some((n) => /db|sql|maria|mysql|postgres|database/i.test(n)), clusters: mcpNames.some((n) => /k8s|kube|argo|rancher|okd|openshift/i.test(n)), network: false };
   if (module) reach.repos = [module];
-  const r: Live = { id, agent, module, key, question, state: 'running', started: new Date().toISOString(), text: '', steps: [], mode, repo, worktree: wt, branch, base, reach };
+  const r: Live = { id, agent, module, key, question, state: 'running', started: new Date().toISOString(), text: '', steps: [], mode, repo, worktree: wt, branch, base, reach,
+    launch: { cwd: home(cwd), command: home(`claude ${shown.join(' ')}`), instructions: home(system) } };
   live.set(r.id, r);
   logRun(ws, { ts: r.started, event: 'start', id: r.id, agent, description: question.slice(0, 200), key, source: 'hub' });
   const child = spawn('claude', args, { cwd, stdio: ['ignore', 'pipe', 'pipe'] });
@@ -378,7 +399,7 @@ export function hubLoopApi(hubDir: string): Plugin {
         if (path === '/api/loop/agents') {
           return send(res, 200, { agents: teamAgents(ws).map((a) => ({ ...a, cloned: a.scope.filter((x) => existsSync(join(ws, 'code', x))) })) });
         }
-        if (path === '/api/loop/runs') return send(res, 200, { runs: runs(ws, q.get('key') || undefined), live: [...live.values()].map(({ text, diff, ...r }) => r) });
+        if (path === '/api/loop/runs') return send(res, 200, { runs: runs(ws, q.get('key') || undefined), live: [...live.values()].map(({ text, diff, launch, ...r }) => r) });
         if (path.startsWith('/api/loop/agent/')) {
           const r = live.get(path.slice('/api/loop/agent/'.length));
           return r ? send(res, 200, r) : send(res, 404, { error: 'no such run (runs are kept until the hub server restarts)' });
