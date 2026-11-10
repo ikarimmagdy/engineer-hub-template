@@ -4,6 +4,30 @@ One engine, many hubs: the engine files come from this repo and are updated in p
 `tools/hub-update.sh`; each project keeps only its content (`content/`, `assets/img/`).
 Never edit engine files inside a hub; fix them here, tag a release, and update the hubs.
 
+## Agents and the local loop (5.1.0)
+
+- **Work item, Agents tab.** Each phase with its command, the subagents and MCP servers it uses (read from the
+  workspace's command files), the files it hands to the next phase, and its gate with who approved it and when.
+  On the local hub it also shows the agents working on the item now, from `.claude/state/agent-runs.jsonl`,
+  which the workspace's `agent-log` hook writes on every subagent start and end (description and key only,
+  never the prompt).
+- **Gate panel.** The next step out of the current phase: approve the intent, spec or design, or move to the next
+  phase. On the local hub the button runs `tools/spec.py approve|phase` in the workspace with your
+  `git config user.name`, then `tools/sync_loop.py`; `status.json` changes and the commit is yours. A static hub
+  shows the command to run instead.
+- **Agents page (`#/agents`).** A Q&A agent per module, an on-call agent, the MCP servers the workspace configures
+  (`agentic.json` `mcpServers`: transport, endpoint, sign-in, the commands that use each; header and env values are
+  never copied), and a guide to building an MCP server.
+- **Knowledge packs.** `tools/sync_modules.py` (run by `sync.sh` after `sync_system.py`) writes
+  `content/data/modules.json`: per cloned repo, metadata only (branch, folders, languages, entry points, route
+  files, tests, runtime row from `docs/env-catalog/`, the system-map component and its calls). Agents answer by
+  reading the code at question time; nothing is trained.
+- **How agents run.** Only on the local dev or preview server (`web/hub-loop-api.ts`, loopback clients only):
+  `claude -p` with your own Claude Code login, tools limited to Read, Grep, Glob and read-only git, no MCP servers,
+  reads of `.env`, key files and `test-data/` denied, project settings only, stopped after 10 minutes. Module
+  agents run in `code/<repo>` with the workspace `docs/` added; the on-call agent runs in the workspace with every
+  clone added.
+
 ## v5 (5.0.0): one web app, the v4 page retired
 
 The hub is a React app (source in `web/`, built with `cd web && npm ci && npm run build`, which

@@ -20,6 +20,7 @@ if node -e "process.exit(JSON.parse(require('fs').readFileSync('content/brand.js
   python3 tools/sync_loop.py
   python3 tools/sync_agentic.py
   python3 tools/sync_system.py
+  python3 tools/sync_modules.py
 fi
 echo "==> building hub (manifest, docs, code traceability)"
 node build.mjs
