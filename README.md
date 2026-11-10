@@ -20,7 +20,8 @@ in from the workspace's open pull requests, so everyone's work shows before it m
   never the prompt).
 - **Gate panel.** The next step out of the current phase: approve the intent, spec or design, or move to the next
   phase. On the local hub the button runs `tools/spec.py approve|phase` in the workspace with your
-  `git config user.name`, then `tools/sync_loop.py`; `status.json` changes and the commit is yours. A static hub
+  `git config user.name`, then `tools/sync_loop.py`. A workspace whose `spec.py` shares work items (5.2.2 and the
+  project template) commits and pushes the work item; the panel says whether it did. A static hub
   shows the command to run instead.
 - **Agents page (`#/agents`).** A Q&A agent per module, an on-call agent, the MCP servers the workspace configures
   (`agentic.json` `mcpServers`: transport, endpoint, sign-in, the commands that use each; header and env values are

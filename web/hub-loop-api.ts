@@ -233,7 +233,7 @@ export function hubLoopApi(hubDir: string): Plugin {
         if (r.code !== 0) return send(res, 409, { error: r.out || 'tools/spec.py refused' });
         // refresh the hub's copy of the loop so the page shows the new state
         const sync = existsSync(join(hubDir, 'tools', 'sync_loop.py')) ? run('python3', ['tools/sync_loop.py'], hubDir) : { code: 0, out: '' };
-        return send(res, 200, { ok: true, output: r.out, synced: sync.code === 0, note: 'status.json changed in the workspace; review and commit it yourself' });
+        return send(res, 200, { ok: true, output: r.out, synced: sync.code === 0, note: /share: .* pushed/.test(r.out) ? 'Shared with the team: tools/spec.py committed and pushed the work item.' : 'status.json changed in the workspace; tools/spec.py did not push it (see above), so push the work item yourself.' });
       }
       if (path === '/api/loop/agent') {
         const r = launch(hubDir, ws, body);

@@ -124,7 +124,7 @@ function GatePanel({ spec, api }: { spec: Spec; api: ReturnType<typeof useLoopAp
           {gate && <p className="text-ink-2">{gate}.</p>}
           <p className="mt-1 text-ink-2">
             {act.kind === 'approve'
-              ? <>The {act.what} needs approval before the item moves to the next phase. Read the document first; approving records your name and the date in <code>status.json</code>.</>
+              ? <>The {act.what} needs approval before the item moves to the next phase. Read the document first; approving records your name and the date in <code>status.json</code> and shares the work item with the team (commit and push).</>
               : <>The next step is to move to <strong>{PHASE_TITLE[act.to]}</strong>. <code>tools/spec.py</code> refuses if the gate is not met and says why.</>}
           </p>
           {msg && <pre className={cx('mt-3 whitespace-pre-wrap rounded-md p-2.5 text-xs', msg.ok ? 'bg-sunk text-ink-2' : 'bg-block/10 text-block')}>{msg.text}</pre>}
