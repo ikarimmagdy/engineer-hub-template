@@ -800,7 +800,7 @@ function ModuleGraph({ mods, matched, focus, onFocus }: { mods: ArchModule[]; ma
 
   return (
     <div className="-mx-4 overflow-x-auto px-4">
-      <svg width={layout.w} height={layout.h} role="group" aria-label="Module dependency graph" className="block">
+      <svg viewBox={`0 0 ${layout.w} ${layout.h}`} width="100%" style={{ maxWidth: layout.w, minWidth: Math.min(layout.w, 640) }} role="group" aria-label="Module dependency graph" className="block h-auto">
         <defs>
           <marker id="mod-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 8 4 0 8z" style={{ fill: 'var(--line-2)' }} /></marker>
           <marker id="mod-arrow-on" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 8 4 0 8z" style={{ fill: 'var(--brand)' }} /></marker>
