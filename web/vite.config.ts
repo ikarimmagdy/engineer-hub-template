@@ -2,6 +2,7 @@ import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { hubDataApi } from './hub-data-api';
+import { hubLoopApi } from './hub-loop-api';
 import { createReadStream, statSync } from 'node:fs';
 import { extname, join, normalize, resolve } from 'node:path';
 
@@ -38,7 +39,7 @@ function hubContent(): Plugin {
 
 export default defineConfig({
   base: './',
-  plugins: [react(), tailwindcss(), hubContent(), hubDataApi(HUB_DIR)],
+  plugins: [react(), tailwindcss(), hubContent(), hubDataApi(HUB_DIR), hubLoopApi(HUB_DIR)],
   server: { host: '127.0.0.1', port: PORT, strictPort: true },
   preview: { host: '127.0.0.1', port: PORT, strictPort: true },
   // assets/app/ keeps the bundle apart from a hub's assets/img/; place.mjs puts index.html and assets/app/ at the hub root

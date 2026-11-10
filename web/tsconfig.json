@@ -13,5 +13,5 @@
     "resolveJsonModule": true,
     "types": ["vite/client"]
   },
-  "include": ["src", "vite.config.ts", "hub-data-api.ts"]
+  "include": ["src", "vite.config.ts", "hub-data-api.ts", "hub-loop-api.ts"]
 }

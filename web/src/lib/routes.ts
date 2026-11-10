@@ -8,6 +8,7 @@ export const TABS = [
   ['tests', 'Tests'],
   ['findings', 'Findings'],
   ['impact', 'Impact'],
+  ['agents', 'Agents'],
   ['documents', 'Documents'],
   ['activity', 'Activity'],
 ] as const;
@@ -91,7 +92,7 @@ export function legacyRoute(path: string, hub: Hub): string | null {
   if (head === 'releases' && !seg[1]) return null;
   if (head === 'release' && seg[1]) return `/releases/${encodeURIComponent(seg[1])}`;
   if (head === 'doc' || head === '' ) return null;
-  if (['work', 'quality', 'environments', 'knowledge', 'section', 'learn', 'releases'].includes(head)) return null;
+  if (['work', 'quality', 'environments', 'knowledge', 'section', 'learn', 'releases', 'agents', 'system'].includes(head)) return null;
   if (hub.manifest.sections.some((s) => s.id === head)) return `/section/${head}${query ? `?${query}` : ''}`;
   return '/knowledge/archive';
 }

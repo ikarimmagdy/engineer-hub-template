@@ -13,6 +13,7 @@ tools/dispatch.py
 tools/sync_loop.py
 tools/sync_agentic.py
 tools/sync_system.py
+tools/sync_modules.py
 tools/hub-update.sh
 tools/hub-migrate.mjs
 tools/engine-files.txt

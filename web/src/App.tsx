@@ -16,6 +16,7 @@ import { Questions } from './pages/Questions';
 import { Learning } from './pages/Learning';
 import { SystemPage } from './pages/System';
 import { Releases } from './pages/Releases';
+import { Agents } from './pages/Agents';
 
 function Legacy() {
   const hub = useHub();
@@ -55,6 +56,7 @@ export function App() {
             <Route path="/quality/:view?" element={<Quality />} />
             <Route path="/environments/:page?" element={<Environments />} />
             <Route path="/system/:lens?" element={<SystemPage />} />
+            <Route path="/agents/:view?" element={<Agents />} />
             <Route path="/knowledge/:page?/:id?/:sub?" element={<Knowledge />} />
             <Route path="/questions/:view?" element={<Questions />} />
             <Route path="/learn/:course?/:lesson?" element={<Learning />} />

@@ -90,7 +90,7 @@ export interface LoopConfig {
   lede: string;
   trackerBase?: string;
   intake?: { key: string; title: string; what: string; command: string; via: string }[];
-  phases?: { key: string; title: string; command: string; does: string; gate?: string; tools?: string; outputs?: string }[];
+  phases?: { key: string; title: string; command: string; does: string; gate?: string; tools?: string; outputs?: string; files?: string[] }[];
   entries?: { key: string; title: string; what?: string; command?: string; example?: string; via?: string }[];
   flows?: { key: string; title: string; steps: { nodes: string[]; text: string }[] }[];
   sdlc?: { title?: string; workspace?: string; sources?: SdlcBox[]; delivers?: SdlcBox[] };
@@ -99,6 +99,8 @@ export interface LoopConfig {
 
 export interface AgCommand { id: string; name: string; description: string; args?: string; phase: number | null; agents: string[]; tools: string[]; files: string[]; path: string }
 export interface AgNode { id: string; name: string; description?: string; path?: string; tools?: string; kind?: string; configured?: boolean; used?: boolean; source?: string; event?: string; matcher?: string }
+/** An MCP server the workspace configures (.mcp.json or an enabled plugin); header and env values are never carried, only names. */
+export interface McpServer { name: string; transport: 'http' | 'stdio' | 'plugin'; endpoint: string; headers: string[]; env: string[]; for: string; signIn: string; source: string; usedBy: string[] }
 /** The workspace's .claude wiring, read from the command, agent, hook and skill files (manifest "agentic"). */
 export interface Agentic {
   generated: string;
@@ -106,6 +108,7 @@ export interface Agentic {
   commands: AgCommand[];
   agents: AgNode[];
   tools: AgNode[];
+  mcpServers?: McpServer[];
   files: AgNode[];
   hooks: AgNode[];
   rules: AgNode[];

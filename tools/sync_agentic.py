@@ -56,6 +56,38 @@ def body(text: str) -> str:
     return re.sub(r"^---\n.*?\n---\n", "", text, flags=re.S)
 
 
+def mcp_servers(ws: Path, mcp: dict, settings: dict, commands: list) -> list:
+    """Every MCP server the workspace configures: transport, endpoint, sign-in and who uses it.
+    Header and env values are never copied, only their names."""
+    notes = {}
+    md = ws / "CLAUDE.md"
+    for line in (md.read_text(encoding="utf-8").splitlines() if md.exists() else []):
+        cells = [c.strip() for c in line.strip().strip("|").split("|")]
+        m = re.match(r"^`?(?:plugin )?`?([\w.-]+)`?$", cells[0]) if len(cells) >= 3 and line.lstrip().startswith("|") else None
+        if m:
+            notes[m.group(1)] = {"for": cells[1], "signIn": cells[2]}
+    used = lambda name: [c["name"] for c in commands if name in c["tools"]]
+    out = []
+    for name, cfg in mcp.items():
+        http = cfg.get("type") in ("http", "sse") or "url" in cfg
+        pkg = next((a for a in cfg.get("args", []) if not a.startswith("-")), "")
+        out.append({"name": name, "transport": "http" if http else "stdio",
+                    "endpoint": cfg.get("url") if http else " ".join([cfg.get("command", ""), pkg]).strip(),
+                    "headers": sorted((cfg.get("headers") or {}).keys()), "env": sorted((cfg.get("env") or {}).keys()),
+                    "for": notes.get(name, {}).get("for", ""), "signIn": notes.get(name, {}).get("signIn", ""),
+                    "source": ".mcp.json", "usedBy": used(name)})
+    markets = settings.get("extraKnownMarketplaces") or {}
+    for key, on in (settings.get("enabledPlugins") or {}).items():
+        if not on:
+            continue
+        name, market = (key.split("@") + [""])[:2]
+        repo = ((markets.get(market) or {}).get("source") or {}).get("repo", "")
+        out.append({"name": name, "transport": "plugin", "endpoint": repo, "headers": [], "env": [],
+                    "for": notes.get(name, {}).get("for", ""), "signIn": notes.get(name, {}).get("signIn", ""),
+                    "source": ".claude/settings.json enabledPlugins", "usedBy": used(name)})
+    return out
+
+
 def workspace(arg: str | None) -> Path:
     if arg:
         return Path(arg).expanduser().resolve()
@@ -109,6 +141,8 @@ def main() -> None:
             tools.append({"id": "tool:" + t, "name": label, "kind": kind, "configured": configured, "used": t in used_tools,
                           "source": ".mcp.json" if t in mcp else (".claude/settings.json enabledPlugins" if t == "beyondbase" else "")})
 
+    servers = mcp_servers(ws, mcp, settings, commands)
+
     hooks = []
     for event, groups in (settings.get("hooks") or {}).items():
         for g in groups:
@@ -130,7 +164,7 @@ def main() -> None:
     constitution = sorted(str(p.relative_to(ws)) for p in (ws / "constitution").glob("*.md")) if (ws / "constitution").exists() else []
 
     out = {"generated": dt.date.today().isoformat(), "workspace": ws.name, "commands": commands, "agents": agents,
-           "tools": tools, "files": files, "hooks": hooks, "rules": rules, "skills": skills, "constitution": constitution,
+           "tools": tools, "mcpServers": servers, "files": files, "hooks": hooks, "rules": rules, "skills": skills, "constitution": constitution,
            "edges": edges}
     (C / "data").mkdir(parents=True, exist_ok=True)
     (C / "data" / "agentic.json").write_text(json.dumps(out, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")

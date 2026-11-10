@@ -14,6 +14,7 @@ import {
 import { TestsTab, LatestRun } from './Tests';
 import { Requirements } from './Requirements';
 import { ImpactCard, WorkImpact } from './System';
+import { WorkAgents } from '../components/Handover';
 import { PhaseBanner, PhaseNav, TAB_PHASE } from '../components/PhaseNav';
 import { WorkQuestions } from './Questions';
 import { WorkReleases } from './Releases';
@@ -62,6 +63,7 @@ export function WorkItem() {
             {tab === 'tasks' && <Tasks spec={spec} />}
             {tab === 'tests' && <TestsTab spec={spec} />}
             {tab === 'findings' && <Findings spec={spec} />}
+            {tab === 'agents' && <WorkAgents spec={spec} />}
             {tab === 'impact' && <WorkImpact spec={spec} />}
             {tab === 'documents' && <Documents spec={spec} hub={hub} />}
             {tab === 'activity' && <Activity spec={spec} />}
