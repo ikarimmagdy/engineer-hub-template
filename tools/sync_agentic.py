@@ -159,6 +159,11 @@ def main() -> None:
                     continue
                 src = (cl / "hooks" / m.group(1))
                 doc = re.search(r'"""(.*?)"""', src.read_text(encoding="utf-8"), re.S) if src.exists() else None
+                # one node per hook script: a script on several events (agent-log on Pre and PostToolUse) lists them all
+                same = next((x for x in hooks if x["id"] == "hook:" + m.group(1)[:-3]), None)
+                if same:
+                    same["event"] = ", ".join(dict.fromkeys(same["event"].split(", ") + [event]))
+                    continue
                 hooks.append({"id": "hook:" + m.group(1)[:-3], "name": m.group(1), "event": event, "matcher": g.get("matcher", ""),
                               "description": " ".join((doc.group(1) if doc else "").split())[:400], "path": f".claude/hooks/{m.group(1)}"})
     rules = [{"id": "rule:" + p.stem, "name": p.stem, "path": str(p.relative_to(ws)),

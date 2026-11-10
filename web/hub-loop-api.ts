@@ -229,7 +229,39 @@ function target(input: any, base: string): string {
   return String(input?.file_path || input?.pattern || input?.path || input?.command || '').split(base + '/').join('').slice(0, 160);
 }
 
+const specDirOf = (ws: string, key: string) => { try { return readdirSync(join(ws, 'specs')).find((d) => d.startsWith(`${key}-`)) || null; } catch { return null; } };
+// /intent from the hub reads its sources with these read tools only: no Jira or Confluence writes, no Figma edits
+const INTENT_MCP: Record<string, string[]> = {
+  atlassian: ['getAccessibleAtlassianResources', 'getJiraIssue', 'searchJiraIssuesUsingJql', 'getJiraIssueRemoteIssueLinks', 'getConfluencePage', 'getConfluencePageDescendants', 'searchConfluenceUsingCql', 'search', 'fetch'],
+  figma: ['whoami', 'create_session', 'get_metadata', 'get_screenshot', 'get_design_context'],
+};
+
+/** Creates a work item with the workspace's own tools/spec.py (which commits and shares the new folder). */
+function startWork(hubDir: string, ws: string, b: any) {
+  const key = String(b.key || '').trim().toUpperCase(), slug = String(b.slug || '').trim().toLowerCase();
+  const kind = String(b.kind || 'jira'), line = (v: unknown, n: number) => String(v || '').replace(/[\r\n]+/g, ' ').trim().slice(0, n);
+  if (!KEY.test(key)) throw new Error('key: a tracker key such as TELCO-2513');
+  if (!/^[a-z0-9][a-z0-9-]{1,59}$/.test(slug)) throw new Error('short name: lower case letters, digits and hyphens');
+  if (!['idea', 'jira', 'github-issue', 'pr'].includes(kind)) throw new Error('kind must be idea, jira, github-issue or pr');
+  const args = ['tools/spec.py', 'new', key, slug, '--intake', kind];
+  const title = line(b.title, 120), ref = line(b.ref, 300) || (kind === 'jira' ? key : '');
+  if (title) args.push('--title', title);
+  if (ref) args.push(kind === 'idea' ? '--summary' : '--ref', ref);
+  const r = run('python3', args, ws);
+  if (r.code !== 0) throw new Error(r.out || 'tools/spec.py refused');
+  if (existsSync(join(hubDir, 'tools', 'sync_loop.py'))) run('python3', ['tools/sync_loop.py'], hubDir);
+  return { ok: true, dir: specDirOf(ws, key), output: r.out, shared: /share: .* pushed/.test(r.out) };
+}
+
 function launch(hubDir: string, ws: string, body: any): Live {
+  if (body.agent === 'intent') {
+    const k = String(body.key || ''), dir = KEY.test(k) ? specDirOf(ws, k) : null;
+    if (!dir) throw new Error(`no work item ${k} in specs/: create it first`);
+    let st: any = {};
+    try { st = JSON.parse(readFileSync(join(ws, 'specs', dir, 'status.json'), 'utf8')); } catch { /* new folder */ }
+    const ref = st.intake?.ref || st.intake?.summary || k;
+    body = { ...body, question: `/intent ${k} ${dir.slice(k.length + 1)} ${ref}` };
+  }
   const question = String(body.question || '').trim();
   if (!question || question.length > MAX_QUESTION) throw new Error(`the question must be 1 to ${MAX_QUESTION} characters`);
   const key = body.key && KEY.test(body.key) ? body.key : null;
@@ -244,12 +276,28 @@ function launch(hubDir: string, ws: string, body: any): Live {
     system = modulePrompt(m, brand); agent = `module:${m.id}`; module = m.id;
   } else if (body.agent === 'oncall') {
     system = oncallPrompt(mods, brand);
-  } else if (body.agent !== 'team') throw new Error('agent must be oncall, module or team');
+  } else if (body.agent !== 'team' && body.agent !== 'intent') throw new Error('agent must be oncall, module, team or intent');
 
   const id = randomUUID();
   let mcpFile: string | undefined, mcpNames: string[] = [];
   let tools: string[] = [], dirs: string[] = [], mode: string | undefined, repo: string | undefined, wt: string | undefined, branch: string | undefined, base: string | undefined;
-  if (body.agent === 'team') {
+  if (body.agent === 'intent') {
+    const dir = specDirOf(ws, key!)!;
+    agent = 'intent'; mode = 'intent';
+    tools = [`Edit(./specs/${dir}/**)`];
+    let all: Record<string, unknown> = {};
+    try { all = JSON.parse(readFileSync(join(ws, '.mcp.json'), 'utf8')).mcpServers || {}; } catch { /* no .mcp.json */ }
+    const picked = Object.fromEntries(Object.keys(INTENT_MCP).filter((n) => all[n]).map((n) => [n, all[n]]));
+    if (Object.keys(picked).length) {
+      mcpFile = join(tmpdir(), `engineering-hub-mcp-${id.slice(0, 8)}.json`);
+      writeFileSync(mcpFile, JSON.stringify({ mcpServers: picked }));
+      mcpNames = Object.keys(picked);
+      tools.push(...mcpNames.flatMap((n) => INTENT_MCP[n].map((t) => `mcp__${n}__${t}`)));
+    }
+    system = `You are running /intent from the ${brand} Engineering Hub, without a shell. Write only inside specs/${dir}/: the dated source snapshots in inputs/ and intent.md. `
+      + `You cannot run tools/spec.py, git or /gap here: list the links you would record (initiative, epics, stories, source URLs) under a "Links to record" heading at the end of intent.md, and say whether /gap is needed. `
+      + `Do not approve anything and do not move the phase: the owner reviews intent.md in the hub and approves there. If Jira, Confluence or Figma is not signed in, say so and write what you can.\n\nRules:\n${bullets(COMMON)}`;
+  } else if (body.agent === 'team') {
     const a = teamAgents(ws).find((x) => x.name === body.name);
     if (!a) throw new Error(`no team agent ${body.name} in .claude/agents/`);
     mode = String(body.mode || 'ask');
@@ -295,17 +343,17 @@ function launch(hubDir: string, ws: string, body: any): Live {
   if (agent === 'oncall') system += history(ws, mods.map((m) => m.id));
   else if (module) system += history(ws, [module]);
 
-  const deny = [...DENY_READ.map((p) => `Read(${p})`), ...(mode === 'propose' ? DENY_READ.map((p) => `Edit(${p})`) : [])];
+  const deny = [...DENY_READ.map((p) => `Read(${p})`), ...(mode === 'propose' || mode === 'intent' ? DENY_READ.map((p) => `Edit(${p})`) : [])];
   const settings = JSON.stringify({ permissions: { deny } });
   const args = ['-p', question, '--output-format', 'stream-json', '--verbose', '--no-session-persistence', '--strict-mcp-config',
     '--settings', settings, '--setting-sources', 'project', '--append-system-prompt', system,
-    '--tools', ...TOOLS, ...(mode === 'propose' ? ['Edit', 'Write'] : []), ...(tools.length ? ['--allowedTools', ...tools] : [])];
+    '--tools', ...TOOLS, ...(mode === 'propose' || mode === 'intent' ? ['Edit', 'Write'] : []), ...(tools.length ? ['--allowedTools', ...tools] : [])];
   for (const d of dirs) args.push('--add-dir', d);
   if (mcpFile) args.push('--mcp-config', mcpFile);
   const home = (x: string) => x.split(process.env.HOME || '\u0000').join('~');
   const shown = args.map((a) => (a === question ? '"<the task>"' : a === system ? '"<the instructions below>"' : /[\s{}"*()]/.test(a) ? `'${a}'` : a));
   const reach: Reach = { repos: wt && repo ? [repo] : dirs.filter((d) => d.startsWith(join(ws, 'code') + '/')).map((d) => d.slice(join(ws, 'code').length + 1)),
-    docs: true, edits: wt ? `${repo} worktree on ${branch}` : null, shell: false, mcp: mcpNames,
+    docs: true, edits: wt ? `${repo} worktree on ${branch}` : mode === 'intent' ? `specs/${specDirOf(ws, key!)}/` : null, shell: false, mcp: mcpNames,
     // only through an MCP server the agent file names; the server's name says what it reaches
     databases: mcpNames.some((n) => /db|sql|maria|mysql|postgres|database/i.test(n)), clusters: mcpNames.some((n) => /k8s|kube|argo|rancher|okd|openshift/i.test(n)), network: false };
   if (module) reach.repos = [module];
@@ -433,6 +481,7 @@ export function hubLoopApi(hubDir: string): Plugin {
         return send(res, 200, { id: r.id });
       }
       if (path === '/api/loop/agents') return send(res, 200, createAgent(ws, body));
+      if (path === '/api/loop/start') return send(res, 200, startWork(hubDir, ws, body));
       if (path === '/api/loop/agent/stop' || path === '/api/loop/agent/discard') {
         const r = live.get(String(body.id || ''));
         if (!r) throw new Error('no such run');

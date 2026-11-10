@@ -30,7 +30,7 @@ export function Work() {
       <PageHeader
         title="Work"
         lede="Every piece of work in the engineering workspace, by phase. Status comes from spec.py and nowhere else."
-        actions={<Link to="/knowledge/how-we-work#start" className="rounded-md bg-ink px-3 py-1.5 text-sm font-medium text-paper">Start a work item</Link>}
+        actions={<Link to="/knowledge/how-we-work/start" className="rounded-md bg-ink px-3 py-1.5 text-sm font-medium text-paper">Start a work item</Link>}
       />
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <Segmented label="View" value={view} onChange={(v) => set('view', v === 'board' ? '' : v)} options={[['board', 'Board'], ['table', 'Table']]} />

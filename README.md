@@ -4,6 +4,21 @@ One engine, many hubs: the engine files come from this repo and are updated in p
 `tools/hub-update.sh`; each project keeps only its content (`content/`, `assets/img/`).
 Never edit engine files inside a hub; fix them here, tag a release, and update the hubs.
 
+## Start a work item from the hub (5.3.3)
+
+- **How we work is three tabs (ADR 0029):** How it works (SDLC at a glance, the loop), In detail (the agentic graph;
+  `cmd/`, `node/` and `flow/` links open here), Start a work item (`/knowledge/how-we-work/start`; the Work
+  board's button points here).
+- **Start a work item, on the local hub:** 1. Create the work item runs `tools/spec.py new <KEY> <slug> --intake
+  <kind> --title --ref|--summary` in the workspace (which commits and shares the folder), via `POST /api/loop/start`.
+  2. Write the intent with Claude runs `/intent` as an agent run (`agent: "intent"`): Read, Grep, Glob, Edit and
+  Write, edits allowed only in `specs/<KEY>-<slug>/`, the workspace's `atlassian` and `figma` MCP servers with read
+  tools only, no shell, so it cannot run `spec.py`, approve, move the phase or commit. It lists the links to
+  record at the end of `intent.md`. The owner reviews and approves on the work item. A static hub shows the
+  commands to paste.
+- `sync_agentic.py`: a hook script on several events is one node (`agent-log` on Pre and PostToolUse had a
+  duplicate id).
+
 ## Long pages split into tabs, how agents work (5.3.2)
 
 - **ADR 0029 (engineering workspace): a page is at most two screens (1800 px at 1440×900); longer is split into

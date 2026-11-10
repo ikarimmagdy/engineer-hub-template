@@ -44,7 +44,9 @@ export function useRuns(enabled: boolean, key?: string, ms = 3000) {
 export const approve = (key: string, what: string) => call<{ ok: boolean; output: string; note: string }>('/api/loop/approve', { key, what });
 export const movePhase = (key: string, phase: Phase) => call<{ ok: boolean; output: string; note: string }>('/api/loop/phase', { key, phase });
 export const checkSpec = (key: string) => call<{ ok: boolean; output: string }>(`/api/loop/check?key=${encodeURIComponent(key)}`);
-export const startAgent = (body: { agent: 'oncall' | 'module' | 'team'; module?: string; name?: string; mode?: string; repo?: string; question: string; key?: string }) => call<{ id: string }>('/api/loop/agent', body);
+export const startAgent = (body: { agent: 'oncall' | 'module' | 'team' | 'intent'; module?: string; name?: string; mode?: string; repo?: string; question: string; key?: string }) => call<{ id: string }>('/api/loop/agent', body);
+export const startWork = (body: { kind: string; key: string; slug: string; title?: string; ref?: string }) =>
+  call<{ ok: boolean; dir: string | null; output: string; shared: boolean }>('/api/loop/start', body);
 export const stopAgent = (id: string) => call<{ ok: boolean }>('/api/loop/agent/stop', { id });
 export const discardChange = (id: string) => call<{ ok: boolean }>('/api/loop/agent/discard', { id });
 export const teamAgents = () => call<{ agents: TeamAgent[] }>('/api/loop/agents').then((d) => d.agents);

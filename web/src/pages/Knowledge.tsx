@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, Navigate, useParams, useSearchParams } from 'react-router';
+import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router';
 import { useHub, type Hub, type NavItem } from '../lib/data';
 import { legacyRoute } from '../lib/routes';
 import { renderInline } from '../lib/markdown';
 import { MarkdownFile } from '../components/Markdown';
 import { AgenticGraph, phaseWiring, SdlcOverview, useModel, type GraphState } from '../components/Sdlc';
-import { CopyButton, cx, Empty, fmtDate, PageHeader, Panel, Pill } from '../components/ui';
+import { CopyButton, cx, Empty, ErrorNote, fmtDate, PageHeader, Pill, TabBar } from '../components/ui';
+import { startAgent, startWork, useLoopApi } from '../lib/loop';
+import { RunView, useRun } from '../components/RunView';
 
 function target(item: NavItem, hub: Hub): { to?: string; href?: string } {
   if (/^https?:/.test(item.route)) return { href: item.route };
@@ -114,6 +116,9 @@ function HowWeWork() {
   const ag = manifest.agentic;
   const model = useModel(hub);
   const { id: mode, sub } = useParams();
+  const navigate = useNavigate();
+  // ADR 0029: the page is three tabs; the graph's deep links (cmd, node, flow) open In detail
+  const tab = mode === 'start' ? 'start' : mode === 'detail' || mode === 'cmd' || mode === 'node' || mode === 'flow' ? 'detail' : 'overview';
   const [params] = useSearchParams();
   const asked = mode === 'cmd' && sub ? sub : params.get('cmd');
   const target = asked ? `cmd:${asked.replace(/^\//, '')}` : mode === 'node' && sub ? sub : null;
@@ -121,23 +126,34 @@ function HowWeWork() {
   const [graph, setGraph] = useState<GraphState>({ sel: target, flow, step: 0 });
   useEffect(() => {
     setGraph({ sel: target, flow, step: 0 });
-    if (!target && !flow && mode !== 'start') return;
-    const t = setTimeout(() => (mode === 'start' ? document.getElementById('start')?.scrollIntoView() : focusGraph(target)), 80);
+    if (!target && !flow) return;
+    const t = setTimeout(() => focusGraph(target), 80);
     return () => clearTimeout(t);
   }, [target, flow, mode]);
-  const go = (id: string) => { setGraph({ sel: id, flow: null, step: 0 }); requestAnimationFrame(() => focusGraph(id, true)); };
+  const go = (id: string) => {
+    if (tab !== 'detail') { navigate(`/knowledge/how-we-work/node/${encodeURIComponent(id)}`); return; }
+    setGraph({ sel: id, flow: null, step: 0 }); requestAnimationFrame(() => focusGraph(id, true));
+  };
   const unused = ag ? ag.tools.filter((t) => t.configured && !t.used) : [];
   const idle = ag ? ag.commands.filter((x) => !x.agents.length && !x.tools.length) : [];
   const start = c.start as { title: string; lede: string; steps: { title: string; where?: string; text?: string[]; commands?: { cmd: string; note?: string }[] }[] } | undefined;
   return (
     <div>
       <PageHeader crumb={<Link to="/knowledge" className="hover:underline">Knowledge</Link>} title="How we work" lede={c.lede} />
-      {model && (
+      <TabBar label="How we work" className="mb-6" tabs={[
+        { to: '/knowledge/how-we-work', label: 'How it works', end: true },
+        { to: '/knowledge/how-we-work/detail', label: 'In detail' },
+        ...(start ? [{ to: '/knowledge/how-we-work/start', label: 'Start a work item' }] : []),
+      ]} />
+      {tab === 'overview' && model && (
         <>
           <h2 className="mb-1 text-lg font-semibold">{c.sdlc?.title || 'The SDLC at a glance'}</h2>
-          <p className="mb-3 max-w-3xl text-sm text-ink-2">Where work comes from, what Claude Code does with it in the workspace, and what it delivers. Click a box to find it in the detail below.</p>
+          <p className="mb-3 max-w-3xl text-sm text-ink-2">Where work comes from, what Claude Code does with it in the workspace, and what it delivers. Click a box to see it in detail.</p>
           <SdlcOverview hub={hub} model={model} onGo={go} />
-
+        </>
+      )}
+      {tab === 'detail' && model && (
+        <>
           <h2 id="how-graph" className="mb-1 mt-10 scroll-mt-20 text-lg font-semibold">How it works, in detail</h2>
           <p className="mb-3 max-w-3xl text-sm text-ink-2">
             Read from <code className="font-mono text-[12px]">{model.ag.workspace}/.claude</code> and <code className="font-mono text-[12px]">.mcp.json</code> on {fmtDate(model.ag.generated)}.
@@ -147,6 +163,7 @@ function HowWeWork() {
         </>
       )}
 
+      {tab === 'overview' && <>
       <h2 className="mb-1 mt-10 text-lg font-semibold">The loop, one gate per step</h2>
       <p className="mb-3 text-sm text-ink-2">{loop.specs.length} work items are in it now: see them by phase on the <Link to="/work" className="underline decoration-line-2 underline-offset-4 hover:decoration-ink">Work board</Link>.</p>
       <ol className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
@@ -176,9 +193,10 @@ function HowWeWork() {
           );
         })}
       </ol>
-      <p className="mt-2 text-xs text-ink-3">↺ Maintain feeds new intents: incidents, feedback and review findings start the loop again.</p>
+      <p className="mt-2 text-xs text-ink-3">↺ Maintain feeds new intents: incidents, feedback and review findings start the loop again. <Link to="/knowledge/how-we-work/start" className="underline">Start a work item</Link>.</p>
+      </>}
 
-      {unused.length > 0 && (
+      {tab === 'detail' && unused.length > 0 && (
         <>
           <h2 className="mb-3 mt-10 text-lg font-semibold">Wiring gaps</h2>
           <div className="max-w-3xl rounded-lg border border-line-2 bg-sunk px-4 py-3 text-sm">
@@ -190,27 +208,24 @@ function HowWeWork() {
         </>
       )}
 
-      {!!c.intake?.length && (
-        <>
-          <h2 className="mb-3 mt-10 text-lg font-semibold">Where work comes from</h2>
-          <div className="grid gap-3 md:grid-cols-2">
-            {c.intake.map((e) => (
-              <Panel key={e.key} title={e.title}>
-                <p className="text-sm text-ink-2">{e.what}</p>
-                <div className="mt-2"><CopyButton text={e.command} /></div>
-                <p className="mt-2 text-xs text-ink-3">{e.via}</p>
-              </Panel>
-            ))}
-          </div>
-        </>
-      )}
 
-      {start && (
-        <>
-          <h2 id="start" className="mb-1 mt-10 scroll-mt-20 text-lg font-semibold">{start.title}</h2>
-          <p className="mb-4 max-w-3xl text-sm text-ink-2">{start.lede}</p>
-          <StartForm />
-          <ol className="mt-6 space-y-4">
+      {tab === 'start' && start && (
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
+          <div className="min-w-0">
+            <h2 id="start" className="mb-1 text-lg font-semibold">{start.title}</h2>
+            <p className="mb-4 max-w-3xl text-sm text-ink-2">{start.lede}</p>
+            <StartForm />
+          </div>
+          <div className="min-w-0 space-y-3">
+          {!!c.intake?.length && (
+            <div className="rounded-lg border border-line bg-paper px-4 py-3">
+              <div className="mb-2 text-sm font-semibold">Where work comes from</div>
+              <ul className="space-y-1.5 text-sm">{c.intake.map((e) => <li key={e.key}><span className="font-medium">{e.title}</span> <span className="text-ink-2">{e.what}</span></li>)}</ul>
+            </div>
+          )}
+          <details className="min-w-0 rounded-lg border border-line bg-paper px-4 py-3 open:pb-4">
+          <summary className="cursor-pointer text-sm font-semibold">The steps, in a terminal ({start.steps.length}): first-time setup to the first gate</summary>
+          <ol className="mt-4 space-y-4">
             {start.steps.map((s, i) => (
               <li key={i} className="grid grid-cols-[minmax(0,1fr)] gap-3 md:grid-cols-[32px_minmax(0,1fr)]">
                 <span className="grid size-7 place-items-center rounded-full border border-line-2 text-xs font-semibold tabular-nums">{i + 1}</span>
@@ -226,8 +241,11 @@ function HowWeWork() {
               </li>
             ))}
           </ol>
-        </>
+          </details>
+          </div>
+        </div>
       )}
+      {tab === 'start' && !start && <Empty>This hub's loop-config has no start steps.</Empty>}
     </div>
   );
 }
@@ -240,17 +258,36 @@ const KINDS: [string, string, string][] = [
 ];
 
 function StartForm() {
+  const { loop } = useHub();
+  const api = useLoopApi();
   const [kind, setKind] = useState('jira');
   const [key, setKey] = useState('');
   const [slug, setSlug] = useState('');
+  const [title, setTitle] = useState('');
   const [src, setSrc] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [made, setMade] = useState<{ dir: string | null; output: string; shared: boolean } | null>(null);
+  const [runId, setRunId] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const { run } = useRun(runId);
   const k = key.trim().toUpperCase() || '<KEY>';
   const s = slug.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-') || '<short-name>';
+  const exists = loop.specs.some((x) => x.key === key.trim().toUpperCase());
   const source = kind === 'jira' ? (src.trim() || k) : kind === 'idea' ? `"${src.trim() || '<the idea>'}"` : (src.trim() || 'BeyondOneGroup/<repo>#<n>');
   const cmds = kind === 'pr'
     ? [`/pr-review ${source}`]
     : [`/intent ${k} ${s} ${source}`, `/gap ${k} all`, `python3 tools/spec.py approve ${k} intent --by "<your name>"`, `/spec ${k}`];
   const field = 'mt-1 h-9 w-full rounded-md border border-line-2 bg-sunk px-2.5 text-sm';
+  const ready = kind !== 'pr' && /^[A-Z][A-Z0-9]*-\d+$/.test(key.trim().toUpperCase()) && /^[a-z0-9][a-z0-9-]+$/.test(s);
+  const create = () => {
+    setErr(null); setBusy(true);
+    startWork({ kind, key: key.trim().toUpperCase(), slug: s, title: title.trim() || undefined, ref: src.trim() || undefined })
+      .then(setMade, (e) => setErr((e as Error).message)).finally(() => setBusy(false));
+  };
+  const intent = () => {
+    setErr(null);
+    startAgent({ agent: 'intent', key: key.trim().toUpperCase(), question: 'intent' }).then((r) => setRunId(r.id), (e) => setErr((e as Error).message));
+  };
   return (
     <form className="rounded-lg border border-line bg-paper p-4" onSubmit={(e) => e.preventDefault()}>
       <div className="grid gap-3 md:grid-cols-[180px_160px_minmax(0,1fr)]">
@@ -259,13 +296,39 @@ function StartForm() {
         </label>
         {kind !== 'pr' && <label className="text-xs font-medium">Work key<input value={key} onChange={(e) => setKey(e.target.value)} placeholder="PROJ-123" className={field} /></label>}
         {kind !== 'pr' && <label className="text-xs font-medium">Short name<input value={slug} onChange={(e) => setSlug(e.target.value)} placeholder="promissory-cap" className={field} /></label>}
+        {kind !== 'pr' && <label className="text-xs font-medium md:col-span-3">Title<input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="What the work is, in a few words" className={field} /></label>}
         <label className="text-xs font-medium md:col-span-3">Source
           <input value={src} onChange={(e) => setSrc(e.target.value)} placeholder={KINDS.find(([v]) => v === kind)![2]} className={field} />
         </label>
       </div>
-      <ol className="mt-4 space-y-1.5">
-        {cmds.map((c, i) => <li key={i} className="flex items-center gap-2"><span className="w-4 text-xs tabular-nums text-ink-3">{i + 1}</span><CopyButton text={c} className="max-w-full [&_code]:truncate" /></li>)}
-      </ol>
+
+      {api?.writable && kind !== 'pr' ? (
+        <div className="mt-4 space-y-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" disabled={!ready || busy || !!made || exists} onClick={create}
+              className="rounded-md bg-ink px-3 py-1.5 text-sm font-medium text-paper disabled:opacity-50">1. Create the work item</button>
+            <button type="button" disabled={!(made || exists) || !api.agents || run?.state === 'running'} onClick={intent}
+              className="rounded-md border border-ink px-3 py-1.5 text-sm font-medium disabled:opacity-40">2. Write the intent with Claude</button>
+            {exists && !made && <span className="text-xs text-ink-3">{key.trim().toUpperCase()} already exists: step 2 writes or rewrites its intent. <Link to={`/work/${key.trim().toUpperCase()}`} className="underline">Open it</Link></span>}
+          </div>
+          <p className="text-xs text-ink-3">Step 1 runs <code>tools/spec.py new</code> in the workspace, which creates <code>specs/{k}-{s}/</code> and shares it with the team. Step 2 runs <code>/intent</code> as an agent: it reads the sources (Jira, Confluence, Figma, read-only), writes only inside that folder, and cannot approve or move the phase; you review and approve on the work item.</p>
+          {made && <div className="rounded-md bg-sunk p-3 text-xs"><div className="mb-1 font-medium">{made.shared ? 'Created and shared with the team.' : 'Created; tools/spec.py did not push it (see below).'} <Link to={`/work/${key.trim().toUpperCase()}`} className="underline">Open the work item</Link></div><pre className="max-h-32 overflow-auto whitespace-pre-wrap">{made.output}</pre></div>}
+          {err && <ErrorNote>{err}</ErrorNote>}
+          {run && <RunView run={run} />}
+        </div>
+      ) : (
+        <>
+          <p className="mt-4 text-xs text-ink-3">{kind === 'pr' ? 'Paste into Claude Code in the workspace:' : 'On the hub on your laptop this form creates the work item and writes the intent for you. Here, paste these into Claude Code in the workspace:'}</p>
+          <ol className="mt-2 space-y-1.5">
+            {cmds.map((c, i) => <li key={i} className="flex items-center gap-2"><span className="w-4 text-xs tabular-nums text-ink-3">{i + 1}</span><CopyButton text={c} className="max-w-full [&_code]:truncate" /></li>)}
+          </ol>
+        </>
+      )}
+      {api?.writable && kind !== 'pr' && (
+        <details className="mt-3"><summary className="cursor-pointer text-xs text-ink-2">Or in Claude Code</summary>
+          <ol className="mt-2 space-y-1.5">{cmds.map((c, i) => <li key={i} className="flex items-center gap-2"><span className="w-4 text-xs tabular-nums text-ink-3">{i + 1}</span><CopyButton text={c} className="max-w-full [&_code]:truncate" /></li>)}</ol>
+        </details>
+      )}
     </form>
   );
 }
