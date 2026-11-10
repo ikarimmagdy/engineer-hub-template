@@ -42,6 +42,7 @@ export function WorkItem() {
           <h1 className="text-2xl font-semibold leading-tight text-balance">{spec.title}</h1>
           <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-ink-2">
             <Pill>{PHASE_TITLE[spec.phase]}</Pill>
+            {spec.proposed && <a href={spec.proposed.url} target="_blank" rel="noopener" className="rounded-full border border-sev-medium px-2 py-px text-xs text-sev-medium hover:underline">proposed in PR #{spec.proposed.pr} by {spec.proposed.author}, not merged</a>}
             {jira && <a href={jira} target="_blank" rel="noopener" className="underline decoration-line-2 underline-offset-4 hover:decoration-ink">Jira {spec.tracker?.initiative || spec.key}</a>}
             {!!spec.tracker?.epics?.length && <span>{spec.tracker.epics.length} epics, {spec.tracker.stories?.length || 0} stories</span>}
             <span>{spec.repos.length} {spec.repos.length === 1 ? 'repo' : 'repos'}</span>

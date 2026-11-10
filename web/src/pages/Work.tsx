@@ -60,7 +60,7 @@ function Card({ s }: { s: Spec }) {
   const gate = (['intent', 'spec', 'design'] as const).find((g) => g === s.phase && !s.approved?.[g]);
   return (
     <Link to={`/work/${s.key}/overview`} className="block rounded-lg border border-line bg-paper p-3 hover:border-line-2">
-      <div className="font-mono text-[11px] text-ink-3">{s.key}</div>
+      <div className="flex items-center gap-2 font-mono text-[11px] text-ink-3">{s.key}<ProposedTag s={s} /></div>
       <div className="mt-0.5 line-clamp-2 text-sm font-medium">{s.title}</div>
       {s.criteria > 1 && (
         <div className="mt-2.5">
@@ -139,7 +139,7 @@ function Table({ specs, sort, onSort }: { specs: Spec[]; sort: SortKey; onSort: 
             <tr key={s.key} className="hover:bg-sunk">
               <td className="px-3 py-2">
                 <Link to={`/work/${s.key}/overview`} className="hover:underline">
-                  <span className="mr-2 font-mono text-[11.5px] text-ink-3">{s.key}</span><span className="font-medium">{s.title}</span>
+                  <span className="mr-2 font-mono text-[11.5px] text-ink-3">{s.key}</span><span className="font-medium">{s.title}</span> <ProposedTag s={s} />
                 </Link>
               </td>
               <td className="px-3 py-2"><Pill>{PHASE_TITLE[s.phase]}</Pill></td>
@@ -155,4 +155,10 @@ function Table({ specs, sort, onSort }: { specs: Spec[]; sort: SortKey; onSort: 
       </table>
     </div>
   );
+}
+
+/** A work item that exists only on an open pull request: whose it is and where to review it. */
+export function ProposedTag({ s }: { s: Spec }) {
+  if (!s.proposed) return null;
+  return <span className="rounded-full border border-sev-medium px-1.5 py-px font-sans text-[10.5px] text-sev-medium" title={`${s.proposed.title} (${s.proposed.branch})`}>proposed · PR #{s.proposed.pr} · {s.proposed.author}</span>;
 }

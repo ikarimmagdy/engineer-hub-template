@@ -267,6 +267,10 @@ def main() -> None:
             files.update({k: True for k, f in DOCS.items() if f in listed})  # spec.py may not track every file; keep our own check for the rest
         if groups:
             r = {**r, "findings": {**(r.get("findings") or {}), **groups}}
+        # a spec that exists only on an open pull request (laid in by the shared hub's workspace sync)
+        prop = d / ".proposed.json"
+        if prop.exists():
+            r = {**r, "proposed": json.loads(prop.read_text(encoding="utf-8"))}
         specs.append({**r, "dir": name, "files": files,
                       "review": review, "feedback": feedback, "contracts": contracts, "outputs": outputs, "inputs": inputs,
                       "findingsFile": f"content/specs/{name}/findings.json" if findings.exists() else None,

@@ -4,6 +4,13 @@ One engine, many hubs: the engine files come from this repo and are updated in p
 `tools/hub-update.sh`; each project keeps only its content (`content/`, `assets/img/`).
 Never edit engine files inside a hub; fix them here, tag a release, and update the hubs.
 
+## Proposed work (5.2.1)
+
+A spec folder with a `.proposed.json` (`pr`, `url`, `author`, `title`, `branch`) is a work item that is still on an
+open pull request. `sync_loop.py` carries it into `loop.json` as `proposed`, and the Work page and the work item
+header mark it "proposed · PR #N · author" with a link to the PR. A shared hub's CI workspace sync lays these folders
+in from the workspace's open pull requests, so everyone's work shows before it merges.
+
 ## Agents and the local loop (5.2.0)
 
 - **Work item, Agents tab.** Each phase with its command, the subagents and MCP servers it uses (read from the
