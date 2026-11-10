@@ -16,6 +16,7 @@ import { Requirements } from './Requirements';
 import { PhaseBanner, PhaseNav, TAB_PHASE } from '../components/PhaseNav';
 import { WorkQuestions } from './Questions';
 import { WorkReleases } from './Releases';
+import { WorkArchitecture } from './Architecture';
 
 export function WorkItem() {
   const { key, tab = 'overview' } = useParams();
@@ -120,6 +121,7 @@ function Overview({ spec }: { spec: Spec }) {
           )}
         </div>
         <div className="min-w-0 space-y-6">
+          <WorkArchitecture workKey={spec.key} />
           <LatestRun spec={spec} />
           {f && (
             <Panel title="Findings by area" action={<Link to={`/work/${spec.key}/findings`} className="text-xs underline">All findings</Link>}>

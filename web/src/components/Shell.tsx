@@ -2,12 +2,14 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { NavLink, useLocation } from 'react-router';
 import { useHub } from '../lib/data';
 import { releasesOf } from '../lib/releases';
+import { archOf } from '../lib/architecture';
 import { Palette } from './Palette';
 import { cx, Logo } from './ui';
 
 const NAV: [string, string][] = [
   ['/', 'Home'],
   ['/work', 'Work'],
+  ['/architecture', 'Architecture'],
   ['/questions', 'Questions'],
   ['/quality', 'Quality'],
   ['/environments', 'Environments'],
@@ -33,13 +35,14 @@ export function Shell({ children, onSignOut }: { children: ReactNode; onSignOut:
   const { brand, manifest } = hub;
   const hasLearning = !!manifest.learning?.courses?.length;
   const hasReleases = releasesOf(hub).length > 0;
-  const shown = NAV.filter(([to]) => (to !== '/learn' || hasLearning) && (to !== '/releases' || hasReleases));
+  const hasArch = !!archOf(hub);
+  const shown = NAV.filter(([to]) => (to !== '/learn' || hasLearning) && (to !== '/releases' || hasReleases) && (to !== '/architecture' || hasArch));
   const [palette, setPalette] = useState(false);
   const [menu, setMenu] = useState(false);
   const toggleTheme = useTheme();
   const loc = useLocation();
 
-  useEffect(() => { setMenu(false); window.scrollTo(0, 0); }, [loc.pathname]);
+  useEffect(() => { setMenu(false); if (!(loc.state as { keepScroll?: boolean } | null)?.keepScroll) window.scrollTo(0, 0); }, [loc.pathname]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); setPalette(true); }
@@ -75,16 +78,16 @@ export function Shell({ children, onSignOut }: { children: ReactNode; onSignOut:
           <nav aria-label="Main" className="hidden items-center gap-0.5 md:flex">{shown.map(([to, l]) => link(to, l))}</nav>
           <div className="ml-auto flex items-center gap-2">
             <button type="button" onClick={() => setPalette(true)}
-              className="flex h-8 items-center gap-2 whitespace-nowrap rounded-md border border-line bg-sunk px-2.5 text-sm text-ink-3 hover:border-line-2 md:w-44 2xl:w-72">
+              className="flex h-8 items-center gap-2 whitespace-nowrap rounded-md border border-line bg-sunk px-2.5 text-sm text-ink-3 hover:border-line-2 md:w-auto 2xl:w-72">
               <svg aria-hidden viewBox="0 0 20 20" className="size-4 shrink-0"><circle cx="9" cy="9" r="6" fill="none" stroke="currentColor" strokeWidth="1.6" /><path d="m14 14 4 4" stroke="currentColor" strokeWidth="1.6" /></svg>
-              <span className="hidden md:inline">Search work and commands</span>
+              <span className="hidden 2xl:inline">Search work and commands</span><span className="hidden md:inline 2xl:hidden">Search</span>
               <kbd className="ml-auto hidden rounded border border-line-2 px-1 font-mono text-[11px] md:inline">⌘K</kbd>
               <span className="sr-only md:hidden">Search</span>
             </button>
             <button type="button" onClick={toggleTheme} aria-label="Switch light or dark theme" className="grid size-8 place-items-center rounded-md text-ink-2 hover:bg-sunk">
               <svg aria-hidden viewBox="0 0 20 20" className="size-4"><path d="M10 3a7 7 0 1 0 7 7 5.5 5.5 0 0 1-7-7Z" fill="currentColor" /></svg>
             </button>
-            <button type="button" onClick={onSignOut} className="hidden rounded-md px-2 py-1 text-sm text-ink-2 hover:bg-sunk md:block">Sign out</button>
+            <button type="button" onClick={onSignOut} className="hidden whitespace-nowrap rounded-md px-2 py-1 text-sm text-ink-2 hover:bg-sunk md:block">Sign out</button>
             <button type="button" onClick={() => setMenu((m) => !m)} aria-expanded={menu} aria-controls="mobile-nav" aria-label="Menu" className="grid size-8 place-items-center rounded-md hover:bg-sunk md:hidden">
               <svg aria-hidden viewBox="0 0 20 20" className="size-4"><path d="M3 6h14M3 10h14M3 14h14" stroke="currentColor" strokeWidth="1.6" /></svg>
             </button>

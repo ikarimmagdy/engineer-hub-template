@@ -1,0 +1,91 @@
+{
+  "generated": "2026-11-10",
+  "sources": ["docs/architecture/README.md", "code/core-api", "infra/cdk"],
+  "summary": "A sample bookings platform. Customers book through the web and mobile apps; one **core API** holds the business logic as modules; operations staff work in the back office. Production runs in two AWS regions, with payments and SMS through partners.",
+  "actors": [
+    { "id": "customer", "name": "Customer", "kind": "person", "description": "Books and pays for appointments on the web or mobile app." },
+    { "id": "ops", "name": "Operations team", "kind": "ops", "description": "Manages providers, refunds and support cases in the back office." },
+    { "id": "provider", "name": "Provider", "kind": "partner", "description": "A clinic or practitioner who receives bookings through the provider portal." }
+  ],
+  "externals": [
+    { "id": "stripe", "name": "Stripe", "kind": "payments", "regions": ["eu", "me"], "description": "Card payments, refunds and payouts." },
+    { "id": "twilio", "name": "Twilio", "kind": "messaging", "regions": ["eu", "me"], "description": "SMS one-time codes and booking reminders." },
+    { "id": "maps", "name": "Google Maps", "kind": "geo", "description": "Address search and distance for provider listings." }
+  ],
+  "regions": [
+    {
+      "id": "eu", "name": "Europe (production)", "cloud": "AWS", "location": "eu-west-1", "account": "111111111111", "status": "live",
+      "description": "Primary region. Serves every market outside the Gulf.",
+      "layers": [
+        { "id": "edge", "name": "Edge", "resources": [
+          { "id": "eu-cdn", "name": "CloudFront", "type": "CDN", "stack": "edge-stack", "description": "Serves the web apps and caches public API reads.", "connects": ["eu-alb", "eu-web-bucket"], "links": [{ "label": "Console", "url": "https://console.aws.amazon.com/cloudfront" }] },
+          { "id": "eu-web-bucket", "name": "Web bucket", "type": "S3", "stack": "edge-stack", "description": "Static builds of the web app and back office." }
+        ] },
+        { "id": "compute", "name": "Compute", "resources": [
+          { "id": "eu-alb", "name": "Load balancer", "type": "ALB", "stack": "app-stack", "connects": ["eu-ecs"] },
+          { "id": "eu-ecs", "name": "ECS cluster", "type": "ECS Fargate", "stack": "app-stack", "description": "Runs the core API and the reminder job.", "connects": ["eu-db", "eu-cache", "eu-queue"] }
+        ] },
+        { "id": "data", "name": "Data", "resources": [
+          { "id": "eu-db", "name": "Bookings database", "type": "Aurora PostgreSQL", "stack": "data-stack", "description": "System of record for bookings, providers and payments." },
+          { "id": "eu-cache", "name": "Cache", "type": "ElastiCache Redis", "stack": "data-stack" },
+          { "id": "eu-queue", "name": "Events queue", "type": "SQS", "stack": "data-stack", "description": "Booking events for reminders and reporting." }
+        ] }
+      ]
+    },
+    {
+      "id": "me", "name": "Gulf (production)", "cloud": "AWS", "location": "me-central-1", "account": "222222222222", "status": "live",
+      "description": "Data residency region for Gulf customers. Same layout as Europe without a CDN bucket.",
+      "layers": [
+        { "id": "edge", "name": "Edge", "resources": [
+          { "id": "me-cdn", "name": "CloudFront", "type": "CDN", "stack": "edge-stack", "connects": ["me-alb"] }
+        ] },
+        { "id": "compute", "name": "Compute", "resources": [
+          { "id": "me-alb", "name": "Load balancer", "type": "ALB", "stack": "app-stack", "connects": ["me-ecs"] },
+          { "id": "me-ecs", "name": "ECS cluster", "type": "ECS Fargate", "stack": "app-stack", "connects": ["me-db", "me-queue"] }
+        ] },
+        { "id": "data", "name": "Data", "resources": [
+          { "id": "me-db", "name": "Bookings database", "type": "Aurora PostgreSQL", "stack": "data-stack" },
+          { "id": "me-queue", "name": "Events queue", "type": "SQS", "stack": "data-stack" }
+        ] }
+      ]
+    }
+  ],
+  "containers": [
+    { "id": "core-api", "name": "Core API", "kind": "service", "tech": "NestJS, TypeScript", "repo": "core-api", "regions": ["eu", "me"], "description": "The one backend: bookings, providers, payments and notifications as modules.", "runsOn": { "eu": "eu-ecs", "me": "me-ecs" }, "talksTo": ["stripe", "twilio", "maps"], "urls": [{ "label": "API docs (dev)", "url": "https://api.dev.example.com/docs" }] },
+    { "id": "web-app", "name": "Web app", "kind": "web", "tech": "React, Vite", "repo": "web-app", "regions": ["eu", "me"], "description": "Customer booking site.", "runsOn": { "eu": "eu-web-bucket", "me": "me-cdn" }, "talksTo": ["core-api", "customer"], "urls": [{ "label": "Dev", "url": "https://dev.example.com" }] },
+    { "id": "mobile-app", "name": "Mobile app", "kind": "mobile", "tech": "React Native", "repo": "mobile-app", "description": "iOS and Android booking app.", "talksTo": ["core-api", "customer"] },
+    { "id": "back-office", "name": "Back office", "kind": "console", "tech": "React", "repo": "back-office", "regions": ["eu"], "description": "Operations console for providers, refunds and support.", "runsOn": { "eu": "eu-web-bucket" }, "talksTo": ["core-api", "ops"] },
+    { "id": "reminders", "name": "Reminder job", "kind": "job", "tech": "Node.js worker", "repo": "core-api", "regions": ["eu", "me"], "description": "Reads booking events and sends reminders a day ahead.", "runsOn": { "eu": "eu-ecs", "me": "me-ecs" }, "talksTo": ["twilio"] }
+  ],
+  "modules": [
+    { "id": "auth", "name": "Auth", "container": "core-api", "package": "src/auth", "description": "Sign-in with phone and one-time code; issues JWTs.", "dependsOn": ["notifications"], "endpoints": [
+      { "method": "POST", "path": "/auth/otp", "summary": "Send a one-time code" },
+      { "method": "POST", "path": "/auth/verify", "summary": "Verify the code and issue tokens" },
+      { "method": "POST", "path": "/auth/refresh", "summary": "Refresh an access token" }
+    ], "tables": ["users", "sessions"], "workItems": ["SAMPLE-1"], "adrs": ["ADR-001"], "code": ["core-api/src/auth/auth.service.ts"] },
+    { "id": "bookings", "name": "Bookings", "container": "core-api", "package": "src/bookings", "description": "Availability, booking, rescheduling and cancellation.", "dependsOn": ["auth", "providers", "payments", "notifications"], "endpoints": [
+      { "method": "GET", "path": "/providers/{id}/slots", "summary": "Free slots for a provider" },
+      { "method": "POST", "path": "/bookings", "summary": "Create a booking and hold the slot" },
+      { "method": "PATCH", "path": "/bookings/{id}", "summary": "Reschedule" },
+      { "method": "DELETE", "path": "/bookings/{id}", "summary": "Cancel and refund by policy" }
+    ], "tables": ["bookings", "slots"], "events": { "publishes": ["booking.created", "booking.cancelled"], "consumes": ["payment.succeeded"] }, "workItems": ["SAMPLE-1"], "code": ["core-api/src/bookings/"] },
+    { "id": "providers", "name": "Providers", "container": "core-api", "package": "src/providers", "description": "Provider profiles, locations and schedules.", "dependsOn": ["auth"], "endpoints": [
+      { "method": "GET", "path": "/providers", "summary": "Search providers near a location" },
+      { "method": "GET", "path": "/providers/{id}", "summary": "Provider profile" }
+    ], "tables": ["providers", "schedules"], "adapters": ["maps-adapter"], "code": ["core-api/src/providers/"] },
+    { "id": "payments", "name": "Payments", "container": "core-api", "package": "src/payments", "description": "Card payments and refunds through the payment adapter.", "dependsOn": ["auth"], "endpoints": [
+      { "method": "POST", "path": "/payments/intents", "summary": "Start a card payment" },
+      { "method": "POST", "path": "/payments/webhook", "summary": "Payment provider callbacks" }
+    ], "tables": ["payments", "refunds"], "events": { "publishes": ["payment.succeeded", "payment.failed"] }, "adapters": ["stripe-adapter"], "adrs": ["ADR-001"], "code": ["core-api/src/payments/"] },
+    { "id": "notifications", "name": "Notifications", "container": "core-api", "package": "src/notifications", "description": "SMS and push messages.", "endpoints": [], "events": { "consumes": ["booking.created", "booking.cancelled"] }, "adapters": ["sms-adapter"], "code": ["core-api/src/notifications/"] }
+  ],
+  "adapters": [
+    { "id": "stripe-adapter", "name": "Stripe adapter", "external": "stripe", "regions": ["eu", "me"], "ports": ["PaymentGateway"], "module": "payments", "code": ["core-api/src/payments/stripe.adapter.ts"], "description": "Implements the PaymentGateway port with Stripe PaymentIntents." },
+    { "id": "sms-adapter", "name": "SMS adapter", "external": "twilio", "regions": ["eu", "me"], "ports": ["SmsSender"], "module": "notifications", "code": ["core-api/src/notifications/twilio.adapter.ts"], "description": "Sends SMS through Twilio Messaging Services." },
+    { "id": "maps-adapter", "name": "Maps adapter", "external": "maps", "ports": ["Geocoder"], "module": "providers", "code": ["core-api/src/providers/maps.adapter.ts"] }
+  ],
+  "flows": [
+    { "id": "book-and-pay", "title": "Book and pay", "description": "A customer picks a slot, pays by card, and gets an SMS confirmation.", "mermaid": "sequenceDiagram\n  participant C as Customer app\n  participant B as Bookings\n  participant P as Payments\n  participant S as Stripe\n  participant N as Notifications\n  C->>B: POST /bookings\n  B->>P: create payment intent\n  P->>S: PaymentIntent\n  S-->>P: webhook succeeded\n  P-->>B: payment.succeeded\n  B-->>N: booking.created\n  N-->>C: SMS confirmation", "workItems": ["SAMPLE-1"], "modules": ["bookings", "payments", "notifications"] },
+    { "id": "sign-in", "title": "Sign in with a one-time code", "mermaid": "flowchart LR\n  A[Phone number] --> B[POST /auth/otp]\n  B --> C[SMS code]\n  C --> D[POST /auth/verify]\n  D --> E[Access and refresh tokens]", "modules": ["auth", "notifications"] }
+  ]
+}

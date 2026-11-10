@@ -3,10 +3,11 @@ import type { Hub } from './data';
 import { TABS, ENV_PAGES, docTabRoute, howRoute } from './routes';
 import { courseRoute, learningOf, lessonRoute } from './learning';
 import { releaseRoute, releasesOf } from './releases';
+import { archOf, archRoute, indexArch, KIND_LABEL, nodeRoute, VIEWS } from './architecture';
 
 export interface Hit {
   id: string;
-  group: 'Work' | 'Commands' | 'Pages' | 'Decisions' | 'Library' | 'Learning' | 'Releases';
+  group: 'Work' | 'Commands' | 'Pages' | 'Decisions' | 'Library' | 'Learning' | 'Releases' | 'Architecture';
   title: string;
   hint?: string;
   to?: string;
@@ -65,6 +66,14 @@ export function buildIndex(hub: Hub) {
     docs.push({ id: 'p:/releases/live', group: 'Pages', title: 'Releases · Live now', to: '/releases/live' });
     for (const r of releases) {
       docs.push({ id: `r:${r.id}`, group: 'Releases', title: `${r.id} ${r.title || ''}`, hint: [r.env, r.date, ...(r.tickets || [])].filter(Boolean).join(' '), to: releaseRoute(r.id) });
+    }
+  }
+  const arch = archOf(hub);
+  if (arch) {
+    for (const [v, l] of VIEWS) docs.push({ id: `p:/architecture/${v}`, group: 'Pages', title: v === 'overview' ? 'Architecture' : `Architecture · ${l}`, to: archRoute(v) });
+    const idx = indexArch(arch);
+    for (const n of idx.nodes) {
+      docs.push({ id: `ar:${n.kind}:${n.id}`, group: 'Architecture', title: n.name, hint: [KIND_LABEL[n.kind], n.hint].filter(Boolean).join(' · '), to: nodeRoute(n, idx) });
     }
   }
   for (const a of hub.manifest.adrs) {

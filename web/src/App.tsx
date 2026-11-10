@@ -15,6 +15,7 @@ import { Doc, SectionPage } from './pages/Doc';
 import { Questions } from './pages/Questions';
 import { Learning } from './pages/Learning';
 import { Releases } from './pages/Releases';
+import { Architecture } from './pages/Architecture';
 
 function Legacy() {
   const hub = useHub();
@@ -57,6 +58,7 @@ export function App() {
             <Route path="/questions/:view?" element={<Questions />} />
             <Route path="/learn/:course?/:lesson?" element={<Learning />} />
             <Route path="/releases/:id?" element={<Releases />} />
+            <Route path="/architecture/:view?/:id?" element={<Architecture />} />
             <Route path="/doc/*" element={<Doc />} />
             <Route path="/section/:id" element={<SectionPage />} />
             <Route path="*" element={<Legacy />} />

@@ -14,7 +14,58 @@ contract as v4: `brand.json`, `manifest.json` (from `node build.mjs`), `data/loo
 redirect to their v5 pages. `hub-update.sh` removes the v4 files listed in `tools/engine-retired.txt`.
 
 Views: Home, Work (board and table, one page per work item with the phases as tabs and an
-Impact tab), Quality, **System**, Environments, Knowledge.
+Impact tab), **Architecture** (5.1.0, when `content/data/architecture.json` exists), Quality, **System**,
+Environments, Knowledge.
+
+### Architecture (5.1.0): how the system is built, clickable
+
+`content/data/architecture.json` reaches the manifest as `architecture` (`node build.mjs`); the
+Architecture page and its nav entry show only when it exists. Routes are
+`#/architecture/<view>/<id>`, so every selection is a deep link:
+
+- **Overview**: the summary, then a context map: people and partners, each region as a box holding
+  the containers that run there, and the external systems, with lines from `talksTo` (and from each
+  adapter's container to its external). Pick any box for a side panel (description, links, what it
+  talks to, what calls it, its modules) and a link to its view. Filter by region (`?region=`).
+- **Infrastructure**: regions side by side (stacked on a phone), each with its layers as rows of
+  resource cards. Picking a resource highlights what it connects to and shows its type, stack,
+  links and the containers running on it. `Compare layer by layer` (`?mode=compare`) lines the
+  regions up per layer.
+- **Application**: containers grouped by kind with region badges, repo and URLs; the container with
+  the most modules opens its module list.
+- **Modules**: a filterable list (`?q=`) and a dependency graph (arrows point at what a module
+  depends on; picking one, `?focus=`, lights it and its neighbours). `#/architecture/modules/<id>` is
+  the module page: description, package, endpoints (filter by method and text), tables, events,
+  adapters, flows through it, what it depends on and what uses it, work items (to `#/work/<key>`
+  when the hub has that item, else the tracker), decisions (to `#/knowledge/decisions/<id>`) and code paths.
+- **Flows**: one diagram per flow, rendered with the hub's mermaid, with its modules and work items.
+
+A search box on the page finds any node by name; every node is also in the global search (⌘K).
+A work item named in a module's `workItems` (or a flow's) gets an Architecture panel on its overview.
+
+Contract (every field optional; the page renders what exists):
+
+```
+{ "generated", "sources": [], "summary",
+  "actors":     [{ "id", "name", "kind": "person|partner|ops", "description" }],
+  "externals":  [{ "id", "name", "kind", "regions": [], "description" }],
+  "regions":    [{ "id", "name", "cloud", "location", "account", "status", "description",
+                   "layers": [{ "id", "name", "resources": [{ "id", "name", "type", "stack", "description",
+                                                               "connects": [ids], "links": [{ "label", "url" }] }] }] }],
+  "containers": [{ "id", "name", "kind": "service|web|mobile|console|job|simulator|hub", "tech", "repo",
+                   "regions": [], "description", "runsOn": { "<region id>": "<resource id>" },
+                   "talksTo": [ids], "urls": [{ "label", "url" }] }],
+  "modules":    [{ "id", "name", "container", "package", "description", "dependsOn": [ids],
+                   "endpoints": [{ "method", "path", "summary" }], "tables": [],
+                   "events": { "publishes": [], "consumes": [] }, "adapters": [ids],
+                   "workItems": [keys], "adrs": [ids], "code": [paths] }],
+  "adapters":   [{ "id", "name", "external", "regions": [], "ports": [], "module", "code": [], "description" }],
+  "flows":      [{ "id", "title", "description", "mermaid", "workItems": [], "modules": [] }] }
+```
+
+`summary` and every `description` render as Markdown. `talksTo` may name a container, an actor, an
+external system or a module (drawn to the module's container). The template carries a sample in
+`content/data/architecture.json`.
 
 ### System: the picture every work item adds to
 
@@ -253,7 +304,7 @@ A concrete case, How it works in the platform, What goes wrong, The vocabulary, 
 Optional data files switch modules on by being present: `content/learning/paths.json`
 (learning paths), `content/data/releases.json` (Releases page: `releases: [{ id, date, env,
 title, tickets, notes, platforms: [{ platform, component, version, where, status }], build }]`),
-`feedback.json` (client feedback changelog), `questions.json`, `vendors.json`,
+`content/data/architecture.json` (Architecture page, contract above), `feedback.json` (client feedback changelog), `questions.json`, `vendors.json`,
 `content/stories/*.json`. Comments are on when `content/comments-config.json` has
 `"enabled": true`. Any `sections.json` entry without its own page renders as Markdown; give it
 `"base": "content/kb-src/<repo path of its source>"` when it is generated from a repo document, so

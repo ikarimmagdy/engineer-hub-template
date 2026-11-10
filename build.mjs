@@ -183,6 +183,7 @@ const vendors = readIf(join(D, 'vendors.json')) || [];
 const questions = readIf(join(D, 'questions.json')) || [];
 const summary = readIf(join(D, 'summary.json')) || { defects: {} };
 const releases = readIf(join(D, 'releases.json'));
+const architecture = readIf(join(D, 'architecture.json'));
 const lifecycle = readIf(join(D, 'lifecycle.json')) || { stages: [] };
 const feedback = readIf(join(D, 'feedback.json')) || { batches: [], items: [] };
 
@@ -294,7 +295,7 @@ if (existsSync(CODE) && REPOS.length) {
 
 const manifest = {
   meta: { generated: new Date().toISOString().slice(0, 10), version: 'v4', template: (existsSync(join(C, '.template-version')) ? readFileSync(join(C, '.template-version'), 'utf8').split(/\s+/)[0] : ''), brand: brand.name || '', hubDir: relative(REPO, ROOT).replace(/\\/g, '/') || '.', adrSource },
-  overview, nav, sections, features, loop: readIf(join(D, 'loop.json')), loopConfig: readIf(join(D, 'loop-config.json')), agentic: readIf(join(D, 'agentic.json')), roadmapExtra, adrs, gaps, security, performance, gtm, vendors, questions, lifecycle, kb, kbFiles, traceability, feedback, learning, releases,
+  overview, nav, sections, features, loop: readIf(join(D, 'loop.json')), loopConfig: readIf(join(D, 'loop-config.json')), agentic: readIf(join(D, 'agentic.json')), roadmapExtra, adrs, gaps, security, performance, gtm, vendors, questions, lifecycle, kb, kbFiles, traceability, feedback, learning, releases, architecture,
   defectsSummary: { total: summary.defects?.total || 0, critical: summary.defects?.critical || 0, high: summary.defects?.high || 0, medium: summary.defects?.medium || 0, low: summary.defects?.low || 0 },
   counts: { gaps: summary.gaps || null, security: summary.security || null }
 };
