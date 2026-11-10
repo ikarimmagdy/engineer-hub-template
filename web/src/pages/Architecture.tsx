@@ -7,10 +7,22 @@ import {
   type ArchRegion, type ArchResource, type ArchActor, type ArchFlow, type View,
 } from '../lib/architecture';
 import { MarkdownText } from '../components/Markdown';
-import { cx, Empty, fmtDate, PageHeader, Panel, Pill, Segmented, TabBar, type Tone } from '../components/ui';
+import { cx, Dot, Empty, fmtDate, PageHeader, Panel, Pill, Segmented, TabBar, type Tone } from '../components/ui';
 
 const DATA_PATH = 'content/data/architecture.json';
 const KEEP = { state: { keepScroll: true } };
+
+/** A short status is a pill; a sentence wraps inside the box instead of running past it. */
+function StatusLine({ status, className }: { status: string; className?: string }) {
+  const tone = statusTone(status);
+  if (status.length <= 40) return <Pill tone={tone} className={className}>{status}</Pill>;
+  return (
+    <span className={cx('inline-flex min-w-0 max-w-full items-start gap-1.5 rounded-lg border border-line-2 px-2 py-0.5 text-xs text-ink-2', className)}>
+      {tone && <Dot tone={tone} className="mt-1.5 shrink-0" />}
+      <span className="min-w-0 break-words">{status}</span>
+    </span>
+  );
+}
 
 const statusTone = (s?: string): Tone | undefined =>
   !s ? undefined : /^(live|active|prod|running|ok|up)/i.test(s) ? 'ok' : /(plan|propos|future|draft)/i.test(s) ? 'wait' : /(down|fail|retired|block)/i.test(s) ? 'block' : 'run';
@@ -192,7 +204,7 @@ function NodeDetail({ node, idx }: { node: ArchNode; idx: ArchIndex }) {
     rows.push(
       <Field key="c" label="Cloud">{r.cloud}</Field>, <Field key="l" label="Location">{r.location}</Field>,
       <Field key="a" label="Account"><span className="font-mono text-[12px]">{r.account}</span></Field>,
-      <Field key="s" label="Status">{r.status && <Pill tone={statusTone(r.status)}>{r.status}</Pill>}</Field>,
+      <Field key="s" label="Status">{r.status && <StatusLine status={r.status} />}</Field>,
     );
     const cs = (arch.containers || []).filter((c) => (c.regions || []).includes(r.id)).map((c) => c.id);
     const n = (r.layers || []).reduce((s, l) => s + (l.resources || []).length, 0);
@@ -458,7 +470,7 @@ function ContextMap({ idx, region, selected, onSelect }: { idx: ArchIndex; regio
                 <button type="button" onClick={() => onSelect(r.id)} aria-pressed={selected === r.id} className="mb-2 flex w-full flex-wrap items-center gap-2 text-left">
                   <span className="text-sm font-semibold hover:underline">{r.name || r.id}</span>
                   <span className="text-xs text-ink-3">{[r.cloud, r.location].filter(Boolean).join(' · ')}</span>
-                  {r.status && <Pill tone={statusTone(r.status)} className="ml-auto">{r.status}</Pill>}
+                  {r.status && <StatusLine status={r.status} className="basis-full" />}
                 </button>
                 {cs.length ? (
                   <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-2">
@@ -568,7 +580,7 @@ function Infrastructure({ idx }: { idx: ArchIndex }) {
                 <header className="border-b border-line px-4 py-2.5">
                   <div className="flex flex-wrap items-center gap-2">
                     <h3 className="text-sm font-semibold">{r.name || r.id}</h3>
-                    {r.status && <Pill tone={statusTone(r.status)}>{r.status}</Pill>}
+                    {r.status && <StatusLine status={r.status} className="basis-full" />}
                   </div>
                   <div className="mt-0.5 text-xs text-ink-3">{[r.cloud, r.location, r.account && `account ${r.account}`].filter(Boolean).join(' · ')}</div>
                   {r.description && <p className="mt-1.5 text-xs text-ink-2">{r.description}</p>}
