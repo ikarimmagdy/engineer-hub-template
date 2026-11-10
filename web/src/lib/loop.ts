@@ -13,7 +13,7 @@ export interface LiveRun {
 }
 export interface Reach { repos: string[]; docs: boolean; edits: string | null; shell: boolean; mcp: string[]; databases: boolean; clusters: boolean; network: boolean }
 /** A team agent from the workspace's .claude/agents/ (team: in the front matter), with the scope repos cloned on this laptop. */
-export interface TeamAgent { name: string; description: string; team: string; family: string; scope: string[]; modes: string[]; starters: string[]; mcp?: string[]; prompt: string; path: string; cloned?: string[] }
+export interface TeamAgent { name: string; description: string; team: string; family: string; scope: string[]; modes: string[]; starters: string[]; mcp?: string[]; mcpTools?: string[]; access?: string[]; build?: string; prompt: string; path: string; cloned?: string[] }
 
 async function call<T>(path: string, body?: unknown): Promise<T> {
   const r = await fetch(path, body === undefined ? { cache: 'no-store' } : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });

@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { useParams, useSearchParams } from 'react-router';
+import { Link, useParams, useSearchParams } from 'react-router';
 import { useHub } from '../lib/data';
 import { createAgent, since, startAgent, teamAgents, useLive, useLoopApi, useRuns, type TeamAgent } from '../lib/loop';
 import { RunView, useRun } from '../components/RunView';
+import { AccessList, BUILDS } from './AgentsHow';
 import { CopyButton, cx, Dot, Empty, ErrorNote, Panel, Pill, Segmented, Select, Skeleton, TabBar } from '../components/ui';
 
 const MODE_HELP: Record<string, string> = {
@@ -20,7 +21,7 @@ function useTeamAgents() {
   useEffect(() => { if (api) teamAgents().then(setLive, (e) => setErr((e as Error).message)); }, [api]);
   const synced = (manifest.agentic?.agents || []).filter((a) => a.team).map((a) => ({
     name: a.name, description: a.description || '', team: a.team!, family: a.family || '', scope: a.scope || [], modes: a.modes || ['ask'],
-    starters: a.starters || [], prompt: a.prompt || '', path: a.path || '',
+    starters: a.starters || [], mcp: a.mcp || [], mcpTools: a.mcpTools || [], access: a.access || [], build: a.build || '', prompt: a.prompt || '', path: a.path || '',
   }));
   return { api, agents: api ? live : synced, err, loading: api === undefined || (!!api && !live && !err) };
 }
@@ -70,7 +71,8 @@ export function TeamAgents() {
   );
 }
 
-const title = (n: string) => n.split('-').map((w) => (w === 'dotnet' ? '.NET' : w[0].toUpperCase() + w.slice(1))).join(' ');
+const UPPER: Record<string, string> = { dotnet: '.NET', api: 'API', sog: 'SOG', mcp: 'MCP', db: 'DB', otp: 'OTP', mnp: 'MNP', uat: 'UAT' };
+const title = (n: string) => n.split('-').map((w) => UPPER[w] || w[0].toUpperCase() + w.slice(1)).join(' ');
 
 function AgentCard({ a }: { a: TeamAgent }) {
   return (
@@ -81,8 +83,10 @@ function AgentCard({ a }: { a: TeamAgent }) {
         <div className="text-ink-3">Modes</div><div className="flex flex-wrap gap-1.5">{a.modes.map((m) => <Pill key={m}>{m}</Pill>)}</div>
         <div className="text-ink-3">Scope</div>
         <div className="flex flex-wrap gap-1.5">{a.scope.map((r) => <code key={r} className={cx('rounded px-1.5 text-xs', a.cloned && !a.cloned.includes(r) ? 'text-ink-3 line-through' : 'bg-sunk')} title={a.cloned && !a.cloned.includes(r) ? 'not cloned on this laptop' : undefined}>{r}</code>)}</div>
+        {!!a.build && <><div className="text-ink-3">Built as</div><div className="text-xs text-ink-2"><Link to="/agents/how/ways" className="underline">{BUILDS[a.build] || a.build}</Link></div></>}
+        {!!a.access?.length && <><div className="text-ink-3">Reaches data</div><AccessList access={a.access} /></>}
         <div className="text-ink-3">Guardrails</div>
-        <div className="text-xs text-ink-2">Read, Grep and Glob only (plus edits inside an isolated worktree in propose mode); no shell, no MCP servers; never .env files, keys or test data; 10-minute limit; every run logged on the work item.</div>
+        <div className="text-xs text-ink-2">Read, Grep and Glob only (plus edits inside an isolated worktree in propose mode); no shell; {a.mcp?.length ? <>MCP server{a.mcp.length > 1 ? 's' : ''} <code>{a.mcp.join(', ')}</code>{a.mcpTools?.length ? <>, only {a.mcpTools.map((t) => <code key={t} className="mr-1">{t}</code>)}</> : ', every tool'}</> : 'no MCP servers'}; never .env files, keys or test data; 10-minute limit; every run logged on the work item.</div>
       </div>
       <details className="mt-3"><summary className="cursor-pointer text-xs text-ink-2">Instructions the agent follows</summary>
         <pre className="mt-2 max-h-80 overflow-auto whitespace-pre-wrap rounded bg-sunk p-3 text-xs">{a.prompt}</pre>

@@ -98,7 +98,7 @@ function runs(ws: string, key?: string) {
     .slice(0, 200);
 }
 
-interface TeamAgent { name: string; description: string; team: string; family: string; scope: string[]; modes: string[]; starters: string[]; mcp: string[]; prompt: string; path: string }
+interface TeamAgent { name: string; description: string; team: string; family: string; scope: string[]; modes: string[]; starters: string[]; mcp: string[]; mcpTools: string[]; access: string[]; build: string; prompt: string; path: string }
 
 /** The workspace's team agents: .claude/agents/*.md with team: in the front matter (flat key: value lines). */
 function teamAgents(ws: string): TeamAgent[] {
@@ -115,7 +115,7 @@ function teamAgents(ws: string): TeamAgent[] {
     const list = (v = '', sep = ',') => v.split(sep).map((x) => x.trim()).filter(Boolean);
     out.push({ name: fm.name || f.slice(0, -3), description: fm.description || '', team: fm.team, family: fm.family || '', scope: list(fm.scope),
       modes: list(fm.modes).filter((x) => MODES.includes(x)).length ? list(fm.modes).filter((x) => MODES.includes(x)) : ['ask'],
-      starters: list(fm.starters, '|'), mcp: list(fm.mcp), prompt: text.slice(m[0].length).trim(), path: `.claude/agents/${f}` });
+      starters: list(fm.starters, '|'), mcp: list(fm.mcp), mcpTools: list(fm['mcp-tools']), access: list(fm.access, '|'), build: fm.build || '', prompt: text.slice(m[0].length).trim(), path: `.claude/agents/${f}` });
   }
   return out;
 }
@@ -334,7 +334,8 @@ function launch(hubDir: string, ws: string, body: any): Live {
       mcpFile = join(tmpdir(), `engineering-hub-mcp-${id.slice(0, 8)}.json`);
       writeFileSync(mcpFile, JSON.stringify({ mcpServers: picked }));
       mcpNames = Object.keys(picked);
-      tools.push(...mcpNames.map((n) => `mcp__${n}`));
+      // mcp-tools: in the agent file narrows each server to those tools (a hub run cannot ask before a write, so list reads only)
+      tools.push(...mcpNames.flatMap((n) => (a.mcpTools.length ? a.mcpTools.map((t) => `mcp__${n}__${t}`) : [`mcp__${n}`])));
     }
     system = teamPrompt(a, mode, brand, repo, key, repo ? [repo, ...cloned.filter((r) => r !== repo)] : cloned) + history(ws, repo ? [repo] : cloned);
   } else if (agent !== 'oncall') dirs = [join(ws, 'docs')];

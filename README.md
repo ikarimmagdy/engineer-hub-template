@@ -4,6 +4,21 @@ One engine, many hubs: the engine files come from this repo and are updated in p
 `tools/hub-update.sh`; each project keeps only its content (`content/`, `assets/img/`).
 Never edit engine files inside a hub; fix them here, tag a release, and update the hubs.
 
+## How agents are built (5.5.0)
+
+- **Agents > How agents work** gains four tabs before the existing ones (ADR 0029, one subject per tab): **Building
+  blocks** (CLAUDE.md, rules, commands, agents, skills, hooks, MCP servers, settings, environment, memory, plugins:
+  file, who starts it, context or enforced, with the workspace's own counts and names), **The cycle** (one request
+  through every block, hooks named by event from the workspace), **Three ways to build** (agent harness, framework
+  graph, deterministic service; when each fits, and the frameworks on a Java 21 / .NET 8 stack) and **Reaching data**
+  (code, docs, API, database, logs, events; the seven steps to build an agent; how each team agent reaches data).
+  `/agents/how` now opens on Building blocks.
+- **Team agent front matter**: `build:` (harness, framework, service), `access:` (`|`-separated `kind: what`, kinds
+  code, docs, api, db, logs, events, mcp; `(planned)` shows dimmed) and `mcp-tools:` (narrows each `mcp:` server to
+  those tools on a hub run: a headless run cannot ask before a write, so list read tools). The About tab shows them,
+  with the MCP servers and tools in Guardrails; `sync_agentic.py` and the local loop API carry them.
+- Agent names title-case known acronyms (API, SOG, MCP, OTP, MNP, UAT, DB).
+
 ## Operation Center (5.4.0)
 
 - **Operations page (`#/operations`)**, shown when the workspace has an `operations-center/` folder. It covers how

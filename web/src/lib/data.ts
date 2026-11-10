@@ -102,7 +102,7 @@ export interface LoopConfig {
 
 export interface AgCommand { id: string; name: string; description: string; args?: string; phase: number | null; agents: string[]; tools: string[]; files: string[]; path: string }
 export interface AgNode { id: string; name: string; description?: string; path?: string; tools?: string; kind?: string; configured?: boolean; used?: boolean; source?: string; event?: string; matcher?: string
-  team?: string; family?: string; scope?: string[]; modes?: string[]; starters?: string[]; prompt?: string }
+  team?: string; family?: string; scope?: string[]; modes?: string[]; starters?: string[]; mcp?: string[]; mcpTools?: string[]; access?: string[]; build?: string; prompt?: string }
 /** An MCP server the workspace configures (.mcp.json or an enabled plugin); header and env values are never carried, only names. */
 export interface McpServer { name: string; transport: 'http' | 'stdio' | 'plugin'; endpoint: string; headers: string[]; env: string[]; for: string; signIn: string; source: string; usedBy: string[] }
 /** The workspace's .claude wiring, read from the command, agent, hook and skill files (manifest "agentic"). */

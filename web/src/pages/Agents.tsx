@@ -28,7 +28,7 @@ export function Agents() {
   const [qs] = useSearchParams();
   if (!view) return <Navigate to="/agents/team" replace />;
   if (view === 'mcp' && !sub) return <Navigate to="/agents/mcp/servers" replace />;
-  if (view === 'how' && !sub) return <Navigate to="/agents/how/loop" replace />;
+  if (view === 'how' && !sub) return <Navigate to="/agents/how/blocks" replace />;
   if (view === 'team' && !sub) return <Navigate to={`/agents/team/launch${qs.toString() ? `?${qs}` : ''}`} replace />;
   if (view === 'build-mcp') return <Navigate to="/agents/mcp/what" replace />;
   if (!VIEWS.some(([v]) => v === view)) return <Navigate to="/agents" replace />;
