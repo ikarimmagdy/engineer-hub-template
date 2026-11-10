@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import type { SystemModel } from './system';
+import type { Operations } from '../pages/Operations';
 
 export const PHASES = ['intent', 'spec', 'design', 'build', 'test', 'deploy', 'maintain'] as const;
 export type Phase = (typeof PHASES)[number];
@@ -177,7 +178,7 @@ export interface TestLatest {
   sessions: TestSession[];
 }
 
-export interface Hub { brand: Brand; manifest: Manifest; loop: Loop; system: SystemModel | null }
+export interface Hub { brand: Brand; manifest: Manifest; loop: Loop; system: SystemModel | null; operations: Operations | null }
 
 export const url = (path: string) => path.split('/').map(encodeURIComponent).join('/');
 
@@ -195,13 +196,15 @@ export async function getText(path: string): Promise<string> {
 
 export async function loadHub(): Promise<Hub> {
   // loop.json and system.json exist only in hubs fed from a workspace
-  const [brand, manifest, loop, system] = await Promise.all([
+  const [brand, manifest, loop, system, operations] = await Promise.all([
     getJson<Brand>('content/brand.json'),
     getJson<Manifest>('content/manifest.json'),
     getJson<Loop>('content/data/loop.json').catch((): Loop => ({ generated: '', workspace: '', specs: [] })),
     getJson<SystemModel>('content/data/system.json').catch(() => null),
+    // operations.json exists only when the workspace has an operations-center/ (tools/sync_operations.py)
+    getJson<Operations>('content/data/operations.json').then((o) => (Array.isArray(o?.processes) ? o : null), () => null),
   ]);
-  return { brand, manifest, loop, system };
+  return { brand, manifest, loop, system, operations };
 }
 
 export const HubContext = createContext<Hub | null>(null);

@@ -4,6 +4,22 @@ One engine, many hubs: the engine files come from this repo and are updated in p
 `tools/hub-update.sh`; each project keeps only its content (`content/`, `assets/img/`).
 Never edit engine files inside a hub; fix them here, tag a release, and update the hubs.
 
+## Operation Center (5.4.0)
+
+- **Operations page (`#/operations`)**, shown when the workspace has an `operations-center/` folder. It covers how
+  engineering gets infrastructure, security and IT work done. Tabs: Processes (a catalog by category, searchable,
+  paged), Journeys (an ordered path through processes, such as a new engineer's first week, each step linked to
+  its process), and Service desks (what each desk covers and how its tickets flow).
+- **A process** (`/operations/process/<id>/<workflow|prepare|related>`) shows where to ask, who does it, how long it
+  usually takes, and:
+  - a swimlane of its steps, one lane per role in the order they act, with approvals as diamonds;
+  - who approves what;
+  - what you provide, what goes wrong, where an agent can help;
+  - related processes and the evidence tickets.
+- **`tools/sync_operations.py`** reads `operations-center/processes/*.md`, `journeys/*.md` and `desks/*.md` (format
+  in its docstring) into `content/data/operations.json`; `sync.sh` runs it. A step without an actor is an
+  approval ("Approvers") or done by the previous actor.
+
 ## Start a work item from the hub (5.3.3)
 
 - **How we work is three tabs (ADR 0029):** How it works (SDLC at a glance, the loop), In detail (the agentic graph;

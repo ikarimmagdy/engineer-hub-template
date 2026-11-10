@@ -14,6 +14,7 @@ const NAV: [string, string][] = [
   ['/quality', 'Quality'],
   ['/system', 'System'],
   ['/agents', 'Agents'],
+  ['/operations', 'Operations'],
   ['/environments', 'Environments'],
   ['/knowledge', 'Knowledge'],
   ['/learn', 'Learning'],
@@ -38,7 +39,7 @@ export function Shell({ children, onSignOut }: { children: ReactNode; onSignOut:
   const hasLearning = !!manifest.learning?.courses?.length;
   const hasReleases = releasesOf(hub).length > 0;
   const hasArch = !!archOf(hub);
-  const shown = NAV.filter(([to]) => (to !== '/learn' || hasLearning) && (to !== '/releases' || hasReleases) && (to !== '/system' || !!hub.system) && (to !== '/architecture' || hasArch));
+  const shown = NAV.filter(([to]) => (to !== '/learn' || hasLearning) && (to !== '/releases' || hasReleases) && (to !== '/system' || !!hub.system) && (to !== '/operations' || !!hub.operations) && (to !== '/architecture' || hasArch));
   const [palette, setPalette] = useState(false);
   const [menu, setMenu] = useState(false);
   const toggleTheme = useTheme();
