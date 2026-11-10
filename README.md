@@ -4,7 +4,7 @@ One engine, many hubs: the engine files come from this repo and are updated in p
 `tools/hub-update.sh`; each project keeps only its content (`content/`, `assets/img/`).
 Never edit engine files inside a hub; fix them here, tag a release, and update the hubs.
 
-## Agents and the local loop (5.1.0)
+## Agents and the local loop (5.2.0)
 
 - **Work item, Agents tab.** Each phase with its command, the subagents and MCP servers it uses (read from the
   workspace's command files), the files it hands to the next phase, and its gate with who approved it and when.
