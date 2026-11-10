@@ -3,6 +3,7 @@
 # project deploy scripts (deploy-*.sh). Keep this list in the template only.
 # A line ending in / is a folder, replaced whole. Files a release removes: tools/engine-retired.txt.
 # index.html and assets/app/ are the v5 front-end, built from web/ (cd web && npm run build).
+VERSION
 index.html
 assets/app/
 assets/css/mockup-kit.css
@@ -17,7 +18,3 @@ tools/hub-migrate.mjs
 tools/engine-files.txt
 tools/engine-retired.txt
 ci/engineer-hub.yml
-backend/comments/README.md
-backend/comments/handler.mjs
-backend/comments/package.json
-backend/comments/template.yaml

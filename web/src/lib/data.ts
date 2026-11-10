@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState } from 'react';
+import type { SystemModel } from './system';
 
 export const PHASES = ['intent', 'spec', 'design', 'build', 'test', 'deploy', 'maintain'] as const;
 export type Phase = (typeof PHASES)[number];
@@ -170,7 +171,7 @@ export interface TestLatest {
   sessions: TestSession[];
 }
 
-export interface Hub { brand: Brand; manifest: Manifest; loop: Loop }
+export interface Hub { brand: Brand; manifest: Manifest; loop: Loop; system: SystemModel | null }
 
 export const url = (path: string) => path.split('/').map(encodeURIComponent).join('/');
 
@@ -187,12 +188,14 @@ export async function getText(path: string): Promise<string> {
 }
 
 export async function loadHub(): Promise<Hub> {
-  const [brand, manifest, loop] = await Promise.all([
+  // loop.json and system.json exist only in hubs fed from a workspace
+  const [brand, manifest, loop, system] = await Promise.all([
     getJson<Brand>('content/brand.json'),
     getJson<Manifest>('content/manifest.json'),
-    getJson<Loop>('content/data/loop.json'),
+    getJson<Loop>('content/data/loop.json').catch((): Loop => ({ generated: '', workspace: '', specs: [] })),
+    getJson<SystemModel>('content/data/system.json').catch(() => null),
   ]);
-  return { brand, manifest, loop };
+  return { brand, manifest, loop, system };
 }
 
 export const HubContext = createContext<Hub | null>(null);

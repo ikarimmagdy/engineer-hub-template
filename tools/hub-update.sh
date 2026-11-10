@@ -30,7 +30,7 @@ HUB="$(cd "${HUB:-.}" && pwd)"
 [ -f "$HUB/content/brand.json" ] || { echo "Not a hub folder (no content/brand.json): $HUB" >&2; exit 1; }
 
 TMP=""
-cleanup() { [ -n "$TMP" ] && rm -rf "$TMP"; }
+cleanup() { [ -z "$TMP" ] || rm -rf "$TMP"; }
 trap cleanup EXIT
 if [ -n "${HUB_TEMPLATE_DIR:-}" ]; then
   SRC="$(cd "$HUB_TEMPLATE_DIR" && pwd)"
@@ -73,7 +73,7 @@ done
 # files and folders earlier engines installed and this one no longer has (5.0.0: the v4 front-end)
 if [ -f "$SRC/tools/engine-retired.txt" ]; then
   for f in $(grep -v '^\s*#' "$SRC/tools/engine-retired.txt" | sed '/^\s*$/d'); do
-    if [ -e "$HUB/$f" ]; then rm -rf "${HUB:?}/$f"; echo "  retired $f"; fi
+    if [ -e "$HUB/$f" ]; then rm -rf "${HUB:?}/$f"; rmdir -p "$(dirname "$HUB/$f")" 2>/dev/null || true; echo "  retired $f"; fi
   done
 fi
 chmod +x "$HUB/sync.sh" "$HUB/tools/hub-update.sh" 2>/dev/null || true
