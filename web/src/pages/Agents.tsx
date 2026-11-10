@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { Link, Navigate, useParams, useSearchParams } from 'react-router';
 import { getJson, useAsync, useHub } from '../lib/data';
-import { agentRun, since, startAgent, useLoopApi, useRuns, type LiveRun } from '../lib/loop';
+import { startAgent, useLoopApi, useRuns } from '../lib/loop';
+import { RunView, useRun } from '../components/RunView';
+import { CreateAgent, Runs, TeamAgents } from './AgentStudio';
 import { howRoute } from '../lib/routes';
-import { MarkdownText } from '../components/Markdown';
 import { CopyButton, cx, Dot, Empty, ErrorNote, PageHeader, Panel, Pill, Skeleton, TabBar } from '../components/ui';
 
 /** A module's knowledge pack (tools/sync_modules.py): where the agent starts looking; the code is the truth. */
@@ -17,15 +18,18 @@ interface Module {
   changedBy?: { key: string; change: string; summary: string }[];
 }
 
-const VIEWS = [['modules', 'Module agents'], ['oncall', 'On-call agent'], ['mcp', 'MCP servers'], ['build-mcp', 'Building an MCP server']] as const;
+const VIEWS = [['team', 'Team agents'], ['runs', 'Runs'], ['create', 'Create an agent'], ['modules', 'Module agents'], ['oncall', 'On-call agent'], ['mcp', 'MCP servers'], ['build-mcp', 'Building an MCP server']] as const;
 
 export function Agents() {
-  const { view = 'modules' } = useParams();
+  const { view = 'team' } = useParams();
   if (!VIEWS.some(([v]) => v === view)) return <Navigate to="/agents" replace />;
   return (
     <div>
-      <PageHeader title="Agents" lede="Ask an agent about any module of the system, get help on call, and see every MCP server the agents use to reach our systems." />
-      <TabBar label="Agents" className="mb-6" tabs={VIEWS.map(([v, l]) => ({ to: `/agents/${v}`, label: l, end: v === 'modules' }))} />
+      <PageHeader title="Agents" lede="The agent studio: launch a team agent to investigate, plan or propose a change, watch every step it takes, create agents for your team, and ask any module or the on-call agent." />
+      <TabBar label="Agents" className="mb-6" tabs={VIEWS.map(([v, l]) => ({ to: `/agents/${v}`, label: l, end: v === 'team' }))} />
+      {view === 'team' && <TeamAgents />}
+      {view === 'runs' && <Runs />}
+      {view === 'create' && <CreateAgent />}
       {view === 'modules' && <Modules />}
       {view === 'oncall' && <OnCall />}
       {view === 'mcp' && <McpServers />}
@@ -126,18 +130,11 @@ function AskBox({ agent, module, workKey, title, placeholder }: { agent: 'oncall
   const api = useLoopApi();
   const [question, setQuestion] = useState('');
   const [runId, setRunId] = useState<string | null>(null);
-  const [run, setRun] = useState<LiveRun | null>(null);
-  const [err, setErr] = useState<string | null>(null);
-  useEffect(() => {
-    if (!runId) return;
-    let alive = true;
-    const tick = () => agentRun(runId).then((r) => { if (!alive) return; setRun(r); if (r.state !== 'running') clearInterval(id); }, (e) => setErr((e as Error).message));
-    const id = setInterval(tick, 1500);
-    tick();
-    return () => { alive = false; clearInterval(id); };
-  }, [runId]);
+  const { run, err: runErr } = useRun(runId);
+  const [startErr, setErr] = useState<string | null>(null);
+  const err = startErr || runErr;
   const ask = () => {
-    setErr(null); setRun(null);
+    setErr(null);
     startAgent({ agent, module, question, key: workKey }).then((r) => setRunId(r.id), (e) => setErr((e as Error).message));
   };
   const cli = `claude -p ${JSON.stringify(question || '<your question>')} --allowedTools Read Grep Glob`;
@@ -155,29 +152,10 @@ function AskBox({ agent, module, workKey, title, placeholder }: { agent: 'oncall
             <code className="text-ink-2">{cd(agent, module)}{cli}</code><CopyButton text={`${cd(agent, module)}${cli}`} />
           </span>
         )}
-        <span className="text-xs text-ink-3">Read-only: Read, Grep, Glob and git log, show, blame, grep, diff. No MCP servers.</span>
+        <span className="text-xs text-ink-3">Read-only: Read, Grep and Glob, no shell, no MCP servers. Recent commits are given to the agent.</span>
       </div>
       {err && <div className="mt-3"><ErrorNote>{err}</ErrorNote></div>}
-      {run && (
-        <div className="mt-4 space-y-3">
-          <div className="flex flex-wrap items-center gap-2 text-xs text-ink-3">
-            <Dot tone={run.state === 'running' ? 'run' : run.state === 'done' ? 'ok' : 'block'} className={run.state === 'running' ? 'animate-pulse' : undefined} />
-            {run.state === 'running' ? `working for ${since(run.started)}` : `${run.state} in ${since(run.started, run.ended)}`}
-            {typeof run.cost === 'number' && <span>· about ${run.cost.toFixed(2)}</span>}
-            <span>· {run.steps.length} steps</span>
-          </div>
-          {run.steps.length > 0 && (
-            <details className="rounded-md border border-line" open={run.state === 'running'}>
-              <summary className="cursor-pointer px-3 py-1.5 text-xs text-ink-2">What the agent looked at</summary>
-              <ol className="max-h-48 overflow-auto px-3 pb-2 text-xs">
-                {run.steps.map((s, i) => <li key={i} className="truncate py-0.5"><span className="font-mono text-ink-3">{s.tool}</span> {s.target}</li>)}
-              </ol>
-            </details>
-          )}
-          {run.error && <ErrorNote>{run.error}</ErrorNote>}
-          {run.text && <div className="rounded-lg border border-line bg-paper p-4"><MarkdownText src={run.text} path="" /></div>}
-        </div>
-      )}
+      {run && <div className="mt-4"><RunView run={run} /></div>}
       <RecentRuns agent={agent === 'module' ? `module:${module}` : 'oncall'} />
     </Panel>
   );

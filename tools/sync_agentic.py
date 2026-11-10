@@ -107,9 +107,16 @@ def main() -> None:
 
     agents = []
     for p in sorted((cl / "agents").glob("*.md")):
-        f = front(p.read_text(encoding="utf-8"))
-        agents.append({"id": "agent:" + p.stem, "name": f.get("name", p.stem), "description": f.get("description", ""),
-                       "tools": f.get("tools", ""), "path": str(p.relative_to(ws))})
+        text = p.read_text(encoding="utf-8")
+        f = front(text)
+        a = {"id": "agent:" + p.stem, "name": f.get("name", p.stem), "description": f.get("description", ""),
+             "tools": f.get("tools", ""), "path": str(p.relative_to(ws))}
+        # a team agent (team: in its front matter) is also launchable from the hub's Agent studio
+        if f.get("team"):
+            split = lambda k, sep=",": [x.strip() for x in f.get(k, "").split(sep) if x.strip()]
+            a.update({"team": f["team"], "family": f.get("family", ""), "scope": split("scope"),
+                      "modes": split("modes") or ["ask"], "starters": split("starters", "|"), "prompt": body(text).strip()})
+        agents.append(a)
     agent_names = [a["name"] for a in agents]
 
     settings = json.loads((cl / "settings.json").read_text(encoding="utf-8")) if (cl / "settings.json").exists() else {}

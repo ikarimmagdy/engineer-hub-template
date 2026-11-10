@@ -4,6 +4,26 @@ One engine, many hubs: the engine files come from this repo and are updated in p
 `tools/hub-update.sh`; each project keeps only its content (`content/`, `assets/img/`).
 Never edit engine files inside a hub; fix them here, tag a release, and update the hubs.
 
+## Agent studio (5.3.0)
+
+- **Team agents (`#/agents/team`).** Every `.claude/agents/<name>.md` in the workspace with `team:` in its front
+  matter (flat keys: `team`, `family`, `scope` repos, `modes` of ask, plan and propose, `starters` split by `|`).
+  The same file is a Claude Code subagent. `tools/sync_agentic.py` carries the fields and the instructions into
+  `agentic.json`, so a static hub shows the catalog read-only with the Claude Code command to run.
+- **Launch (local hub).** `POST /api/loop/agent {agent: "team", name, mode, repo?, key?, question}`. Agents get no
+  shell (`--tools Read Grep Glob`), since Claude Code auto-approves read-only commands such as `cat` that would get
+  past the `Read` deny rules. They get the last 60 days of commits of their repos in the prompt instead. Ask
+  answers with path:line evidence; plan writes pull-request-sized steps. Propose needs a work item in build or later
+  with intent, spec and design approved (the spec gate), and edits a git worktree of one repo on a local
+  `agent/<name>/<KEY>-<id>` branch in the system temp folder (Claude Code refuses edits under `.claude/`), with
+  `Edit(./**)` only. Nothing is pushed. The run shows the diff, the command to take the branch, and Discard (removes
+  the worktree and the branch).
+- **Runs (`#/agents/runs`).** Everything launched from this hub, live, with an event history (a swimlane of every
+  step over time, and the list of steps with offsets, kinds and the agent's notes), Stop, and every run in
+  `.claude/state/agent-runs.jsonl`, including Claude Code subagents.
+- **Create an agent (`#/agents/create`).** A form that writes `.claude/agents/<name>.md` (it refuses a name in use)
+  and gives the command to share it. A static hub shows the file to copy.
+
 ## Proposed work (5.2.1)
 
 A spec folder with a `.proposed.json` (`pr`, `url`, `author`, `title`, `branch`) is a work item that is still on an
