@@ -4,6 +4,14 @@ One engine, many hubs: the engine files come from this repo and are updated in p
 `tools/hub-update.sh`; each project keeps only its content (`content/`, `assets/img/`).
 Never edit engine files inside a hub; fix them here, tag a release, and update the hubs.
 
+## Operation Center tabs and breadcrumbs (5.8.2)
+
+- The three tabs are back on top (Processes, Journeys, Service desks); the side menu lists only the open tab's items
+  (areas, journeys, desks).
+- Breadcrumbs on every Operation Center page. A process opened from a journey or a desk keeps that trail
+  (`?from=journey:<id>` or `?from=desk:<key>`, kept across its Workflow, Before you ask and Related tabs), so one click
+  returns to the journey; from the catalog the trail is the process's area.
+
 ## Linked flows, the blocks map (5.8.1)
 
 - A step flow and the text under it share one selected step (`components/FlowScope.tsx`): the text a step is about

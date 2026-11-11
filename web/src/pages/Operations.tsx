@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, Navigate, useParams } from 'react-router';
+import { Link, Navigate, useParams, useSearchParams } from 'react-router';
 import { useHub } from '../lib/data';
 import { renderInline } from '../lib/markdown';
 import { MarkdownText } from '../components/Markdown';
@@ -34,24 +34,46 @@ export function OperationsPage() {
   if (!['processes', 'journeys', 'desks'].includes(view)) return <Navigate to="/operations" replace />;
   if (view === 'journeys' && !id && ops.journeys[0]) return <Navigate to={`/operations/journeys/${ops.journeys[0].id}`} replace />;
   const cats = [...new Set(ops.processes.map((p) => p.category))].sort((a, b) => order(a) - order(b));
-  const nav = (
-    <SideNav label="Operation Center" groups={[
-      { title: 'Processes', items: [{ to: '/operations/processes', label: 'All processes', count: ops.processes.length, end: true },
-        ...cats.map((c) => ({ to: `/operations/processes/${c}`, label: catLabel(c), count: ops.processes.filter((p) => p.category === c).length }))] },
-      { title: 'Journeys', items: ops.journeys.map((j) => ({ to: `/operations/journeys/${j.id}`, label: j.title, count: j.steps.length })) },
-      { title: 'Service desks', items: [{ to: '/operations/desks', label: 'All desks', count: ops.desks.length, end: true },
-        ...ops.desks.map((d) => ({ to: `/operations/desks/${d.key}`, label: d.name, count: d.processes.length }))] },
-    ]} />
-  );
+  const groups = view === 'processes'
+    ? [{ title: 'Areas', items: [{ to: '/operations/processes', label: 'All processes', count: ops.processes.length, end: true },
+        ...cats.map((c) => ({ to: `/operations/processes/${c}`, label: catLabel(c), count: ops.processes.filter((p) => p.category === c).length }))] }]
+    : view === 'journeys'
+      ? [{ title: 'Journeys', items: ops.journeys.map((j) => ({ to: `/operations/journeys/${j.id}`, label: j.title, count: j.steps.length })) }]
+      : [{ title: 'Service desks', items: [{ to: '/operations/desks', label: 'All desks', count: ops.desks.length, end: true },
+          ...ops.desks.map((d) => ({ to: `/operations/desks/${d.key}`, label: d.name, count: d.processes.length }))] }];
+  const section = { processes: 'Processes', journeys: 'Journeys', desks: 'Service desks' }[view as 'processes' | 'journeys' | 'desks'];
+  const leaf = view === 'processes' ? (id ? catLabel(id) : '') : view === 'journeys' ? ops.journeys.find((j) => j.id === id)?.title : ops.desks.find((d) => d.key === id)?.name;
   return (
     <div>
       <PageHeader title="Operation Center" lede={<Lede text={ops.lede || 'How engineering gets infrastructure, security and IT work done: what to request, where, what to provide, who approves and who does it.'} />} />
-      <WithSideNav nav={nav}>
+      <TabBar label="Operation Center" className="mb-4" tabs={[
+        { to: '/operations/processes', label: 'Processes', count: ops.processes.length },
+        { to: '/operations/journeys', label: 'Journeys', count: ops.journeys.length },
+        { to: '/operations/desks', label: 'Service desks', count: ops.desks.length },
+      ]} />
+      <Crumbs items={[['Operation Center', '/operations/processes'], [section, leaf ? `/operations/${view}` : undefined], ...(leaf ? [[leaf, undefined] as [string, undefined]] : [])]} />
+      <WithSideNav nav={<SideNav label={section} groups={groups} />}>
         {view === 'processes' && <Catalog ops={ops} cat={id || ''} />}
         {view === 'journeys' && <Journey ops={ops} id={id!} />}
         {view === 'desks' && (id ? <Desk ops={ops} id={id} /> : <DeskList ops={ops} />)}
       </WithSideNav>
     </div>
+  );
+}
+
+/** Where you are: each level a link back, the last one plain. */
+function Crumbs({ items }: { items: [string, string | undefined][] }) {
+  return (
+    <nav aria-label="Breadcrumb" className="mb-5 text-sm text-ink-3">
+      <ol className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        {items.map(([l, to], i) => (
+          <li key={i} className="flex items-center gap-2">
+            {i > 0 && <span aria-hidden>&rsaquo;</span>}
+            {to ? <Link to={to} className="hover:text-ink hover:underline">{l}</Link> : <span className={i === items.length - 1 ? 'font-medium text-ink' : ''} aria-current={i === items.length - 1 ? 'page' : undefined}>{l}</span>}
+          </li>
+        ))}
+      </ol>
+    </nav>
   );
 }
 
@@ -98,11 +120,21 @@ function Catalog({ ops, cat }: { ops: Operations; cat: string }) {
 
 function ProcessPage({ ops, id, tab }: { ops: Operations; id: string; tab: string }) {
   const p = ops.processes.find((x) => x.id === id);
+  const [qs] = useSearchParams();
   if (!p) return <Navigate to="/operations" replace />;
+  // the breadcrumb follows where you came from: a journey, a desk, or the catalog by area
+  const from = qs.get('from') || '';
+  const j = from.startsWith('journey:') ? ops.journeys.find((x) => x.id === from.slice(8)) : undefined;
+  const d = from.startsWith('desk:') ? ops.desks.find((x) => x.key === from.slice(5)) : undefined;
+  const trail: [string, string | undefined][] = j ? [['Journeys', '/operations/journeys'], [j.title, `/operations/journeys/${j.id}`]]
+    : d ? [['Service desks', '/operations/desks'], [d.name, `/operations/desks/${d.key}`]]
+    : [['Processes', '/operations/processes'], [catLabel(p.category), `/operations/processes/${p.category}`]];
+  const keep = from ? `?from=${encodeURIComponent(from)}` : '';
   const byId = (x: string) => ops.processes.find((y) => y.id === x);
   return (
     <div>
-      <PageHeader crumb={<Link to="/operations" className="hover:underline">Operation Center</Link>} title={p.title}
+      <Crumbs items={[['Operation Center', '/operations/processes'], ...trail, [p.title, undefined]]} />
+      <PageHeader title={p.title}
         lede={p.when} actions={<div className="flex flex-wrap gap-1.5"><Pill>{catLabel(p.category)}</Pill><Pill>{p.desk}</Pill>{p.confidence && <Pill tone={p.confidence === 'high' ? 'ok' : p.confidence === 'medium' ? 'wait' : 'block'}>{p.confidence} confidence</Pill>}</div>} />
       <div className="mb-4 grid gap-3 sm:grid-cols-3">
         <Fact k="Ask through" v={`${p.desk}${p.requestType ? ` · ${p.requestType}` : ''}`} />
@@ -110,9 +142,9 @@ function ProcessPage({ ops, id, tab }: { ops: Operations; id: string; tab: strin
         <Fact k="Usually takes" v={p.leadTime || 'not recorded'} />
       </div>
       <TabBar label="Process views" className="mb-5" tabs={[
-        { to: `/operations/process/${p.id}/workflow`, label: 'Workflow' },
-        { to: `/operations/process/${p.id}/prepare`, label: 'Before you ask' },
-        { to: `/operations/process/${p.id}/related`, label: 'Related' },
+        { to: `/operations/process/${p.id}/workflow${keep}`, label: 'Workflow' },
+        { to: `/operations/process/${p.id}/prepare${keep}`, label: 'Before you ask' },
+        { to: `/operations/process/${p.id}/related${keep}`, label: 'Related' },
       ]} />
       {tab === 'workflow' && (
         <div className="space-y-5">
@@ -228,7 +260,7 @@ function Journey({ ops, id }: { ops: Operations; id: string }) {
               <div className="min-w-0">
                 <p className="max-w-3xl text-[15px] leading-relaxed" dangerouslySetInnerHTML={{ __html: renderInline(s.text) }} />
                 {p ? (
-                  <Link to={`/operations/process/${p.id}`} className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-lg border border-line-2 bg-sunk px-3 py-2 text-sm hover:border-ink">
+                  <Link to={`/operations/process/${p.id}?from=journey:${j.id}`} className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-lg border border-line-2 bg-sunk px-3 py-2 text-sm hover:border-ink">
                     <span className="text-xs font-semibold uppercase tracking-wide text-ink-3">Raise</span>
                     <Pill>{p.desk}</Pill>
                     <span className="font-medium">{p.title}</span>
@@ -313,7 +345,7 @@ function Desk({ ops, id }: { ops: Operations; id: string }) {
                 <ul className="grid gap-2 md:grid-cols-2">
                   {procs.filter((p) => p.category === g).map((p) => (
                     <li key={p.id}>
-                      <Link to={`/operations/process/${p.id}`} className="flex h-full items-start justify-between gap-3 rounded-lg border border-line bg-paper px-3.5 py-2.5 hover:border-ink">
+                      <Link to={`/operations/process/${p.id}?from=desk:${d.key}`} className="flex h-full items-start justify-between gap-3 rounded-lg border border-line bg-paper px-3.5 py-2.5 hover:border-ink">
                         <span className="text-sm font-medium leading-snug">{p.title}</span>
                         <span className="shrink-0 text-xs text-ink-3">{p.approvals.length} approval{p.approvals.length === 1 ? '' : 's'}</span>
                       </Link>
