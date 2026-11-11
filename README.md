@@ -4,6 +4,18 @@ One engine, many hubs: the engine files come from this repo and are updated in p
 `tools/hub-update.sh`; each project keeps only its content (`content/`, `assets/img/`).
 Never edit engine files inside a hub; fix them here, tag a release, and update the hubs.
 
+## Architecture documents on the System page (5.10.0)
+
+- `sync_loop.py` adds every `outputs/<folder>/` of a work item that holds a `v<N>-<date>.html` as a page, even when
+  `loop-config.json` does not list it, titled from the document and tagged `kind` (architecture, matrix, infra,
+  other); listed pages keep their own title and can set `kind`.
+- **System** opens on a new **Architecture** tab: every work item's architecture, network and environment documents,
+  read in place full width with all their diagrams (pick from the list; open full page or in the work item).
+  **Communication matrix** shows the per-environment network matrices first, then who talks to whom grouped by
+  "from → to" pair (no paging). **Infrastructure** shows the environment documents first. The **Map** is drawn full
+  width instead of shrunk to the window height.
+- A work item's **Impact** tab opens on **Documents** when it has any (`components/SpecPages.tsx`).
+
 ## Who holds each role (5.9.0)
 
 - `tools/sync_operations.py` reads the workspace's `operations-center/roles.md` (one section per role: the wordings the

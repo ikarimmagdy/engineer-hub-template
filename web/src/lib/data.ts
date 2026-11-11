@@ -59,7 +59,7 @@ export interface Spec {
   inputs: string[];
   sources: string[];
   findingsFile: string | null;
-  pages?: { id: string; title: string; file: string; version: string; source: string; phase?: string | null }[];
+  pages?: { id: string; title: string; file: string; version: string; source: string; phase?: string | null; kind?: string }[];
   docs?: SpecDoc[];
   /** Only on an open pull request to the workspace, not merged yet (laid in by the shared hub's workspace sync). */
   proposed?: { pr: number; url: string; author: string; title: string; branch: string };

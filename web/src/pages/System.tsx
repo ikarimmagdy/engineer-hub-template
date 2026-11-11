@@ -2,10 +2,12 @@ import { useMemo } from 'react';
 import { Link, Navigate, useParams, useSearchParams } from 'react-router';
 import { PHASE_TITLE, useHub, type Phase, type Spec } from '../lib/data';
 import { forWork, keysOf, type SystemModel } from '../lib/system';
-import { ChangedBy, ComponentDetail, FlowTable, InfraList, Legend, ScreenGrid, SystemMap, UseCaseList } from '../components/System';
+import { ChangedBy, ComponentDetail, FlowPairs, InfraList, Legend, ScreenGrid, SystemMap, UseCaseList } from '../components/System';
 import { cx, Empty, fmtDate, PageHeader, Pager, Pill, Select, TabBar } from '../components/ui';
+import { DocViewer, useSpecPages } from '../components/SpecPages';
 
 const LENSES = [
+  ['architecture', 'Architecture'],
   ['map', 'Map'],
   ['matrix', 'Communication matrix'],
   ['infra', 'Infrastructure'],
@@ -24,18 +26,19 @@ const NO_MODEL = (
 /** The whole system as the loop has built it up: the big picture first, then any component, flow or screen and the work that changed it. */
 export function SystemPage() {
   const { system: sys } = useHub();
-  const { lens = 'map' } = useParams();
+  const { lens = 'architecture' } = useParams();
   const [params, setParams] = useSearchParams();
   const work = params.get('work') || '';
   const layer = params.get('layer') || '';
   const sel = params.get('c');
   const set = (k: string, v: string | null) => setParams((p) => { if (v) p.set(k, v); else p.delete(k); return p; }, { replace: true });
+  const docs = useSpecPages(undefined, work || undefined);
 
   if (!sys) return <div><PageHeader title="System" />{NO_MODEL}</div>;
   if (!LENSES.some(([l]) => l === lens)) return <Navigate to="/system" replace />;
 
   const counts: Record<string, number> = {
-    map: sys.components.length, matrix: sys.flows.length, infra: sys.infra.length, screens: sys.screens.length,
+    architecture: docs.length, map: sys.components.length, matrix: sys.flows.length, infra: sys.infra.length, screens: sys.screens.length,
     'use-cases': sys.useCases.length, timeline: sys.works.length,
   };
   const qs = params.toString() ? `?${params}` : '';
@@ -49,7 +52,7 @@ export function SystemPage() {
         title="System"
         lede={`What the system is made of and how it talks, built up by every work item: ${sys.components.length} components in ${sys.layers.length} layers, ${sys.flows.length} flows, ${changed} components changed by ${sys.works.length} work items so far.`}
       />
-      <TabBar label="System views" tabs={LENSES.map(([l, t]) => ({ to: `/system${l === 'map' ? '' : `/${l}`}${qs}`, label: t, count: counts[l], end: true }))} />
+      <TabBar label="System views" tabs={LENSES.map(([l, t]) => ({ to: `/system${l === 'architecture' ? '' : `/${l}`}${qs}`, label: t, count: counts[l], end: true }))} />
       <div className="mb-4 mt-4 flex flex-wrap items-center gap-3">
         <Select label="Work item" value={work} onChange={(v) => set('work', v || null)}
           options={[['', 'All work'], ...sys.works.map((w) => [w.key, `${w.key} ${w.title}`] as [string, string])]} />
@@ -60,9 +63,26 @@ export function SystemPage() {
         {work && <Link to={`/work/${work}/impact`} className="text-xs underline decoration-line-2 underline-offset-4 hover:decoration-ink">Open {work} impact</Link>}
       </div>
 
+      {lens === 'architecture' && (
+        <div className="space-y-6">
+          <DocViewer title="Architecture, infrastructure and network documents" docs={docs}
+            empty="No work item has an architecture document yet. A work item's outputs/<folder>/v<N>-<date>.html (architecture, communication matrix, environment) shows here on the next sync." />
+          <p className="text-sm text-ink-2">The whole system, built up by every work item, is in <Link to={`/system/map${qs}`} className="underline">Map</Link>, <Link to={`/system/matrix${qs}`} className="underline">Communication matrix</Link> and <Link to={`/system/infra${qs}`} className="underline">Infrastructure</Link>.</p>
+        </div>
+      )}
       {lens === 'map' && <MapLens sys={sys} work={work} layer={layer} sel={sel} onSelect={(id) => set('c', id)} />}
-      {lens === 'matrix' && <MatrixLens sys={sys} work={work} />}
-      {lens === 'infra' && <InfraList sys={sys} items={pick(sys.infra)} focus={work || undefined} />}
+      {lens === 'matrix' && (
+        <div className="space-y-6">
+          <DocViewer title="Network communication matrices, per environment" docs={docs.filter((d) => d.kind === 'matrix')} />
+          <div><h2 className="mb-3 text-base font-semibold">Who talks to whom, from every work item</h2><MatrixLens sys={sys} work={work} /></div>
+        </div>
+      )}
+      {lens === 'infra' && (
+        <div className="space-y-6">
+          <DocViewer title="Infrastructure and environment documents" docs={docs.filter((d) => d.kind === 'infra' || d.kind === 'architecture')} />
+          <div><h2 className="mb-3 text-base font-semibold">Infrastructure each work item recorded</h2><InfraList sys={sys} items={pick(sys.infra)} focus={work || undefined} /></div>
+        </div>
+      )}
       {lens === 'screens' && <ScreenGrid sys={sys} screens={pick(sys.screens)} focus={work || undefined} />}
       {lens === 'use-cases' && <UseCaseList sys={sys} items={work ? sys.useCases.filter((u) => u.key === work) : sys.useCases} showKey />}
       {lens === 'timeline' && <Timeline sys={sys} />}
@@ -102,7 +122,6 @@ function MatrixLens({ sys, work }: { sys: SystemModel; work: string }) {
   const set = (k: string, v: string) => setParams((p) => { if (v) p.set(k, v); else p.delete(k); if (k !== 'p') p.delete('p'); return p; }, { replace: true });
   // ADR 0029: one layer's flows at a time, paged
   const g = byLayer.find((x) => x.l.id === params.get('from')) || byLayer[0];
-  const SIZE = 20, pages = g ? Math.ceil(g.flows.length / SIZE) : 0, page = Math.min(Math.max(0, Number(params.get('p') || 1) - 1), Math.max(0, pages - 1));
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
@@ -110,10 +129,7 @@ function MatrixLens({ sys, work }: { sys: SystemModel; work: string }) {
         <Select label="Component" value={comp} onChange={(v) => set('with', v)}
           options={[['', 'Any'], ...used.map((id) => [id, sys.components.find((c) => c.id === id)?.name || id] as [string, string])]} />
       </div>
-      {g ? <>
-        <FlowTable sys={sys} flows={g.flows.slice(page * SIZE, (page + 1) * SIZE)} focus={work || undefined} />
-        <Pager page={page} pages={pages} total={g.flows.length} size={SIZE} onPage={(n) => set('p', n ? String(n + 1) : '')} />
-      </> : <Empty>No flows match.</Empty>}
+      {g ? <FlowPairs sys={sys} flows={g.flows} focus={work || undefined} /> : <Empty>No flows match.</Empty>}
     </div>
   );
 }
@@ -160,9 +176,12 @@ function Timeline({ sys }: { sys: SystemModel }) {
 export function WorkImpact({ spec }: { spec: Spec }) {
   const { system: sys, manifest } = useHub();
   const [params, setParams] = useSearchParams();
-  if (!sys) return NO_MODEL;
+  const docs = useSpecPages(undefined, spec.key);
+  const docsView = docs.length ? <DocViewer title={`${spec.key} architecture, network and environment documents`} docs={docs} /> : null;
+  if (!sys) return docsView || NO_MODEL;
   const w = forWork(sys, spec.key);
   if (!w.work) {
+    if (docsView) return docsView;
     return (
       <Empty>
         {spec.key} has not recorded its system impact yet. <code className="font-mono text-[12px]">/design {spec.key}</code> writes
@@ -170,16 +189,17 @@ export function WorkImpact({ spec }: { spec: Spec }) {
       </Empty>
     );
   }
-  const view = params.get('view') || 'map';
+  const view = params.get('view') || (docs.length ? 'docs' : 'map');
   const sel = params.get('c');
   const setSel = (id: string | null) => setParams((p) => { if (id) p.set('c', id); else p.delete('c'); return p; }, { replace: true });
   const whole = params.get('whole') === '1';
   const only = whole ? undefined : new Set(w.components.map((c) => c.id));
   const views: [string, string, number][] = [
+    ...(docs.length ? [['docs', 'Documents', docs.length] as [string, string, number]] : []),
     ['map', 'Architecture', w.components.length], ['matrix', 'Communications', w.flows.length], ['infra', 'Infrastructure', w.infra.length],
     ['screens', 'Screens', w.screens.length], ['use-cases', 'Use cases', w.useCases.length], ['where', 'Where in the code', w.components.filter((c) => c.changes.some((x) => x.key === spec.key && x.where?.length)).length],
   ];
-  const go = (v: string) => setParams((p) => { if (v === 'map') p.delete('view'); else p.set('view', v); return p; }, { replace: true });
+  const go = (v: string) => setParams((p) => { p.set('view', v); p.delete('doc'); return p; }, { replace: true });
   const adr = (d: string) => manifest.adrs.find((a) => a.id === d || a.id === `ADR-${d}`);
 
   return (
@@ -227,7 +247,8 @@ export function WorkImpact({ spec }: { spec: Spec }) {
           {sel && <div className="min-w-0 xl:sticky xl:top-20 xl:self-start"><ComponentDetail sys={sys} id={sel} onClose={() => setSel(null)} focus={spec.key} /></div>}
         </div>
       )}
-      {view === 'matrix' && <FlowTable sys={sys} flows={w.flows} focus={spec.key} />}
+      {view === 'docs' && docsView}
+      {view === 'matrix' && <FlowPairs sys={sys} flows={w.flows} focus={spec.key} />}
       {view === 'infra' && <InfraList sys={sys} items={w.infra} focus={spec.key} />}
       {view === 'screens' && <ScreenGrid sys={sys} screens={w.screens} focus={spec.key} />}
       {view === 'use-cases' && <UseCaseList sys={sys} items={w.useCases} />}

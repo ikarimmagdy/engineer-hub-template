@@ -43,7 +43,7 @@ export function SystemMap({ sys, focus, only, selected, onSelect, edges = 'auto'
 
   return (
     <div className="overflow-x-auto rounded-lg border border-line bg-paper" data-scroll>
-      <svg viewBox={`0 0 ${W} ${height}`} className="mx-auto block max-h-[calc(100dvh-220px)] w-full min-w-[900px]" role="img" aria-label="System map: layers, components and the flows between them">
+      <svg viewBox={`0 0 ${W} ${height}`} className="mx-auto block w-full min-w-[900px]" role="img" aria-label="System map: layers, components and the flows between them">
         <defs>
           {(['added', 'changed', 'removed', 'used'] as const).map((k) => (
             <marker key={k} id={`arrow-${k}`} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
@@ -181,6 +181,46 @@ export function FlowTable({ sys, flows, focus }: { sys: SystemModel; flows: Flow
           })}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+/** The communication matrix as pairs: one card per "from → to", every interface between them with its protocol and who changed it. */
+export function FlowPairs({ sys, flows, focus }: { sys: SystemModel; flows: Flow[]; focus?: string }) {
+  if (!flows.length) return <Empty>No flows recorded.</Empty>;
+  const pairs = new Map<string, Flow[]>();
+  for (const f of flows) pairs.set(`${f.from}>${f.to}`, [...(pairs.get(`${f.from}>${f.to}`) || []), f]);
+  const list = [...pairs.values()].sort((a, b) => nameOf(sys, a[0].from).localeCompare(nameOf(sys, b[0].from)) || nameOf(sys, a[0].to).localeCompare(nameOf(sys, b[0].to)));
+  return (
+    <div className="grid gap-3 xl:grid-cols-2">
+      {list.map((fs) => {
+        const protos = [...new Set(fs.map((f) => f.protocol).filter(Boolean))];
+        return (
+          <section key={`${fs[0].from}>${fs[0].to}`} className="min-w-0 rounded-lg border border-line bg-paper">
+            <header className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-line px-4 py-2.5">
+              <span className="text-sm font-semibold">{nameOf(sys, fs[0].from)}</span>
+              <span aria-hidden className="text-ink-3">&rarr;</span>
+              <span className="text-sm font-semibold">{nameOf(sys, fs[0].to)}</span>
+              <span className="ml-auto flex flex-wrap gap-1">{protos.map((p) => <span key={p} className="rounded bg-sunk px-1.5 py-0.5 text-[11px] font-medium text-ink-2">{p}</span>)}</span>
+            </header>
+            <ul className="divide-y divide-line">
+              {fs.map((f) => {
+                const rec = focus ? f.changes.find((c) => c.key === focus) : undefined;
+                return (
+                  <li key={f.id} className="flex flex-wrap items-start justify-between gap-2 px-4 py-2">
+                    <div className="min-w-0 flex-1">
+                      <span className="break-all font-mono text-[12px]">{f.interface || '–'}</span>
+                      {protos.length > 1 && <span className="ml-2 text-[11px] text-ink-3">{f.protocol}</span>}
+                      {rec?.summary && <div className="mt-0.5 text-xs text-ink-3">{rec.summary}</div>}
+                    </div>
+                    {focus ? <ChangePill change={changeOf(f, focus)} /> : <ChangedBy el={f} />}
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        );
+      })}
     </div>
   );
 }

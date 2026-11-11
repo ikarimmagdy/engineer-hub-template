@@ -111,13 +111,38 @@ def extract_figures() -> dict:
     return out
 
 
+def page_kind(text: str) -> str:
+    """What a whole-page document is about, from its id, folder or title: the System page groups them by it."""
+    t = text.lower()
+    if re.search(r"matrix|connectivity|firewall|network", t):
+        return "matrix"
+    if re.search(r"infra|environment|deploy|topolog|cluster|platform", t):
+        return "infra"
+    if re.search(r"architect|design|c4|system", t):
+        return "architecture"
+    return "other"
+
+
+def doc_title(f: Path) -> str:
+    t = f.read_text(encoding="utf-8", errors="replace")[:20000]
+    m = re.search(r"<title[^>]*>(.*?)</title>", t, re.S) or re.search(r"<h1[^>]*>(.*?)</h1>", t, re.S)
+    return re.sub(r"\s+", " ", re.sub(r"<[^>]+>", "", m.group(1))).strip() if m else ""
+
+
 def spec_pages(cfg: dict, d: Path, name: str, dest: Path) -> list:
     """loop-config "pages": whole self-contained HTML documents shown as full pages of a spec (own menu, tabs,
     inline JS, CSS and SVG kept), one entry each in the spec page and under the spec in the side menu.
     "src" is relative to the spec folder (a file, or a versioned folder whose latest v<N>-<date>.html is used);
-    a path starting with content/ is relative to the hub app instead."""
+    a path starting with content/ is relative to the hub app instead.
+    Every outputs/<folder>/ of the spec that holds a v<N>-<date>.html is added too, even when the config does not
+    list it, so a work item's architecture, communication matrix or environment document always reaches the hub."""
     out = []
-    for p in (cfg.get("pages") or {}).get(name, []):
+    entries = list((cfg.get("pages") or {}).get(name, []))
+    listed = {(e.get("src") or "").strip("/") for e in entries}
+    for sub in sorted(x for x in (d / "outputs").iterdir() if x.is_dir()) if (d / "outputs").is_dir() else []:
+        if f"outputs/{sub.name}" not in listed and any(sub.glob("v*-*.html")):
+            entries.append({"id": sub.name, "src": f"outputs/{sub.name}", "phase": "design", "auto": True})
+    for p in entries:
         pid, raw = p.get("id"), p.get("src") or ""
         if not pid or not raw:
             continue
@@ -130,7 +155,8 @@ def spec_pages(cfg: dict, d: Path, name: str, dest: Path) -> list:
             continue
         (dest / "pages").mkdir(parents=True, exist_ok=True)
         shutil.copy2(src, dest / "pages" / f"{pid}.html")
-        out.append({"id": pid, "title": p.get("title") or pid.replace("-", " ").capitalize(),
+        title = p.get("title") or (doc_title(src) if p.get("auto") else "") or pid.replace("-", " ").capitalize()
+        out.append({"id": pid, "title": title, "kind": p.get("kind") or page_kind(f"{pid} {raw} {title}"),
                     "file": f"content/specs/{name}/pages/{pid}.html", "version": src.name, "phase": p.get("phase"),
                     "source": raw.rstrip("/") + ("/" + src.name if not raw.endswith(".html") else "")})
     return out
