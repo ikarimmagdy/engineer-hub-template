@@ -4,6 +4,13 @@ One engine, many hubs: the engine files come from this repo and are updated in p
 `tools/hub-update.sh`; each project keeps only its content (`content/`, `assets/img/`).
 Never edit engine files inside a hub; fix them here, tag a release, and update the hubs.
 
+## Design and the loop, worked example (5.6.0)
+
+- **Agents > How agents work** gains **Design and the loop** (agentic design versus the agent loop versus the delivery
+  loop, how they nest, building an agent through the loop, common confusions) and **Worked example** (the real content
+  of every block for the notification agent and the local database agent, open by block, with a recorded run).
+- **The loop** and **Checking a database** name the MCP servers the workspace now has instead of "none yet".
+
 ## How agents are built (5.5.0)
 
 - **Agents > How agents work** gains four tabs before the existing ones (ADR 0029, one subject per tab): **Building

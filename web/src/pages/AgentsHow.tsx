@@ -2,11 +2,12 @@ import type { ReactNode } from 'react';
 import { Link } from 'react-router';
 import { cx } from '../components/ui';
 import { AgentsBlocks, AgentsCycle, AgentsReach, AgentsWays } from './AgentsBuild';
+import { AgentsDesign, AgentsExample } from './AgentsDesign';
 
 export { AccessList, BUILDS } from './AgentsBuild';
 
 /** How agents work: the building blocks, the cycle, the ways to build one, how it reaches data, and the guardrails. One subject per tab (ADR 0029). */
-export const HOW_TABS = [['blocks', 'Building blocks'], ['cycle', 'The cycle'], ['loop', 'The loop'], ['ways', 'Three ways to build'], ['reach', 'Reaching data'],
+export const HOW_TABS = [['blocks', 'Building blocks'], ['design', 'Design and the loop'], ['example', 'Worked example'], ['cycle', 'The cycle'], ['loop', 'The loop'], ['ways', 'Three ways to build'], ['reach', 'Reaching data'],
   ['apis', 'Calling an API'], ['databases', 'Checking a database'], ['guardrails', 'Guardrails']] as const;
 
 const H = ({ children }: { children: ReactNode }) => <h2 className="mb-2 mt-6 text-base font-semibold first:mt-0">{children}</h2>;
@@ -25,6 +26,8 @@ const Arrow = ({ label }: { label?: string }) => <div className="flex flex-col i
 
 export function AgentsHow({ tab }: { tab: string }) {
   if (tab === 'blocks') return <AgentsBlocks />;
+  if (tab === 'design') return <AgentsDesign />;
+  if (tab === 'example') return <AgentsExample />;
   if (tab === 'cycle') return <AgentsCycle />;
   if (tab === 'ways') return <AgentsWays />;
   if (tab === 'reach') return <AgentsReach />;
@@ -58,7 +61,7 @@ function Loop() {
           <tr><td className="py-1.5 pr-4 font-medium">Tools</td><td className="py-1.5 pr-4"><code>--tools</code></td><td className="py-1.5">Read, Grep, Glob. Propose mode adds Edit and Write.</td></tr>
           <tr><td className="py-1.5 pr-4 font-medium">Where</td><td className="py-1.5 pr-4">working directory, <code>--add-dir</code></td><td className="py-1.5">Its scope repos under <code>code/</code>, the workspace docs and work items. Anywhere else is refused.</td></tr>
           <tr><td className="py-1.5 pr-4 font-medium">Deny rules</td><td className="py-1.5 pr-4"><code>--settings</code></td><td className="py-1.5">Never <code>.env</code> files, keys, certificates, test data or backups, even inside its directories</td></tr>
-          <tr><td className="py-1.5 pr-4 font-medium">Systems</td><td className="py-1.5 pr-4"><code>mcp:</code> in the agent file → <code>--mcp-config</code></td><td className="py-1.5">None yet. This is how an agent gets an API or a database: the next two tabs.</td></tr>
+          <tr><td className="py-1.5 pr-4 font-medium">Systems</td><td className="py-1.5 pr-4"><code>mcp:</code> in the agent file → <code>--mcp-config</code></td><td className="py-1.5">Per agent file: <code>notifications</code> (notification-messages, the notification-service API) and <code>localdb</code> (operations, member care and database agents, the local MariaDB restore). How it works: the next two tabs.</td></tr>
         </tbody>
       </table></div>
     </div>
@@ -148,7 +151,7 @@ def subscriptions_stuck_in_port_in(older_than_days: int = 1) -> list[dict]:
     rows = run(QUERIES["subscriptions_stuck_in_port_in"], days=max(1, min(older_than_days, 30)), limit=50)
     audit("subscriptions_stuck_in_port_in", {"older_than_days": older_than_days}, len(rows))
     return [mask(r) for r in rows]`}</Code>
-      <P>Then <code>mcp: selfcare-uat-db</code> in the <code>database-analyst</code> agent file. Its runs would show <em>MCP server: selfcare-uat-db</em> and <em>Databases</em> under <em>Can reach</em>, and every query on <em>Steps</em>. Today no database server exists, so every agent's <em>Not connected</em> row lists <em>Databases</em>. Today the Database Analyst writes the SQL and an engineer runs it.</P>
+      <P>That is the shape for a shared copy (UAT, a masked restore served to the team). On a laptop the workspace has <code>localdb</code>: five read tools on the local MariaDB restore, a free <code>query</code> tool made safe by three enforced layers instead of named queries. The database user has SELECT only and no grant on the credential schemas; the server allows a personal column only in <code>COUNT()</code> or <code>IS NULL</code> and masks long numbers, emails and tokens; the <code>localdb-guard</code> hook allows one read statement and logs every call. The operations, member care and database agents name it in <code>mcp:</code>; <Link to="/agents/how/example" className="underline">Worked example</Link> shows every file and a real run.</P>
     </div>
   );
 }
