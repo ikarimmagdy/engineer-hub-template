@@ -49,7 +49,7 @@ export interface Spec {
   criteria_passing: number;
   tasks: Record<TaskState, number>;
   task_list: { id: string; status: TaskState }[];
-  history: { date: string; event: string; by?: string }[];
+  history: { date: string; event: string; by?: string; note?: string; forced?: string[] }[];
   intake?: { kind: string; ref: string; summary: string };
   started_by?: { name: string; date: string } | null;
   findings: FindingSummary | null;

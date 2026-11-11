@@ -498,6 +498,13 @@ function Activity({ spec }: { spec: Spec }) {
           <span aria-hidden className="absolute -left-[25px] top-1.5 size-2 rounded-full bg-ink-3 ring-4 ring-canvas" />
           <div className="text-xs tabular-nums text-ink-3">{fmtDate(e.date)}</div>
           <div className="text-sm">{e.event}{e.by && <span className="text-ink-3">, {e.by}</span>}</div>
+          {e.note && <div className="mt-0.5 text-sm text-ink-2">{e.note}</div>}
+          {!!e.forced?.length && (
+            <details className="mt-1 text-xs text-ink-3">
+              <summary className="cursor-pointer"><span className="rounded bg-sev-medium/10 px-1.5 py-0.5 text-sev-medium">gates skipped</span> {e.forced.length} {e.forced.length === 1 ? 'check' : 'checks'} not met when moved</summary>
+              <ul className="mt-1 list-disc space-y-0.5 pl-4">{e.forced.map((f) => <li key={f} className="break-words">{f.length > 220 ? f.slice(0, 220) + '…' : f}</li>)}</ul>
+            </details>
+          )}
         </li>
       ))}
     </ol>

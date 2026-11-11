@@ -4,6 +4,11 @@ One engine, many hubs: the engine files come from this repo and are updated in p
 `tools/hub-update.sh`; each project keeps only its content (`content/`, `assets/img/`).
 Never edit engine files inside a hub; fix them here, tag a release, and update the hubs.
 
+## Activity shows why (5.7.3)
+
+- A work item's **Activity** shows each event's note and, for a forced phase move, the gates that were skipped
+  (`spec.py phase --force --note`).
+
 ## Built bundle (5.7.1)
 
 - 5.6.0 to 5.7.0 were tagged without `npm run build` (`web/` → `index.html` and `assets/app/`), so hubs updated to them
