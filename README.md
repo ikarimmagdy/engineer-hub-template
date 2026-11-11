@@ -4,6 +4,11 @@ One engine, many hubs: the engine files come from this repo and are updated in p
 `tools/hub-update.sh`; each project keeps only its content (`content/`, `assets/img/`).
 Never edit engine files inside a hub; fix them here, tag a release, and update the hubs.
 
+## Built bundle (5.7.1)
+
+- 5.6.0 to 5.7.0 were tagged without `npm run build` (`web/` → `index.html` and `assets/app/`), so hubs updated to them
+  kept the 5.5.0 front end. 5.7.1 is the same source with the bundle built. Always release with `cd web && npm run build`.
+
 ## Who started a work item (5.7.0)
 
 - The work item header and the **Where the work is** panel show **Started by** (name and date), and the Work board has
