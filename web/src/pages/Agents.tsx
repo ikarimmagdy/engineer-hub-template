@@ -4,7 +4,8 @@ import { getJson, useAsync, useHub } from '../lib/data';
 import { startAgent, useLoopApi, useRuns } from '../lib/loop';
 import { RunView, useRun } from '../components/RunView';
 import { CreateAgent, Runs, TeamAgents } from './AgentStudio';
-import { AgentsHow, HOW_TABS } from './AgentsHow';
+import { AgentsHow, HOW_GROUPS, HOW_TABS } from './AgentsHow';
+import { SideNav, WithSideNav } from '../components/SideNav';
 import { howRoute } from '../lib/routes';
 import { CopyButton, cx, Dot, Empty, ErrorNote, PageHeader, Panel, Pill, Skeleton, TabBar } from '../components/ui';
 
@@ -45,10 +46,12 @@ export function Agents() {
         <TabBar label="MCP" className="mb-5" tabs={MCP_TABS.map(([t, l]) => ({ to: `/agents/mcp/${t}`, label: l }))} />
         {sub === 'servers' ? <McpServers /> : <BuildMcp part={sub!} />}
       </>}
-      {view === 'how' && <>
-        <TabBar label="How agents work" className="mb-5" tabs={HOW_TABS.map(([t, l]) => ({ to: `/agents/how/${t}`, label: l }))} />
-        <AgentsHow tab={sub!} />
-      </>}
+      {view === 'how' && (
+        <WithSideNav nav={<SideNav label="How agents work" groups={HOW_GROUPS.map((g) => ({
+          title: g.title, items: g.tabs.map((t) => ({ to: `/agents/how/${t}`, label: HOW_TABS.find(([x]) => x === t)?.[1] || t })) }))} />}>
+          <AgentsHow tab={sub!} />
+        </WithSideNav>
+      )}
     </div>
   );
 }

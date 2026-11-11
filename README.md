@@ -4,6 +4,21 @@ One engine, many hubs: the engine files come from this repo and are updated in p
 `tools/hub-update.sh`; each project keeps only its content (`content/`, `assets/img/`).
 Never edit engine files inside a hub; fix them here, tag a release, and update the hubs.
 
+## Side menus and step flows (5.8.0)
+
+- **How agents work** moves its ten sections from a second tab row into a grouped side menu (Start here, How a run
+  works, Building one, Reaching systems, Safety). Each section opens with a **step flow**: numbered circles coloured by
+  who acts (you, the model, a hook, a tool, our system), a detail card for the selected step, previous and next, and
+  Play. The worked example adds the real `/db` run as a second flow. The text stays below.
+- **Operation Center** has one side menu for everything: processes by category, each journey, each service desk.
+  Journeys show totals (steps, tickets, approvals, desks), a strip of numbered circles to jump to a step, and one card
+  per step with a **Raise** row (desk, process, approvals, lead time) or a **Self-service** badge. Each desk has its own
+  page: processes by area first, then how tickets flow, then the desk notes (the opening always shows, the rest opens
+  in full on demand; no inner scrolling).
+- Components: `components/SideNav.tsx`, `components/StepFlow.tsx`; flows in `pages/AgentsFlows.tsx`.
+- Serve a hub with `HUB_DIR=<hub>/app PORT=<port> npx vite preview` from `web/` when agents should launch from it:
+  launching, approving and moving phases need the local API, which a static server does not have.
+
 ## Activity shows why (5.7.3)
 
 - A work item's **Activity** shows each event's note and, for a forced phase move, the gates that were skipped

@@ -1,6 +1,8 @@
 import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { cx } from '../components/ui';
+import { StepFlow } from '../components/StepFlow';
+import { FLOWS } from './AgentsFlows';
 
 /** Agentic design versus the two loops, and the worked example: what is written in every block for one real agent. */
 
@@ -259,6 +261,7 @@ export function AgentsExample() {
       <Blocks items={NOTIFICATION} />
       <H>Operations data: the local database, read-only</H>
       <P>The same blocks for a database. The local MariaDB on <code>127.0.0.1:13306</code> is a restore of production schemas, so it likely holds customer data: three layers keep that data in the database, and the model works from counts, statuses and internal ids.</P>
+      <StepFlow title={FLOWS.exampleDb.title} caption={FLOWS.exampleDb.caption} steps={FLOWS.exampleDb.steps} />
       <Blocks items={LOCALDB} />
     </div>
   );

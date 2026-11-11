@@ -3,12 +3,23 @@ import { Link } from 'react-router';
 import { cx } from '../components/ui';
 import { AgentsBlocks, AgentsCycle, AgentsReach, AgentsWays } from './AgentsBuild';
 import { AgentsDesign, AgentsExample } from './AgentsDesign';
+import { FLOWS } from './AgentsFlows';
+import { StepFlow } from '../components/StepFlow';
 
 export { AccessList, BUILDS } from './AgentsBuild';
 
 /** How agents work: the building blocks, the cycle, the ways to build one, how it reaches data, and the guardrails. One subject per tab (ADR 0029). */
 export const HOW_TABS = [['blocks', 'Building blocks'], ['design', 'Design and the loop'], ['example', 'Worked example'], ['cycle', 'The cycle'], ['loop', 'The loop'], ['ways', 'Ways to build'], ['reach', 'Reaching data'],
   ['apis', 'APIs'], ['databases', 'Databases'], ['guardrails', 'Guardrails']] as const;
+
+/** The side menu of How agents work: the same sections, grouped by the question they answer. */
+export const HOW_GROUPS: { title: string; tabs: string[] }[] = [
+  { title: 'Start here', tabs: ['blocks', 'design', 'example'] },
+  { title: 'How a run works', tabs: ['cycle', 'loop'] },
+  { title: 'Building one', tabs: ['ways'] },
+  { title: 'Reaching systems', tabs: ['reach', 'apis', 'databases'] },
+  { title: 'Safety', tabs: ['guardrails'] },
+];
 
 const H = ({ children }: { children: ReactNode }) => <h2 className="mb-2 mt-6 text-base font-semibold first:mt-0">{children}</h2>;
 const P = ({ children }: { children: ReactNode }) => <p className="mb-2 max-w-3xl text-sm leading-relaxed text-ink-2">{children}</p>;
@@ -25,6 +36,18 @@ function Box({ t, d, tone }: { t: string; d: string; tone?: 'model' | 'gate' | '
 const Arrow = ({ label }: { label?: string }) => <div className="flex flex-col items-center justify-center px-1 text-[10px] text-ink-3"><span aria-hidden>&rarr;</span>{label}</div>;
 
 export function AgentsHow({ tab }: { tab: string }) {
+  const f = FLOWS[tab];
+  const title = HOW_TABS.find(([t]) => t === tab)?.[1];
+  return (
+    <div>
+      {title && <h2 className="mb-3 text-xl font-semibold">{title}</h2>}
+      {f && <StepFlow title={f.title} caption={f.caption} steps={f.steps} />}
+      <HowBody tab={tab} />
+    </div>
+  );
+}
+
+function HowBody({ tab }: { tab: string }) {
   if (tab === 'blocks') return <AgentsBlocks />;
   if (tab === 'design') return <AgentsDesign />;
   if (tab === 'example') return <AgentsExample />;
