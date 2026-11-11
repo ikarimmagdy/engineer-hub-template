@@ -7,17 +7,18 @@ import { FLOWS } from './AgentsFlows';
 import { StepFlow } from '../components/StepFlow';
 import { FlowScope, Hl } from '../components/FlowScope';
 import { BLOCK_STEPS, BlocksMap } from './AgentsBlocksMap';
+import { CycleMap, MCP_STEPS, McpGlossary, McpMap, WaysMap } from './AgentsMaps';
 
 export { AccessList, BUILDS } from './AgentsBuild';
 
 /** How agents work: the building blocks, the cycle, the ways to build one, how it reaches data, and the guardrails. One subject per tab (ADR 0029). */
-export const HOW_TABS = [['blocks', 'Building blocks'], ['design', 'Design and the loop'], ['example', 'Worked example'], ['cycle', 'The cycle'], ['loop', 'The loop'], ['ways', 'Ways to build'], ['reach', 'Reaching data'],
-  ['apis', 'APIs'], ['databases', 'Databases'], ['guardrails', 'Guardrails']] as const;
+export const HOW_TABS = [['blocks', 'Building blocks'], ['design', 'Design and the loop'], ['example', 'Worked example'], ['cycle', 'One request, end to end'],
+  ['ways', 'Ways to build'], ['reach', 'Reaching systems (MCP)'], ['apis', 'API path'], ['databases', 'Database path'], ['guardrails', 'Guardrails']] as const;
 
 /** The side menu of How agents work: the same sections, grouped by the question they answer. */
 export const HOW_GROUPS: { title: string; tabs: string[] }[] = [
   { title: 'Start here', tabs: ['blocks', 'design', 'example'] },
-  { title: 'How a run works', tabs: ['cycle', 'loop'] },
+  { title: 'How a run works', tabs: ['cycle'] },
   { title: 'Building one', tabs: ['ways'] },
   { title: 'Reaching systems', tabs: ['reach', 'apis', 'databases'] },
   { title: 'Safety', tabs: ['guardrails'] },
@@ -40,13 +41,17 @@ const Arrow = ({ label }: { label?: string }) => <div className="flex flex-col i
 export function AgentsHow({ tab }: { tab: string }) {
   const f = FLOWS[tab];
   const title = HOW_TABS.find(([t]) => t === tab)?.[1];
-  const steps = tab === 'blocks' ? BLOCK_STEPS : f?.steps || [];
+  const steps = tab === 'blocks' ? BLOCK_STEPS : tab === 'reach' ? MCP_STEPS : f?.steps || [];
   return (
     <FlowScope key={tab} steps={steps}>
       {title && <h2 className="mb-3 text-xl font-semibold">{title}</h2>}
       {tab === 'blocks'
         ? <StepFlow title="How the blocks work together" caption="One request, from you through Claude Code to our system and back. Each number is a hand-off between two blocks: click one, or press Play. The table below lights up with the block of each step." steps={BLOCK_STEPS} visual={(at, go) => <BlocksMap step={at} go={go} />} />
+        : tab === 'cycle' && f ? <StepFlow title={f.title} caption="Steps 1 to 5 happen once; 6 to 12 are the agent loop, repeated until the model answers (13). Click a step, or press Play." steps={f.steps} visual={(at, go) => <CycleMap steps={f.steps} at={at} go={go} />} />
+        : tab === 'ways' && f ? <StepFlow title="Three ways, side by side: who owns the flow" caption="The same job built three ways. Blue is the model, grey is our code, orange is a check, green is how it reaches systems. Click a way or a step." steps={f.steps} visual={(at, go) => <WaysMap at={at} go={go} />} />
+        : tab === 'reach' ? <StepFlow title="How an agent reaches a system: MCP, step by step" caption="Every term on the map is in the glossary below; the row for the selected step lights up. Click a box, a step, or press Play." steps={MCP_STEPS} visual={(at, go) => <McpMap at={at} go={go} />} />
         : f && <StepFlow title={f.title} caption={f.caption} steps={f.steps} />}
+      {tab === 'reach' && <div className="mb-8"><h3 className="mb-2 text-base font-semibold">The terms, and where they are here</h3><McpGlossary /></div>}
       <HowBody tab={tab} />
     </FlowScope>
   );
@@ -56,7 +61,7 @@ function HowBody({ tab }: { tab: string }) {
   if (tab === 'blocks') return <AgentsBlocks />;
   if (tab === 'design') return <AgentsDesign />;
   if (tab === 'example') return <AgentsExample />;
-  if (tab === 'cycle') return <AgentsCycle />;
+  if (tab === 'cycle') return <><AgentsCycle /><Loop /></>;
   if (tab === 'ways') return <AgentsWays />;
   if (tab === 'reach') return <AgentsReach />;
   if (tab === 'apis') return <Apis />;
@@ -68,18 +73,7 @@ function HowBody({ tab }: { tab: string }) {
 function Loop() {
   return (
     <div>
-      <P>An agent is a model in a loop. The model never touches a system itself: it can only <strong>ask for a tool call</strong>. Claude Code checks the call against the run's permissions, runs the tool, and gives the model the result. The model then asks for the next call or writes the answer. What an agent can do is exactly the list of tools it is given, nothing more.</P>
-      <div className="my-4 grid w-full grid-cols-[repeat(4,minmax(0,1fr)_auto)_minmax(0,1fr)] items-stretch gap-1">
-        <Box a="loop:task" t="Task" d="your question, the mode, the work item" />
-        <Arrow />
-        <Box a="loop:model" t="Model" d="reads the agent file, the mode rules and recent commits; decides the next step" tone="model" />
-        <Arrow label="asks for" />
-        <Box a="loop:call" t="Tool call" d='e.g. Grep "1003" in code/vm-selfcare-proxy' />
-        <Arrow />
-        <Box a="loop:check" t="Permission check" d="is the tool on --tools? is the path inside the agent's directories? any deny rule?" tone="gate" />
-        <Arrow label="allowed" />
-        <Box a="loop:run" t="Tool runs" d="the result goes back to the model, and the loop repeats" tone="tool" />
-      </div>
+      <H>What you see on a run</H>
       <P>Every step of that loop is what you see on a run: <em>What it touched</em> draws the tool calls by system, <em>Steps</em> lists them in order, a refused call shows as <span className="text-block">blocked</span>, and <em>How it ran</em> shows the exact command line that set the tools and permissions.</P>
       <H>What the hub gives each agent today</H>
       <div className="max-w-3xl overflow-x-auto"><table className="w-full text-sm">

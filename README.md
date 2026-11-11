@@ -4,6 +4,17 @@ One engine, many hubs: the engine files come from this repo and are updated in p
 `tools/hub-update.sh`; each project keeps only its content (`content/`, `assets/img/`).
 Never edit engine files inside a hub; fix them here, tag a release, and update the hubs.
 
+## One request, ways side by side, MCP map (5.11.0)
+
+- **The cycle** and **The loop** are one section, **One request, end to end**: a map with steps 1 to 5 once, steps 6
+  to 12 as a ring (the agent loop, repeated until the model answers) and 13 the answer. `/agents/how/loop` redirects.
+- **Ways to build** opens with the three ways side by side (`WaysMap`): the same job as boxes coloured by who owns
+  each step (model, our code, a check), the harness loop drawn, and the reach all three share.
+- **Reaching systems (MCP)** opens with a map from the model through the MCP client, hook, stdio, server and
+  credentials to the API or the database and back, and a glossary of every term (meaning, where it is here) whose
+  row lights with its step. **Calling an API** and **Checking a database** are now **API path** and **Database path**.
+- Drawings in `pages/AgentsMaps.tsx`.
+
 ## Architecture documents on the System page (5.10.0)
 
 - `sync_loop.py` adds every `outputs/<folder>/` of a work item that holds a `v<N>-<date>.html` as a page, even when

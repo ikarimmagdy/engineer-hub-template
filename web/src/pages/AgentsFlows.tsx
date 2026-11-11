@@ -154,7 +154,7 @@ const ANCHORS: Record<string, string[][]> = {
   design: [['design:delivery'], ['design:delivery'], ['design:agent'], ['design:agent'], ['design:design'], ['design:delivery'], ['design:delivery']],
   example: [['ex:Command'], ['ex:Skill'], ['ex:MCP server', 'ex:Registration', 'ex:Environment'], ['ex:MCP server'], ['ex:Hook'], ['ex:MCP server'], ['ex:Agent'], ['ex:The run, recorded']],
   exampleDb: [['db:Command'], ['db:Skill'], ['db:MCP server'], ['db:MCP server'], [], ['db:Hook', 'db:Database user'], ['db:The run, recorded']],
-  cycle: Array.from({ length: 13 }, (_, i) => [`cycle:${i}`]),
+  cycle: Array.from({ length: 13 }, (_, i) => [`cycle:${i}`, ...(i === 5 || i === 10 ? ['loop:model'] : i === 7 ? ['loop:check'] : i === 8 ? ['loop:run'] : [])]),
   loop: [['loop:task'], ['loop:model'], ['loop:call'], ['loop:check'], ['loop:run'], ['loop:model']],
   ways: [[], ['ways:harness'], ['ways:framework'], ['ways:service'], ['ways:harness', 'ways:framework', 'ways:service']],
   reach: [[], ['reach:api'], ['reach:db'], ['reach:api'], ['reach:logs', 'reach:events'], ['reach:tools'], ['reach:ship']],

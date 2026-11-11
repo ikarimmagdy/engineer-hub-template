@@ -30,6 +30,7 @@ export function Agents() {
   if (!view) return <Navigate to="/agents/team" replace />;
   if (view === 'mcp' && !sub) return <Navigate to="/agents/mcp/servers" replace />;
   if (view === 'how' && !sub) return <Navigate to="/agents/how/blocks" replace />;
+  if (view === 'how' && sub === 'loop') return <Navigate to="/agents/how/cycle" replace />;
   if (view === 'team' && !sub) return <Navigate to={`/agents/team/launch${qs.toString() ? `?${qs}` : ''}`} replace />;
   if (view === 'build-mcp') return <Navigate to="/agents/mcp/what" replace />;
   if (!VIEWS.some(([v]) => v === view)) return <Navigate to="/agents" replace />;

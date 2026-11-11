@@ -122,7 +122,7 @@ export function AgentsCycle() {
           </Hl>
         ))}
       </ol>
-      <P><span className="mt-3 block">Steps 6 to 10 repeat until the model writes the answer. That repetition is <Link to="/agents/how/loop" className="underline">the loop</Link>; everything around it is what makes it safe and repeatable.</span></P>
+      <P><span className="mt-3 block">Steps 6 to 12 repeat until the model writes the answer: that repetition is the agent loop, the ring in the map above. Everything around it is what makes it safe and repeatable.</span></P>
     </div>
   );
 }
