@@ -62,6 +62,7 @@ function Card({ s }: { s: Spec }) {
     <Link to={`/work/${s.key}/overview`} className="block rounded-lg border border-line bg-paper p-3 hover:border-line-2">
       <div className="flex items-center gap-2 font-mono text-[11px] text-ink-3">{s.key}<ProposedTag s={s} /></div>
       <div className="mt-0.5 line-clamp-2 text-sm font-medium">{s.title}</div>
+      {s.started_by && <div className="mt-1 truncate text-[11px] text-ink-3">started by <span className="text-ink-2">{s.started_by.name}</span></div>}
       {s.criteria > 1 && (
         <div className="mt-2.5">
           <Meter value={s.criteria_passing} total={s.criteria} />

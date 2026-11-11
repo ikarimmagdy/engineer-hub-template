@@ -11,8 +11,8 @@ Never edit engine files inside a hub; fix them here, tag a release, and update t
 
 ## Who started a work item (5.7.0)
 
-- The work item header and the **Where the work is** panel show **Started by** (name and date), and the Work board has
-  a sortable **Started by** column. The value is `started_by` from the workspace's `spec.py json` (written by
+- The work item header and the **Where the work is** panel show **Started by** (name and date), and the Work board shows
+  it on each card (Board) and as a sortable **Started by** column (Table). The value is `started_by` from the workspace's `spec.py json` (written by
   `spec.py new` from `git config user.name`; older items fall back to the first commit of their `status.json`).
 
 ## Design and the loop, worked example (5.6.0)
