@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { Link } from 'react-router';
 import { cx, Pill } from '../components/ui';
 import { useHub, type AgNode } from '../lib/data';
+import { Hl } from '../components/FlowScope';
 
 /** How agents are built here: the blocks of the workspace, one request through them, three architectures, and the ways to data. */
 
@@ -69,16 +70,16 @@ export function AgentsBlocks() {
   return (
     <div>
       <P>Claude Code is the <strong>harness</strong>: it runs the model in a loop and decides what the model may do. Everything else is files in this workspace. Each block below answers one question: what the model knows (context), how it is told to work (advice), and what it is allowed to do (enforced). Only enforced blocks are guarantees.</P>
-      <div className="max-w-5xl overflow-x-auto"><table className="w-full text-sm">
+      <div className="w-full overflow-x-auto"><table className="w-full text-sm">
         <thead><tr className="text-left text-xs uppercase tracking-wide text-ink-3"><th className="py-1.5 pr-3">Block</th><th className="py-1.5 pr-3">File</th><th className="py-1.5 pr-3">Started by, and when</th><th className="py-1.5 pr-3">Kind</th><th className="py-1.5">In this workspace</th></tr></thead>
         <tbody className="divide-y divide-line align-top text-ink-2">{rows.map((r) => (
-          <tr key={r.b}>
+          <Hl as="tr" a={`blk:${r.b}`} key={r.b}>
             <td className="py-1.5 pr-3 font-medium text-ink">{r.b}</td>
             <td className="py-1.5 pr-3"><code className="text-xs">{r.file}</code></td>
             <td className="py-1.5 pr-3 text-xs">{r.who}. {r.when}.</td>
             <td className="py-1.5 pr-3"><span className={cx('rounded px-1.5 py-0.5 text-[11px]', tone[r.strength])}>{r.strength}</span></td>
             <td className="py-1.5 text-xs">{r.here}</td>
-          </tr>))}
+          </Hl>))}
         </tbody>
       </table></div>
       <P><span className="mt-3 block">How they combine: a <strong>command</strong> is the recipe you start, a <strong>skill</strong> is the know-how it pulls in, an <strong>agent</strong> is a specialist it hands work to, an <strong>MCP server</strong> is how anyone reaches a system, a <strong>hook</strong> is the check nobody can skip, and <strong>settings</strong> and the <strong>environment</strong> decide what is reachable at all. <Link to="/agents/how/cycle" className="underline">The cycle</Link> follows one request through all of them.</span></P>
@@ -112,13 +113,13 @@ export function AgentsCycle() {
   return (
     <div>
       <P>One request, start to end, in this workspace. Orange steps are hooks, which the harness runs whatever the model decides. Blue steps are the model, and green steps are tools acting on a system.</P>
-      <ol className="max-w-4xl space-y-1.5">
+      <ol className="w-full space-y-1.5">
         {steps.map(([k, t, d, w], i) => (
-          <li key={t} className={cx('grid grid-cols-[28px_minmax(0,220px)_minmax(0,1fr)] items-start gap-3 rounded-lg border px-3 py-2', KIND_TONE[k])}>
+          <Hl as="li" a={`cycle:${i}`} key={t} className={cx('grid grid-cols-[28px_minmax(0,220px)_minmax(0,1fr)] items-start gap-3 rounded-lg border px-3 py-2', KIND_TONE[k])}>
             <span className="text-xs font-semibold text-ink-3">{i + 1}</span>
             <span className="text-sm font-semibold">{t}</span>
             <span className="text-xs text-ink-2">{d} <code className="ml-1 text-[11px] text-ink-3">{w}</code></span>
-          </li>
+          </Hl>
         ))}
       </ol>
       <P><span className="mt-3 block">Steps 6 to 10 repeat until the model writes the answer. That repetition is <Link to="/agents/how/loop" className="underline">the loop</Link>; everything around it is what makes it safe and repeatable.</span></P>
@@ -141,9 +142,9 @@ export function AgentsWays() {
   return (
     <div>
       <P>Three ways to build an agent, from most freedom for the model to least. They differ in who owns the control flow: the model, a graph we write, or plain code.</P>
-      <div className="grid max-w-6xl gap-3 lg:grid-cols-3">
+      <div className="grid w-full gap-3 lg:grid-cols-3">
         {cols.map((c) => (
-          <div key={c.k} className="rounded-lg border border-line-2 bg-paper p-4">
+          <Hl a={`ways:${c.k}`} key={c.k} className="rounded-lg border border-line-2 bg-paper p-4">
             <div className="font-semibold">{c.t}</div>
             <p className="mt-1 text-xs text-ink-2">{c.what}</p>
             <div className="mt-3 text-[11px] font-semibold uppercase tracking-wide text-ink-3">Use it when</div>
@@ -154,7 +155,7 @@ export function AgentsWays() {
             <p className="text-xs text-ink-2">{c.stack}</p>
             <div className="mt-3 text-[11px] font-semibold uppercase tracking-wide text-ink-3">Here</div>
             <p className="text-xs text-ink-2">{c.here}</p>
-          </div>
+          </Hl>
         ))}
       </div>
       <H>Choosing in four questions</H>
@@ -183,10 +184,10 @@ export function AgentsReach() {
   return (
     <div>
       <P>Six ways an agent gets to our data. The rule of thumb: <strong>read through the API when it answers the question, read the database when only history and joins do, and write only through the API</strong>, never with SQL. The production databases a person opens in DBeaver through a tunnel are for people. An agent never gets that connection: it gets a masked or UAT copy, or synthetic data locally.</P>
-      <div className="max-w-6xl overflow-x-auto"><table className="w-full text-sm">
+      <div className="w-full overflow-x-auto"><table className="w-full text-sm">
         <thead><tr className="text-left text-xs uppercase tracking-wide text-ink-3"><th className="py-1.5 pr-3">Way</th><th className="py-1.5 pr-3">Answers</th><th className="py-1.5 pr-3">How the agent gets it</th><th className="py-1.5 pr-3">Watch out</th><th className="py-1.5">Here</th></tr></thead>
         <tbody className="divide-y divide-line align-top text-xs text-ink-2">{ways.map(([k, a, h, w, e]) => (
-          <tr key={k}><td className="py-1.5 pr-3"><span className={cx('whitespace-nowrap rounded px-1.5 py-0.5 text-[11px] font-medium', WAYS[k].tone)}>{WAYS[k].label}</span></td><td className="py-1.5 pr-3">{a}</td><td className="py-1.5 pr-3">{h}</td><td className="py-1.5 pr-3">{w}</td><td className="py-1.5">{e}</td></tr>))}
+          <Hl as="tr" a={`reach:${k}`} key={k}><td className="py-1.5 pr-3"><span className={cx('whitespace-nowrap rounded px-1.5 py-0.5 text-[11px] font-medium', WAYS[k].tone)}>{WAYS[k].label}</span></td><td className="py-1.5 pr-3">{a}</td><td className="py-1.5 pr-3">{h}</td><td className="py-1.5 pr-3">{w}</td><td className="py-1.5">{e}</td></Hl>))}
         </tbody>
       </table></div>
       <H>Building an agent, step by step</H>
@@ -194,14 +195,14 @@ export function AgentsReach() {
         <li><strong>Job and ten real questions.</strong> Write the questions the users actually ask, with the answer you would expect.</li>
         <li><strong>Source per question.</strong> For each one: code, API, database, logs. Mark the questions that need personal data.</li>
         <li><strong>Pick the build style</strong> (<Link to="/agents/how/ways" className="underline">three ways</Link>).</li>
-        <li><strong>Tools.</strong> Named, typed and read-only first (<code>get_notification(id)</code>, not <code>run_sql</code>). Writes are separate tools that the hook and the permission prompt gate.</li>
+        <Hl as="li" a="reach:tools"><strong>Tools.</strong> Named, typed and read-only first (<code>get_notification(id)</code>, not <code>run_sql</code>). Writes are separate tools that the hook and the permission prompt gate.</Hl>
         <li><strong>Guardrails.</strong> Which account, which environment, masking, row limits, a hook for the rule that must not be skipped.</li>
         <li><strong>Evals.</strong> The ten questions become tests, run on synthetic or masked data (like <code>oman-ops-synth</code>).</li>
-        <li><strong>Ship.</strong> An agent file with <code>mcp:</code> on this hub, or a service through BeyondBase; then measure the answers it gets right.</li>
+        <Hl as="li" a="reach:ship"><strong>Ship.</strong> An agent file with <code>mcp:</code> on this hub, or a service through BeyondBase; then measure the answers it gets right.</Hl>
       </ol>
       {team.length > 0 && <>
         <H>How each team agent reaches data</H>
-        <div className="grid max-w-5xl gap-2 sm:grid-cols-2">
+        <div className="grid w-full gap-2 sm:grid-cols-2">
           {team.map((a) => (
             <Link key={a.name} to={`/agents/team/about?a=${a.name}`} className="rounded-lg border border-line bg-paper px-3 py-2 hover:border-line-2">
               <div className="mb-1 flex items-center gap-2 text-sm font-medium">{a.name}{a.build && <Pill>{a.build}</Pill>}</div>

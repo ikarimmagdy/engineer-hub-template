@@ -4,6 +4,16 @@ One engine, many hubs: the engine files come from this repo and are updated in p
 `tools/hub-update.sh`; each project keeps only its content (`content/`, `assets/img/`).
 Never edit engine files inside a hub; fix them here, tag a release, and update the hubs.
 
+## Linked flows, the blocks map (5.8.1)
+
+- A step flow and the text under it share one selected step (`components/FlowScope.tsx`): the text a step is about
+  lights up, and clicking that text selects its step. Each section starts again at step 1 (the scope is keyed per
+  section). The mapping of steps to text is `ANCHORS` in `pages/AgentsFlows.tsx`.
+- Flows fit the width of the page instead of scrolling sideways; tables and lists under them use the full width.
+- **Building blocks** opens with a map (`pages/AgentsBlocksMap.tsx`): every block where it sits (you, Claude Code,
+  reach, our systems), coloured context, enforced, model or system, and the eleven numbered hand-offs of one request.
+  The selected step draws its arrows and blocks and lights its row in the table.
+
 ## Side menus and step flows (5.8.0)
 
 - **How agents work** moves its ten sections from a second tab row into a grouped side menu (Start here, How a run

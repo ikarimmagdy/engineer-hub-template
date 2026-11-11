@@ -1,14 +1,15 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { cx } from './ui';
+import { useFlowScope } from './FlowScope';
 
 /**
  * An interactive flow: numbered circles joined by a line, one short title under each. Click a step (or use the
  * arrows, or Play) and its detail opens below. The kind colours the circle: who acts at that step.
  */
 export type StepKind = 'you' | 'model' | 'hook' | 'tool' | 'file' | 'gate' | 'system';
-export interface FlowStep { title: string; detail: ReactNode; kind?: StepKind; where?: string }
+export interface FlowStep { title: string; detail: ReactNode; kind?: StepKind; where?: string; anchors?: string[] }
 
-const KIND: Record<StepKind, { ring: string; fill: string; label: string }> = {
+export const KIND: Record<StepKind, { ring: string; fill: string; label: string }> = {
   you: { ring: 'border-ink', fill: 'bg-ink text-paper', label: 'You' },
   model: { ring: 'border-run', fill: 'bg-run text-paper', label: 'The model' },
   hook: { ring: 'border-sev-medium', fill: 'bg-sev-medium text-paper', label: 'Hook (enforced)' },
@@ -18,8 +19,14 @@ const KIND: Record<StepKind, { ring: string; fill: string; label: string }> = {
   system: { ring: 'border-brand', fill: 'bg-brand text-paper', label: 'Our system' },
 };
 
-export function StepFlow({ steps, title, caption }: { steps: FlowStep[]; title?: ReactNode; caption?: ReactNode }) {
-  const [at, setAt] = useState(0);
+/** `visual` replaces the row of circles with a drawing of its own (a diagram) that shows and changes the step. */
+export function StepFlow({ steps, title, caption, visual }: {
+  steps: FlowStep[]; title?: ReactNode; caption?: ReactNode; visual?: (at: number, go: (i: number) => void) => ReactNode;
+}) {
+  const scope = useFlowScope();
+  const [own, setOwn] = useState(0);
+  const at = scope ? scope.at : own;
+  const setAt = scope ? scope.setAt : setOwn;
   const [play, setPlay] = useState(false);
   useEffect(() => {
     if (!play) return;
@@ -48,24 +55,24 @@ export function StepFlow({ steps, title, caption }: { steps: FlowStep[]; title?:
           </div>
         </div>
       )}
-      <div className="overflow-x-auto pb-1" data-scroll>
-        <ol className="relative flex min-w-max items-start" role="tablist" aria-label="Steps"
+      {visual ? visual(at, go) : (
+        <ol className="relative grid items-start" role="tablist" aria-label="Steps" style={{ gridTemplateColumns: `repeat(${steps.length}, minmax(0, 1fr))` }}
           onKeyDown={(e) => { if (e.key === 'ArrowRight') go(at + 1); if (e.key === 'ArrowLeft') go(at - 1); }}>
           {steps.map((x, i) => {
             const kk = KIND[x.kind || 'model'];
             const on = i === at, done = i < at;
             return (
-              <li key={i} className="relative flex w-[112px] shrink-0 flex-col items-center px-1">
+              <li key={i} className="relative flex min-w-0 flex-col items-center px-0.5">
                 {i < steps.length - 1 && <span aria-hidden className={cx('absolute left-[calc(50%+18px)] right-[calc(-50%+18px)] top-[17px] h-0.5', done ? 'bg-ink-3' : 'bg-line-2')} />}
                 <button type="button" role="tab" aria-selected={on} onClick={() => go(i)}
                   className={cx('relative z-10 grid size-9 place-items-center rounded-full border-2 text-sm font-semibold tabular-nums transition',
                     kk.ring, on ? cx(kk.fill, 'scale-110 shadow-md') : done ? 'bg-sunk text-ink' : 'bg-paper text-ink')}>{i + 1}</button>
-                <button type="button" onClick={() => go(i)} className={cx('mt-2 text-center text-xs leading-snug', on ? 'font-semibold text-ink' : 'text-ink-2 hover:text-ink')}>{x.title}</button>
+                <button type="button" onClick={() => go(i)} className={cx('mt-2 break-words text-center text-xs leading-snug', on ? 'font-semibold text-ink' : 'text-ink-2 hover:text-ink')}>{x.title}</button>
               </li>
             );
           })}
         </ol>
-      </div>
+      )}
       <div className="mt-4 grid grid-cols-[44px_minmax(0,1fr)] gap-3 rounded-lg bg-sunk p-4" role="tabpanel" aria-live="polite">
         <span className={cx('grid size-11 place-items-center rounded-full text-lg font-semibold tabular-nums', k.fill)}>{at + 1}</span>
         <div className="min-w-0">

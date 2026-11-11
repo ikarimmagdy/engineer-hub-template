@@ -5,6 +5,8 @@ import { AgentsBlocks, AgentsCycle, AgentsReach, AgentsWays } from './AgentsBuil
 import { AgentsDesign, AgentsExample } from './AgentsDesign';
 import { FLOWS } from './AgentsFlows';
 import { StepFlow } from '../components/StepFlow';
+import { FlowScope, Hl } from '../components/FlowScope';
+import { BLOCK_STEPS, BlocksMap } from './AgentsBlocksMap';
 
 export { AccessList, BUILDS } from './AgentsBuild';
 
@@ -25,12 +27,12 @@ const H = ({ children }: { children: ReactNode }) => <h2 className="mb-2 mt-6 te
 const P = ({ children }: { children: ReactNode }) => <p className="mb-2 max-w-3xl text-sm leading-relaxed text-ink-2">{children}</p>;
 const Code = ({ children }: { children: string }) => <pre className="mb-3 max-w-3xl overflow-auto rounded-md bg-sunk p-3 text-xs"><code>{children}</code></pre>;
 
-function Box({ t, d, tone }: { t: string; d: string; tone?: 'model' | 'gate' | 'tool' }) {
+function Box({ t, d, tone, a }: { t: string; d: string; tone?: 'model' | 'gate' | 'tool'; a?: string }) {
   return (
-    <div className={cx('min-w-0 rounded-lg border px-3 py-2', tone === 'model' ? 'border-run bg-run/5' : tone === 'gate' ? 'border-sev-medium bg-sev-medium/5' : tone === 'tool' ? 'border-ok bg-ok/5' : 'border-line-2 bg-paper')}>
+    <Hl a={a || ''} className={cx('min-w-0 rounded-lg border px-3 py-2', tone === 'model' ? 'border-run bg-run/5' : tone === 'gate' ? 'border-sev-medium bg-sev-medium/5' : tone === 'tool' ? 'border-ok bg-ok/5' : 'border-line-2 bg-paper')}>
       <div className="text-sm font-semibold">{t}</div>
       <div className="text-xs text-ink-3">{d}</div>
-    </div>
+    </Hl>
   );
 }
 const Arrow = ({ label }: { label?: string }) => <div className="flex flex-col items-center justify-center px-1 text-[10px] text-ink-3"><span aria-hidden>&rarr;</span>{label}</div>;
@@ -38,12 +40,15 @@ const Arrow = ({ label }: { label?: string }) => <div className="flex flex-col i
 export function AgentsHow({ tab }: { tab: string }) {
   const f = FLOWS[tab];
   const title = HOW_TABS.find(([t]) => t === tab)?.[1];
+  const steps = tab === 'blocks' ? BLOCK_STEPS : f?.steps || [];
   return (
-    <div>
+    <FlowScope key={tab} steps={steps}>
       {title && <h2 className="mb-3 text-xl font-semibold">{title}</h2>}
-      {f && <StepFlow title={f.title} caption={f.caption} steps={f.steps} />}
+      {tab === 'blocks'
+        ? <StepFlow title="How the blocks work together" caption="One request, from you through Claude Code to our system and back. Each number is a hand-off between two blocks: click one, or press Play. The table below lights up with the block of each step." steps={BLOCK_STEPS} visual={(at, go) => <BlocksMap step={at} go={go} />} />
+        : f && <StepFlow title={f.title} caption={f.caption} steps={f.steps} />}
       <HowBody tab={tab} />
-    </div>
+    </FlowScope>
   );
 }
 
@@ -64,27 +69,27 @@ function Loop() {
   return (
     <div>
       <P>An agent is a model in a loop. The model never touches a system itself: it can only <strong>ask for a tool call</strong>. Claude Code checks the call against the run's permissions, runs the tool, and gives the model the result. The model then asks for the next call or writes the answer. What an agent can do is exactly the list of tools it is given, nothing more.</P>
-      <div className="my-4 grid max-w-4xl grid-cols-[repeat(4,minmax(0,1fr)_auto)_minmax(0,1fr)] items-stretch gap-1">
-        <Box t="Task" d="your question, the mode, the work item" />
+      <div className="my-4 grid w-full grid-cols-[repeat(4,minmax(0,1fr)_auto)_minmax(0,1fr)] items-stretch gap-1">
+        <Box a="loop:task" t="Task" d="your question, the mode, the work item" />
         <Arrow />
-        <Box t="Model" d="reads the agent file, the mode rules and recent commits; decides the next step" tone="model" />
+        <Box a="loop:model" t="Model" d="reads the agent file, the mode rules and recent commits; decides the next step" tone="model" />
         <Arrow label="asks for" />
-        <Box t="Tool call" d='e.g. Grep "1003" in code/vm-selfcare-proxy' />
+        <Box a="loop:call" t="Tool call" d='e.g. Grep "1003" in code/vm-selfcare-proxy' />
         <Arrow />
-        <Box t="Permission check" d="is the tool on --tools? is the path inside the agent's directories? any deny rule?" tone="gate" />
+        <Box a="loop:check" t="Permission check" d="is the tool on --tools? is the path inside the agent's directories? any deny rule?" tone="gate" />
         <Arrow label="allowed" />
-        <Box t="Tool runs" d="the result goes back to the model, and the loop repeats" tone="tool" />
+        <Box a="loop:run" t="Tool runs" d="the result goes back to the model, and the loop repeats" tone="tool" />
       </div>
       <P>Every step of that loop is what you see on a run: <em>What it touched</em> draws the tool calls by system, <em>Steps</em> lists them in order, a refused call shows as <span className="text-block">blocked</span>, and <em>How it ran</em> shows the exact command line that set the tools and permissions.</P>
       <H>What the hub gives each agent today</H>
       <div className="max-w-3xl overflow-x-auto"><table className="w-full text-sm">
         <thead><tr className="text-left text-xs uppercase tracking-wide text-ink-3"><th className="py-1.5 pr-4">Layer</th><th className="py-1.5 pr-4">Set by</th><th className="py-1.5">Today</th></tr></thead>
         <tbody className="divide-y divide-line text-ink-2">
-          <tr><td className="py-1.5 pr-4 font-medium">Instructions</td><td className="py-1.5 pr-4"><code>.claude/agents/&lt;name&gt;.md</code></td><td className="py-1.5">The role, what it knows, how it works, what it never does; plus the mode rules and the last 60 days of commits</td></tr>
-          <tr><td className="py-1.5 pr-4 font-medium">Tools</td><td className="py-1.5 pr-4"><code>--tools</code></td><td className="py-1.5">Read, Grep, Glob. Propose mode adds Edit and Write.</td></tr>
-          <tr><td className="py-1.5 pr-4 font-medium">Where</td><td className="py-1.5 pr-4">working directory, <code>--add-dir</code></td><td className="py-1.5">Its scope repos under <code>code/</code>, the workspace docs and work items. Anywhere else is refused.</td></tr>
-          <tr><td className="py-1.5 pr-4 font-medium">Deny rules</td><td className="py-1.5 pr-4"><code>--settings</code></td><td className="py-1.5">Never <code>.env</code> files, keys, certificates, test data or backups, even inside its directories</td></tr>
-          <tr><td className="py-1.5 pr-4 font-medium">Systems</td><td className="py-1.5 pr-4"><code>mcp:</code> in the agent file → <code>--mcp-config</code></td><td className="py-1.5">Per agent file: <code>notifications</code> (notification-messages, the notification-service API) and <code>localdb</code> (operations, member care and database agents, the local MariaDB restore). How it works: the next two tabs.</td></tr>
+          <Hl as="tr" a="loop:model"><td className="py-1.5 pr-4 font-medium">Instructions</td><td className="py-1.5 pr-4"><code>.claude/agents/&lt;name&gt;.md</code></td><td className="py-1.5">The role, what it knows, how it works, what it never does; plus the mode rules and the last 60 days of commits</td></Hl>
+          <Hl as="tr" a="loop:check"><td className="py-1.5 pr-4 font-medium">Tools</td><td className="py-1.5 pr-4"><code>--tools</code></td><td className="py-1.5">Read, Grep, Glob. Propose mode adds Edit and Write.</td></Hl>
+          <Hl as="tr" a="loop:check"><td className="py-1.5 pr-4 font-medium">Where</td><td className="py-1.5 pr-4">working directory, <code>--add-dir</code></td><td className="py-1.5">Its scope repos under <code>code/</code>, the workspace docs and work items. Anywhere else is refused.</td></Hl>
+          <Hl as="tr" a="loop:check"><td className="py-1.5 pr-4 font-medium">Deny rules</td><td className="py-1.5 pr-4"><code>--settings</code></td><td className="py-1.5">Never <code>.env</code> files, keys, certificates, test data or backups, even inside its directories</td></Hl>
+          <Hl as="tr" a="loop:run"><td className="py-1.5 pr-4 font-medium">Systems</td><td className="py-1.5 pr-4"><code>mcp:</code> in the agent file → <code>--mcp-config</code></td><td className="py-1.5">Per agent file: <code>notifications</code> (notification-messages, the notification-service API) and <code>localdb</code> (operations, member care and database agents, the local MariaDB restore). How it works: the next two tabs.</td></Hl>
         </tbody>
       </table></div>
     </div>
@@ -95,14 +100,14 @@ function Apis() {
   return (
     <div>
       <P>An agent calls an API through a <strong>tool</strong> that wraps it. The standard way to give an agent tools for a system is an <strong>MCP server</strong>: a small program that lists its tools (name, description, typed inputs) and runs them when the model asks. The model reads the descriptions and decides when to call one. It never sees a URL or a token.</P>
-      <div className="my-4 grid max-w-4xl grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_auto_minmax(0,1fr)_auto_minmax(0,1fr)] items-stretch gap-1">
-        <Box t="Model" d='asks: get_deploy_status(service: "notification", env: "dev")' tone="model" />
+      <div className="my-4 grid w-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_auto_minmax(0,1fr)_auto_minmax(0,1fr)] items-stretch gap-1">
+        <Box a="api:model" t="Model" d='asks: get_deploy_status(service: "notification", env: "dev")' tone="model" />
         <Arrow />
-        <Box t="Permission check" d="mcp__deploy-status is allowed for this agent" tone="gate" />
+        <Box a="api:check" t="Permission check" d="mcp__deploy-status is allowed for this agent" tone="gate" />
         <Arrow />
-        <Box t="MCP server" d="validates the input, calls the API with the engineer's own token, trims the answer" tone="tool" />
+        <Box a="api:server" t="MCP server" d="validates the input, calls the API with the engineer's own token, trims the answer" tone="tool" />
         <Arrow />
-        <Box t="Our API" d="Argo CD, the pipeline, Selfcare UAT, a service catalog" />
+        <Box a="api:system" t="Our API" d="Argo CD, the pipeline, Selfcare UAT, a service catalog" />
       </div>
       <H>1. Write the server (the tools are the contract)</H>
       <Code>{`# deploy_status_mcp.py   pip install mcp
@@ -145,20 +150,20 @@ function Databases() {
   return (
     <div>
       <P>Same pattern as an API: a database is reached only through an MCP server built for it. What makes it safe is what the server connects to and what its tools allow, not what the agent is told.</P>
-      <div className="my-4 grid max-w-4xl grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_auto_minmax(0,1fr)] items-stretch gap-1">
-        <Box t="Model" d='asks: subscriptions_stuck_in_port_in(older_than_days: 1)' tone="model" />
+      <div className="my-4 grid w-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_auto_minmax(0,1fr)] items-stretch gap-1">
+        <Box a="db:model" t="Model" d='asks: subscriptions_stuck_in_port_in(older_than_days: 1)' tone="model" />
         <Arrow />
-        <Box t="DB MCP server" d="named, parameterised queries; row limit, timeout, masking, audit line per call" tone="tool" />
+        <Box a="db:server" t="DB MCP server" d="named, parameterised queries; row limit, timeout, masking, audit line per call" tone="tool" />
         <Arrow />
-        <Box t="Masked UAT copy" d="a database user with SELECT on approved views only; never production" />
+        <Box a="db:copy" t="Masked UAT copy" d="a database user with SELECT on approved views only; never production" />
       </div>
       <H>Rules for a database server</H>
       <ul className="mb-3 max-w-3xl list-disc space-y-1 pl-5 text-sm text-ink-2">
-        <li><strong>Where:</strong> a masked restore or UAT. No production personal data on a laptop, and none in an agent's context.</li>
-        <li><strong>Who:</strong> a dedicated database user with <code>SELECT</code> on a few views. The server cannot write, because the user cannot.</li>
-        <li><strong>What:</strong> prefer named queries (<code>subscriptions_stuck_in_port_in</code>) over a free <code>run_sql</code> tool. A named query is reviewed once and cannot be talked into a different one.</li>
-        <li><strong>How much:</strong> a row limit (50), a statement timeout (5 s), and identifiers masked in the output (<code>9665******12</code>).</li>
-        <li><strong>Trace:</strong> one audit line per call: who, which tool, the inputs, the row count.</li>
+        <Hl as="li" a="db:copy"><strong>Where:</strong> a masked restore or UAT. No production personal data on a laptop, and none in an agent's context.</Hl>
+        <Hl as="li" a="db:copy"><strong>Who:</strong> a dedicated database user with <code>SELECT</code> on a few views. The server cannot write, because the user cannot.</Hl>
+        <Hl as="li" a="db:server"><strong>What:</strong> prefer named queries (<code>subscriptions_stuck_in_port_in</code>) over a free <code>run_sql</code> tool. A named query is reviewed once and cannot be talked into a different one.</Hl>
+        <Hl as="li" a="db:server"><strong>How much:</strong> a row limit (50), a statement timeout (5 s), and identifiers masked in the output (<code>9665******12</code>).</Hl>
+        <Hl as="li" a="db:trace"><strong>Trace:</strong> one audit line per call: who, which tool, the inputs, the row count.</Hl>
       </ul>
       <Code>{`# selfcare_uat_db_mcp.py   (shape of the server; connection by name from the environment)
 QUERIES = {
@@ -191,11 +196,11 @@ function Guardrails() {
     ['Record', 'Accountability', 'Every run in .claude/state/agent-runs.jsonl, on its work item, with its exact command line'],
   ];
   return (
-    <div className="max-w-4xl overflow-x-auto">
+    <div className="w-full overflow-x-auto">
       <P>Only the enforced layers are guarantees. That is why access to a system is given as a tool with a narrow job, never as a sentence in the instructions.</P>
       <table className="w-full text-sm">
         <thead><tr className="text-left text-xs uppercase tracking-wide text-ink-3"><th className="py-1.5 pr-4">Layer</th><th className="py-1.5 pr-4">Controls</th><th className="py-1.5">How strong</th></tr></thead>
-        <tbody className="divide-y divide-line text-ink-2">{rows.map(([a, b, c]) => <tr key={a}><td className="py-1.5 pr-4 font-medium">{a}</td><td className="py-1.5 pr-4">{b}</td><td className="py-1.5">{c}</td></tr>)}</tbody>
+        <tbody className="divide-y divide-line text-ink-2">{rows.map(([a, b, c]) => <Hl as="tr" a={`guard:${a}`} key={a}><td className="py-1.5 pr-4 font-medium">{a}</td><td className="py-1.5 pr-4">{b}</td><td className="py-1.5">{c}</td></Hl>)}</tbody>
       </table>
     </div>
   );

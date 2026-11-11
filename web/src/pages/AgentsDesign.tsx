@@ -1,28 +1,29 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { cx } from '../components/ui';
 import { StepFlow } from '../components/StepFlow';
+import { FlowScope, Hl, useFlowScope } from '../components/FlowScope';
 import { FLOWS } from './AgentsFlows';
 
 /** Agentic design versus the two loops, and the worked example: what is written in every block for one real agent. */
 
 const H = ({ children }: { children: ReactNode }) => <h2 className="mb-2 mt-6 text-base font-semibold first:mt-0">{children}</h2>;
 const P = ({ children }: { children: ReactNode }) => <p className="mb-2 max-w-3xl text-sm leading-relaxed text-ink-2">{children}</p>;
-const Code = ({ children }: { children: string }) => <pre className="max-h-80 max-w-4xl overflow-auto rounded-md bg-sunk p-3 text-[11px] leading-relaxed"><code>{children}</code></pre>;
+const Code = ({ children }: { children: string }) => <pre className="max-h-80 w-full overflow-auto rounded-md bg-sunk p-3 text-[11px] leading-relaxed"><code>{children}</code></pre>;
 
 const SDLC = ['Intent', 'Spec', 'Design', 'Tasks', 'Build', 'Test', 'Deploy', 'Maintain'];
 const AGENT = ['Prompt', 'Model decides', 'Tool call', 'Permission + hooks', 'Tool runs', 'Result'];
 
-function Ring({ items, tone, label }: { items: string[]; tone: string; label: string }) {
+function Ring({ items, tone, label, a }: { items: string[]; tone: string; label: string; a: string }) {
   return (
-    <div className={cx('rounded-lg border px-3 py-2', tone)}>
+    <Hl a={a} className={cx('rounded-lg border px-3 py-2', tone)}>
       <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-ink-3">{label}</div>
       <div className="flex flex-wrap items-center gap-1 text-xs">
         {items.map((s, i) => (
           <span key={s} className="flex items-center gap-1"><span className="rounded bg-paper px-1.5 py-0.5 shadow-sm">{s}</span>{i < items.length - 1 ? <span aria-hidden className="text-ink-3">&rarr;</span> : <span aria-hidden className="text-ink-3">&#8635;</span>}</span>
         ))}
       </div>
-    </div>
+    </Hl>
   );
 }
 
@@ -44,29 +45,29 @@ export function AgentsDesign() {
   return (
     <div>
       <P>Three ideas that people mix up. They nest: the <strong>delivery loop</strong> is how the team ships; inside every phase, agents do work, and each agent run is an <strong>agent loop</strong>; what an agent is allowed to do in that loop is its <strong>agentic design</strong>.</P>
-      <div className="my-3 max-w-4xl space-y-2">
-        <Ring label="Delivery loop (SDLC): per work item, days to weeks, gated by people" items={SDLC} tone="border-line-2 bg-paper" />
+      <div className="my-3 w-full space-y-2">
+        <Ring a="design:delivery" label="Delivery loop (SDLC): per work item, days to weeks, gated by people" items={SDLC} tone="border-line-2 bg-paper" />
         <div className="ml-6 border-l-2 border-dashed border-line-2 pl-4">
           <div className="mb-1 text-xs text-ink-3">inside every phase, for example /design or /build, an agent runs:</div>
-          <Ring label="Agent loop: per request, seconds to minutes, run by the harness" items={AGENT} tone="border-run bg-run/5" />
+          <Ring a="design:agent" label="Agent loop: per request, seconds to minutes, run by the harness" items={AGENT} tone="border-run bg-run/5" />
           <div className="ml-6 mt-2 border-l-2 border-dashed border-line-2 pl-4">
             <div className="mb-1 text-xs text-ink-3">what that loop may know, do and reach is set by:</div>
-            <div className="rounded-lg border border-ok bg-ok/5 px-3 py-2 text-xs">
+            <Hl a="design:design" className="rounded-lg border border-ok bg-ok/5 px-3 py-2 text-xs">
               <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-ink-3">Agentic design: files, built once</div>
               Command (the recipe) · Skill (the know-how) · Agent (the specialist and its tool list) · MCP server (the reach into a system) · Hook (the check nobody skips) · Settings (allow and deny) · Environment (credentials by name)
-            </div>
+            </Hl>
           </div>
         </div>
       </div>
       <H>Side by side</H>
-      <div className="max-w-5xl overflow-x-auto"><table className="w-full text-sm">
+      <div className="w-full overflow-x-auto"><table className="w-full text-sm">
         <thead><tr className="text-left text-xs uppercase tracking-wide text-ink-3"><th className="py-1.5 pr-3" /><th className="py-1.5 pr-3">Delivery loop (SDLC)</th><th className="py-1.5 pr-3">Agent loop</th><th className="py-1.5">Agentic design</th></tr></thead>
         <tbody className="divide-y divide-line align-top text-xs text-ink-2">{rows.map(([k, a, b, c]) => (
           <tr key={k}><td className="py-1.5 pr-3 font-medium text-ink">{k}</td><td className="py-1.5 pr-3">{a}</td><td className="py-1.5 pr-3">{b}</td><td className="py-1.5">{c}</td></tr>))}
         </tbody>
       </table></div>
       <H>Building an agent goes through the delivery loop</H>
-      <div className="max-w-5xl overflow-x-auto"><table className="w-full text-sm">
+      <div className="w-full overflow-x-auto"><table className="w-full text-sm">
         <thead><tr className="text-left text-xs uppercase tracking-wide text-ink-3"><th className="py-1.5 pr-3">Phase</th><th className="py-1.5 pr-3">For an agent, this means</th><th className="py-1.5">Notification example</th></tr></thead>
         <tbody className="divide-y divide-line align-top text-xs text-ink-2">
           {[
@@ -233,13 +234,16 @@ query: SELECT StatusID, COUNT(*) n, SUM(LastUpdateDateTime IS NULL) no_date, MIN
 Next: confirm whether CAS_SERVER.esim is still the live eSIM pool; if so, release expired reservations.` },
 ];
 
-function Blocks({ items }: { items: Block[] }) {
+function Blocks({ items, prefix }: { items: Block[]; prefix: string }) {
   const [open, setOpen] = useState<string | null>(items[0]?.b ?? null);
+  const scope = useFlowScope();
+  const lit = scope?.steps[scope.at]?.anchors || [];
+  useEffect(() => { const hit = items.find((x) => lit.includes(`${prefix}:${x.b}`)); if (hit) setOpen(hit.b); }, [scope?.at]);
   const tone = { enforced: 'bg-ok/10 text-ok', advice: 'bg-sev-medium/10 text-sev-medium', context: 'bg-sunk text-ink-2' };
   return (
-    <ol className="max-w-5xl space-y-1.5">
+    <ol className="w-full space-y-1.5">
       {items.map((x, i) => (
-        <li key={x.b} className="rounded-lg border border-line-2 bg-paper">
+        <li key={x.b} className={cx('rounded-lg border bg-paper transition-colors', lit.includes(`${prefix}:${x.b}`) ? 'border-brand ring-2 ring-brand/40' : 'border-line-2')}>
           <button type="button" onClick={() => setOpen(open === x.b ? null : x.b)} className="grid w-full grid-cols-[24px_minmax(0,150px)_70px_minmax(0,1fr)] items-baseline gap-3 px-3 py-2 text-left">
             <span className="text-xs font-semibold text-ink-3">{i + 1}</span>
             <span className="text-sm font-semibold">{x.b}</span>
@@ -258,11 +262,13 @@ export function AgentsExample() {
     <div>
       <P>One real agent, file by file, in the order a request meets them. These are excerpts of the files in this workspace, not illustrations; open each block to see what is written in it. The same pattern builds any agent here: change the system the MCP server reaches, the rules the hook enforces and the know-how in the skill.</P>
       <H>Notifications: create, change, read, simulate, publish (writes, on the API)</H>
-      <Blocks items={NOTIFICATION} />
+      <Blocks items={NOTIFICATION} prefix="ex" />
       <H>Operations data: the local database, read-only</H>
       <P>The same blocks for a database. The local MariaDB on <code>127.0.0.1:13306</code> is a restore of production schemas, so it likely holds customer data: three layers keep that data in the database, and the model works from counts, statuses and internal ids.</P>
-      <StepFlow title={FLOWS.exampleDb.title} caption={FLOWS.exampleDb.caption} steps={FLOWS.exampleDb.steps} />
-      <Blocks items={LOCALDB} />
+      <FlowScope steps={FLOWS.exampleDb.steps}>
+        <StepFlow title={FLOWS.exampleDb.title} caption={FLOWS.exampleDb.caption} steps={FLOWS.exampleDb.steps} />
+        <Blocks items={LOCALDB} prefix="db" />
+      </FlowScope>
     </div>
   );
 }

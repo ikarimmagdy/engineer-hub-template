@@ -148,3 +148,18 @@ export const FLOWS: Record<string, { title: string; caption: ReactNode; steps: F
     ],
   },
 };
+
+/** Which part of each section's text a step is about (see Hl in components/FlowScope.tsx), by step number. */
+const ANCHORS: Record<string, string[][]> = {
+  design: [['design:delivery'], ['design:delivery'], ['design:agent'], ['design:agent'], ['design:design'], ['design:delivery'], ['design:delivery']],
+  example: [['ex:Command'], ['ex:Skill'], ['ex:MCP server', 'ex:Registration', 'ex:Environment'], ['ex:MCP server'], ['ex:Hook'], ['ex:MCP server'], ['ex:Agent'], ['ex:The run, recorded']],
+  exampleDb: [['db:Command'], ['db:Skill'], ['db:MCP server'], ['db:MCP server'], [], ['db:Hook', 'db:Database user'], ['db:The run, recorded']],
+  cycle: Array.from({ length: 13 }, (_, i) => [`cycle:${i}`]),
+  loop: [['loop:task'], ['loop:model'], ['loop:call'], ['loop:check'], ['loop:run'], ['loop:model']],
+  ways: [[], ['ways:harness'], ['ways:framework'], ['ways:service'], ['ways:harness', 'ways:framework', 'ways:service']],
+  reach: [[], ['reach:api'], ['reach:db'], ['reach:api'], ['reach:logs', 'reach:events'], ['reach:tools'], ['reach:ship']],
+  apis: [['api:model'], ['api:check'], ['api:server'], ['api:system'], ['api:server']],
+  databases: [['db:model'], [], ['db:server'], ['db:copy'], ['db:server'], ['db:trace']],
+  guardrails: [['guard:The agent file'], ['guard:Tools (--tools)'], ['guard:Directories'], ['guard:Deny rules (--settings)'], ['guard:MCP servers (mcp:)'], [], ['guard:Limits', 'guard:Record']],
+};
+for (const [k, list] of Object.entries(ANCHORS)) FLOWS[k]?.steps.forEach((s, i) => { s.anchors = list[i] || []; });
