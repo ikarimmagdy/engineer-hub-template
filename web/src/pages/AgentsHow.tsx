@@ -7,8 +7,8 @@ import { AgentsDesign, AgentsExample } from './AgentsDesign';
 export { AccessList, BUILDS } from './AgentsBuild';
 
 /** How agents work: the building blocks, the cycle, the ways to build one, how it reaches data, and the guardrails. One subject per tab (ADR 0029). */
-export const HOW_TABS = [['blocks', 'Building blocks'], ['design', 'Design and the loop'], ['example', 'Worked example'], ['cycle', 'The cycle'], ['loop', 'The loop'], ['ways', 'Three ways to build'], ['reach', 'Reaching data'],
-  ['apis', 'Calling an API'], ['databases', 'Checking a database'], ['guardrails', 'Guardrails']] as const;
+export const HOW_TABS = [['blocks', 'Building blocks'], ['design', 'Design and the loop'], ['example', 'Worked example'], ['cycle', 'The cycle'], ['loop', 'The loop'], ['ways', 'Ways to build'], ['reach', 'Reaching data'],
+  ['apis', 'APIs'], ['databases', 'Databases'], ['guardrails', 'Guardrails']] as const;
 
 const H = ({ children }: { children: ReactNode }) => <h2 className="mb-2 mt-6 text-base font-semibold first:mt-0">{children}</h2>;
 const P = ({ children }: { children: ReactNode }) => <p className="mb-2 max-w-3xl text-sm leading-relaxed text-ink-2">{children}</p>;
