@@ -51,6 +51,7 @@ export interface Spec {
   task_list: { id: string; status: TaskState }[];
   history: { date: string; event: string; by?: string }[];
   intake?: { kind: string; ref: string; summary: string };
+  started_by?: { name: string; date: string } | null;
   findings: FindingSummary | null;
   review: string[];
   files: Record<string, boolean>;

@@ -6,7 +6,7 @@ import { releaseRoute, releasesFor } from '../lib/releases';
 import { Empty, fmtDate, Meter, PageHeader, Pill, Segmented, Select } from '../components/ui';
 
 type View = 'board' | 'table';
-type SortKey = 'key' | 'phase' | 'tasks' | 'criteria' | 'findings' | 'critical' | 'updated';
+type SortKey = 'key' | 'starter' | 'phase' | 'tasks' | 'criteria' | 'findings' | 'critical' | 'updated';
 
 export function Work() {
   const { loop } = useHub();
@@ -104,14 +104,14 @@ function Board({ specs }: { specs: Spec[] }) {
 }
 
 const COLS: [SortKey, string, boolean][] = [
-  ['key', 'Work', false], ['phase', 'Phase', false], ['tasks', 'Tasks done', true], ['criteria', 'Criteria passing', true],
+  ['key', 'Work', false], ['starter', 'Started by', false], ['phase', 'Phase', false], ['tasks', 'Tasks done', true], ['criteria', 'Criteria passing', true],
   ['findings', 'Open findings', true], ['critical', 'Critical', true], ['updated', 'Updated', true],
 ];
 
 function Table({ specs, sort, onSort }: { specs: Spec[]; sort: SortKey; onSort: (s: SortKey) => void }) {
   const hub = useHub();
   const val = (s: Spec, k: SortKey): string | number => ({
-    key: s.key, phase: PHASES.indexOf(s.phase), tasks: s.tasks.done / (taskTotal(s) || 1), criteria: s.criteria_passing / (s.criteria || 1),
+    key: s.key, starter: s.started_by?.name || '', phase: PHASES.indexOf(s.phase), tasks: s.tasks.done / (taskTotal(s) || 1), criteria: s.criteria_passing / (s.criteria || 1),
     findings: s.findings?.open || 0, critical: s.findings?.bySeverity.critical || 0, updated: s.updated,
   })[k];
   const rows = [...specs].sort((a, b) => {
@@ -121,7 +121,7 @@ function Table({ specs, sort, onSort }: { specs: Spec[]; sort: SortKey; onSort: 
   });
   return (
     <div className="overflow-x-auto rounded-lg border border-line bg-paper">
-      <table className="w-full min-w-[820px] text-sm">
+      <table className="w-full min-w-[920px] text-sm">
         <thead className="bg-sunk text-left text-xs text-ink-2">
           <tr>
             {COLS.map(([k, l, num]) => (
@@ -142,6 +142,7 @@ function Table({ specs, sort, onSort }: { specs: Spec[]; sort: SortKey; onSort: 
                   <span className="mr-2 font-mono text-[11.5px] text-ink-3">{s.key}</span><span className="font-medium">{s.title}</span> <ProposedTag s={s} />
                 </Link>
               </td>
+              <td className="whitespace-nowrap px-3 py-2 text-ink-2">{s.started_by?.name || '–'}</td>
               <td className="px-3 py-2"><Pill>{PHASE_TITLE[s.phase]}</Pill></td>
               <td className="px-3 py-2 text-right tabular-nums">{s.tasks.done}/{taskTotal(s)}{s.tasks.blocked ? <span className="ml-1.5 text-block">{s.tasks.blocked} blocked</span> : null}</td>
               <td className="px-3 py-2 text-right tabular-nums">{s.criteria_passing}/{s.criteria}</td>

@@ -47,6 +47,7 @@ export function WorkItem() {
             {jira && <a href={jira} target="_blank" rel="noopener" className="underline decoration-line-2 underline-offset-4 hover:decoration-ink">Jira {spec.tracker?.initiative || spec.key}</a>}
             {!!spec.tracker?.epics?.length && <span>{spec.tracker.epics.length} epics, {spec.tracker.stories?.length || 0} stories</span>}
             <span>{spec.repos.length} {spec.repos.length === 1 ? 'repo' : 'repos'}</span>
+            {spec.started_by && <span>started by <span className="font-medium text-ink">{spec.started_by.name}</span> on {fmtDate(spec.started_by.date)}</span>}
             <span className="text-ink-3">updated {fmtDate(spec.updated)}</span>
           </div>
         </div>
@@ -147,6 +148,7 @@ function Overview({ spec }: { spec: Spec }) {
           )}
           <Panel title="Where the work is">
             <dl className="grid grid-cols-[88px_minmax(0,1fr)] gap-x-3 gap-y-1.5 text-sm">
+              {spec.started_by && <><dt className="text-ink-3">Started by</dt><dd>{spec.started_by.name}, {fmtDate(spec.started_by.date)}</dd></>}
               {spec.intake && <><dt className="text-ink-3">Came from</dt><dd>{spec.intake.summary}</dd></>}
               <dt className="text-ink-3">Repos</dt><dd className="font-mono text-[12px]">{spec.repos.join(', ') || '–'}</dd>
               <dt className="text-ink-3">Folder</dt><dd className="font-mono text-[12px] break-all">specs/{spec.folder}/</dd>
