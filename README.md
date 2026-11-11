@@ -4,6 +4,14 @@ One engine, many hubs: the engine files come from this repo and are updated in p
 `tools/hub-update.sh`; each project keeps only its content (`content/`, `assets/img/`).
 Never edit engine files inside a hub; fix them here, tag a release, and update the hubs.
 
+## Who holds each role (5.9.0)
+
+- `tools/sync_operations.py` reads the workspace's `operations-center/roles.md` (one section per role: the wordings the
+  processes use, who holds it now, example tickets) into `operations.json` `people`.
+- A process flow shows, under each lane's role, who holds it now (two names, hover for ticket counts); approvals show
+  "now: <names>". Roles that depend on the requester say "depends on who asks". A note under the flow gives the window
+  and date and where to correct it.
+
 ## Operation Center tabs and breadcrumbs (5.8.2)
 
 - The three tabs are back on top (Processes, Journeys, Service desks); the side menu lists only the open tab's items

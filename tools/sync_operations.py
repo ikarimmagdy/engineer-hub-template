@@ -7,6 +7,9 @@ Reads, when they exist:
   operations-center/processes/<id>.md   one operational process (front matter + sections, see below)
   operations-center/journeys/<id>.md    an ordered path through processes (e.g. engineer onboarding)
   operations-center/desks/<KEY>.md      a service desk: what it covers, how its tickets flow
+  operations-center/roles.md            who holds each role now (front matter as-of, window; one "## <Role>" section
+                                        per role with "- key:", "- kind: fixed|relative", "- desks:", "- matches: a; b",
+                                        "- now: Name (Title, 7 tickets); Name (12 tickets)", "- evidence:", "- note:")
 
 and writes content/data/operations.json. No operations-center/ folder: nothing is written and an old
 operations.json is removed, so the hub hides the page. PATH defaults to brand.json "workspace".
@@ -106,6 +109,28 @@ def approvals(v: str) -> list[dict]:
     return out
 
 
+def roles(path: Path) -> dict:
+    """roles.md: the wordings the process files use for a role, and who holds it now (names and titles only)."""
+    if not path.exists():
+        return {"asOf": "", "window": "", "roles": []}
+    f, _ = parse(path.read_text(encoding="utf-8"))
+    out = []
+    for block in re.split(r"^## ", path.read_text(encoding="utf-8"), flags=re.M)[1:]:
+        label, _, body = block.partition("\n")
+        kv = {m.group(1).lower(): m.group(2).strip() for m in re.finditer(r"^- ([a-z]+):\s*(.*)$", body, flags=re.M)}
+        holders = []
+        for h in split(kv.get("now", ""), ";"):
+            m = re.match(r"(.+?)\s*\((.*)\)\s*$", h)
+            name, extra = (m.group(1), m.group(2)) if m else (h, "")
+            n = re.search(r"(\d+)\s+tickets?", extra)
+            title = re.sub(r",?\s*\d+\s+tickets?", "", extra).strip(" ,")
+            holders.append({"name": name.strip(), "title": title or None, "tickets": int(n.group(1)) if n else None})
+        out.append({"key": kv.get("key", label.strip().lower()), "label": label.strip(), "kind": kv.get("kind", "fixed"),
+                    "desks": split(kv.get("desks", "")), "matches": split(kv.get("matches", ""), ";"), "holders": holders,
+                    "evidence": split(kv.get("evidence", "")), "note": kv.get("note", "")})
+    return {"asOf": f.get("as-of", ""), "window": f.get("window", ""), "roles": out}
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--workspace")
@@ -150,10 +175,10 @@ def main() -> None:
     readme = (oc / "README.md").read_text(encoding="utf-8") if (oc / "README.md").exists() else ""
     lede = next((l.strip() for l in re.sub(r"^#.*$", "", readme, flags=re.M).split("\n\n") if l.strip()), "")
     out = {"generated": dt.date.today().isoformat(), "workspace": ws.name, "lede": lede,
-           "processes": processes, "journeys": journeys, "desks": desks}
+           "processes": processes, "journeys": journeys, "desks": desks, "people": roles(oc / "roles.md")}
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(json.dumps(out, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
-    print(f"operations: {len(processes)} processes, {len(journeys)} journeys, {len(desks)} desks from {oc}")
+    print(f"operations: {len(processes)} processes, {len(journeys)} journeys, {len(desks)} desks, {len(out['people']['roles'])} roles from {oc}")
 
 
 if __name__ == "__main__":

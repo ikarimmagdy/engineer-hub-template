@@ -15,7 +15,30 @@ export interface OpsProcess {
 }
 export interface OpsJourney { id: string; title: string; who: string; overview: string; steps: { text: string; process: string | null }[]; path: string }
 export interface OpsDesk { key: string; name: string; covers: string; overview: string; flow: string; requestTypes: string[]; processes: string[]; path: string }
-export interface Operations { generated: string; workspace: string; lede: string; processes: OpsProcess[]; journeys: OpsJourney[]; desks: OpsDesk[] }
+export interface OpsRole { key: string; label: string; kind: 'fixed' | 'relative'; desks: string[]; matches: string[]; holders: { name: string; title: string | null; tickets: number | null }[]; evidence: string[]; note: string }
+export interface Operations { generated: string; workspace: string; lede: string; processes: OpsProcess[]; journeys: OpsJourney[]; desks: OpsDesk[]; people?: { asOf: string; window: string; roles: OpsRole[] } }
+
+/** The role a process names (a lane or an approval), from operations-center/roles.md: who holds it now. */
+const roleOf = (ops: Operations, text: string) => {
+  const t = text.trim().toLowerCase();
+  return ops.people?.roles.find((r) => r.matches.some((m) => m.trim().toLowerCase() === t));
+};
+
+function Who({ role, compact }: { role?: OpsRole; compact?: boolean }) {
+  if (!role) return null;
+  if (role.kind === 'relative' || !role.holders.length) return <div className="mt-0.5 text-[11px] font-normal italic text-ink-3">{role.kind === 'relative' ? 'depends on who asks' : 'no one seen recently'}</div>;
+  const hs = compact ? role.holders.slice(0, 2) : role.holders;
+  return (
+    <div className="mt-1 space-y-0.5 font-normal">
+      {hs.map((h) => (
+        <div key={h.name} className="text-[11.5px] leading-tight text-ink-2" title={`${h.name}${h.title ? `, ${h.title}` : ''}${h.tickets ? ` · ${h.tickets} tickets in this role` : ''}`}>
+          <span className="font-medium text-ink">{h.name}</span>{h.title && <span className="block text-[10.5px] text-ink-3">{h.title}</span>}
+        </div>
+      ))}
+      {compact && role.holders.length > 2 && <div className="text-[10.5px] text-ink-3">+{role.holders.length - 2} more</div>}
+    </div>
+  );
+}
 
 const CATEGORY: Record<string, string> = {
   onboarding: 'Onboarding and access', access: 'Access', 'domains-dns': 'Domains and DNS', certificates: 'Certificates',
@@ -148,11 +171,12 @@ function ProcessPage({ ops, id, tab }: { ops: Operations; id: string; tab: strin
       ]} />
       {tab === 'workflow' && (
         <div className="space-y-5">
-          <Swimlane steps={p.steps} />
+          <Swimlane steps={p.steps} ops={ops} />
+          {ops.people?.roles.length ? <p className="-mt-3 text-xs text-ink-3">Names under each role: who acted in that role on {p.desk} tickets in the {ops.people.window || 'recent past'}, as of {ops.people.asOf}. Hover a name for the ticket count. From <code>operations-center/roles.md</code>; correct it there.</p> : null}
           {p.approvals.length > 0 && (
             <Panel title="Who approves what">
               <ul className="divide-y divide-line">{p.approvals.map((a, i) => (
-                <li key={i} className="flex flex-wrap items-baseline gap-x-3 py-1.5 text-sm"><span className="inline-block size-2.5 rotate-45 border border-sev-medium bg-sev-medium/20" aria-hidden /><span className="font-medium">{a.role}</span>{a.checks && <span className="text-ink-2">checks {a.checks}</span>}</li>
+                <li key={i} className="flex flex-wrap items-baseline gap-x-3 py-1.5 text-sm"><span className="inline-block size-2.5 rotate-45 border border-sev-medium bg-sev-medium/20" aria-hidden /><span className="font-medium">{a.role}</span>{a.checks && <span className="text-ink-2">checks {a.checks}</span>}{(() => { const r = roleOf(ops, a.role); return r?.kind === 'fixed' && r.holders.length ? <span className="text-ink-3">now: {r.holders.map((h) => h.title ? `${h.name} (${h.title})` : h.name).join(', ')}</span> : r?.kind === 'relative' ? <span className="text-ink-3 italic">depends on who asks</span> : null; })()}</li>
               ))}</ul>
             </Panel>
           )}
@@ -187,7 +211,7 @@ function ProcLinks({ ids, byId }: { ids: string[]; byId: (id: string) => OpsProc
 }
 
 /** One lane per actor, in the order they first act; each step sits in its actor's lane, numbered left to right. Approvals are diamonds. */
-function Swimlane({ steps }: { steps: OpsStep[] }) {
+function Swimlane({ steps, ops }: { steps: OpsStep[]; ops: Operations }) {
   if (!steps.length) return <Empty>No steps recorded.</Empty>;
   const lanes = [...new Set(steps.map((s) => s.actor || 'Someone'))];
   const cols = `150px repeat(${steps.length}, 200px)`;
@@ -202,7 +226,7 @@ function Swimlane({ steps }: { steps: OpsStep[] }) {
         </div>
         {lanes.map((lane) => (
           <div key={lane} className="grid items-stretch gap-x-2 border-t border-line py-2" style={{ gridTemplateColumns: cols }}>
-            <div className="pr-2 text-xs font-semibold text-ink-2">{lane}</div>
+            <div className="pr-2 text-xs font-semibold text-ink-2">{lane}<Who role={roleOf(ops, lane)} compact /></div>
             {steps.map((s, i) => (s.actor || 'Someone') === lane ? (
               <div key={i} title={s.action} className={cx('line-clamp-6 rounded-md border px-2.5 py-1.5 text-xs leading-snug', isApproval(s) ? 'border-sev-medium bg-sev-medium/10' : 'border-line-2 bg-sunk')}>
                 <div className="mb-0.5 flex items-center gap-1.5 text-[10px] text-ink-3"><span className="tabular-nums">{i + 1}</span>{isApproval(s) && <><span className="inline-block size-2 rotate-45 border border-sev-medium" aria-hidden />approval</>}</div>
