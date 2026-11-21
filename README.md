@@ -4,6 +4,21 @@ One engine, many hubs: the engine files come from this repo and are updated in p
 `tools/hub-update.sh`; each project keeps only its content (`content/`, `assets/img/`).
 Never edit engine files inside a hub; fix them here, tag a release, and update the hubs.
 
+## Sections with their diagrams, sectioned HTML documents (5.18.0)
+
+- A phase's documents and their sections are labelled: **Documents of this phase** above the buttons, **Sections of
+  <document>** above the side menu.
+- **Design:** each section of the design shows the diagrams that explain it above its text (Sequence diagrams in
+  "Sequence", the data model in "Data", deployment in "Deployment", patterns in "How it works"; `lib/sections.ts`
+  `matchDiagrams`, by the kind a diagram title starts with, else by shared words). A section with more than two
+  diagrams shows them one at a time behind chips. **Visual** keeps the same side menu with only the sections that have
+  diagrams; diagrams no section fits get a page each under **More diagrams**. The menu marks sections with ◇ and a count.
+- **Visual** on the other phase tabs is one diagram per page with a side menu, grouped by kind (Journey, States, ...),
+  instead of one long page.
+- **HTML documents** (architecture, network matrices, environment documents) show one `<h2>` section at a time with a
+  side menu built from the document's own headings, on the work item and in System > Documents; "Open the whole page"
+  keeps the full document a click away.
+
 ## System: the system first, documents as a library (5.17.0)
 
 - **System** opens on the **Map**: every lens up to **How it grew** shows the one system model merged from every work

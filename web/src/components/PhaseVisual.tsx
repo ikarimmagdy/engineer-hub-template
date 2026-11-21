@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
-import { PHASE_TITLE, useHub, type Phase, type Spec } from '../lib/data';
-import { HtmlPage, MarkdownFile } from './Markdown';
+import { useState } from 'react';
+import { getText, PHASE_TITLE, useAsync, useHub, type Phase, type Spec } from '../lib/data';
+import { HtmlPage, Sectioned } from './Markdown';
+import { diagramSections } from '../lib/sections';
 import { CopyButton, cx, Empty } from './ui';
 
 /** What a phase's diagrams are: the phase commands write them (specs/README.md, "Diagrams"). */
@@ -22,21 +23,8 @@ export function PhaseVisual({ spec, phase }: { spec: Spec; phase: Phase }) {
   const map = phase === 'build' ? (spec.pages || []).find((p) => p.kind === 'code-map') : undefined;
   const cmd = hub.manifest.loopConfig.phases?.find((p) => p.key === phase)?.command.split(/[,\s]+/).find((c) => c.startsWith('/'));
   const v = version || d?.version;
-  const box = useRef<HTMLDivElement>(null);
-  // Mermaid draws each diagram at 100% of the column and records its natural width as max-width: a wide one
-  // (the idea on one page, a long flow) becomes unreadable, so give it that width and let the row scroll sideways
-  useEffect(() => {
-    const el = box.current;
-    if (!el) return;
-    const widen = () => el.querySelectorAll<SVGSVGElement>('.mermaid svg').forEach((svg) => {
-      const natural = parseFloat(svg.style.maxWidth);
-      if (natural > el.clientWidth - 40 && svg.style.width !== `${natural}px`) { svg.style.width = `${natural}px`; svg.style.maxWidth = 'none'; }
-    });
-    const mo = new MutationObserver(widen);
-    mo.observe(el, { childList: true, subtree: true });
-    widen();
-    return () => mo.disconnect();
-  }, [v]);
+  const file = d && v ? `content/specs/${spec.dir}/diagrams/${phase}/${v}` : null;
+  const pics = useAsync(file ? () => getText(file).then(diagramSections) : null, [file]);
 
   return (
     <div className="space-y-6">
@@ -49,9 +37,7 @@ export function PhaseVisual({ spec, phase }: { spec: Spec; phase: Phase }) {
                 className={cx('rounded-md border px-2 py-0.5 font-mono', x === v ? 'border-ink text-ink' : 'border-line-2 hover:border-ink')}>{x.replace(/\.md$/, '')}</button>
             )) : <span className="font-mono">{d.version.replace(/\.md$/, '')}</span>}
           </div>
-                    <div ref={box} className="rounded-lg border border-line bg-paper p-5 [&_.mermaid]:overflow-x-auto [&_.mermaid]:pb-2">
-            <MarkdownFile key={v} path={`content/specs/${spec.dir}/diagrams/${phase}/${v}`} wide />
-          </div>
+                    {pics.data?.length ? <Sectioned key={v} intro="" sections={[]} path={file!} param="d" visuals={pics.data} label={`${PHASE_TITLE[phase]} diagrams`} /> : null}
         </section>
       ) : (
         <Empty action={cmd ? <span className="inline-flex items-center gap-2">Run it again from the loop on Overview, or in the terminal: <CopyButton text={`${cmd} ${spec.key}`} /></span> : undefined}>

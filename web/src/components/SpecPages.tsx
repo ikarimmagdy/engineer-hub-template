@@ -1,6 +1,7 @@
 import { Link, useSearchParams } from 'react-router';
 import { useHub, type Spec } from '../lib/data';
 import { cx, Pill } from './ui';
+import { HtmlPage } from './Markdown';
 
 /**
  * A work item's whole-page documents (architecture, communication matrix, environment), shown inside the page that
@@ -48,7 +49,7 @@ export function DocViewer({ docs, title, empty }: { docs: SpecPage[]; title: str
           <span className="font-medium text-ink">{cur.title}</span><Pill>{cur.spec.key}</Pill><span className="text-ink-3">{cur.spec.title}</span>
           <span className="ml-auto font-mono text-ink-3">{cur.source}</span>
         </div>
-        <iframe key={cur.file} src={cur.file} title={cur.title} className="block h-[82vh] w-full bg-white" />
+        <div className="p-3"><HtmlPage key={cur.file} path={cur.file} title={cur.title.replace(/\s+—.*$/, '')} sectioned /></div>
       </div>
     </section>
   );

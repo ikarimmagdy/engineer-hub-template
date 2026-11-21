@@ -5,6 +5,7 @@ import {
 } from '../lib/data';
 import { taskTotal } from '../lib/attention';
 import { renderInline } from '../lib/markdown';
+import { diagramSections } from '../lib/sections';
 import { parseTasks, type TaskRow } from '../lib/tasks';
 import { docTabRoute, howRoute, PHASE_TAB, phaseCommand, TABS, type Tab } from '../lib/routes';
 import { HtmlPage, MarkdownFile, MarkdownText } from '../components/Markdown';
@@ -62,7 +63,7 @@ export function WorkItem() {
       <div className="pt-6">
         <PhaseBanner spec={spec} tab={tab as Tab} />
         <PhaseDocs spec={spec} tab={tab as Tab} open={phaseDoc} />
-        {params.get('mode') === 'visual' && TAB_PHASE[tab as Tab] ? <PhaseVisual spec={spec} phase={TAB_PHASE[tab as Tab]!} /> : phaseDoc ? <PhaseDocView key={phaseDoc.id} spec={spec} doc={phaseDoc} version={params.get('v')} /> : (
+        {params.get('mode') === 'visual' && TAB_PHASE[tab as Tab] && tab !== 'design' ? <PhaseVisual spec={spec} phase={TAB_PHASE[tab as Tab]!} /> : phaseDoc ? <PhaseDocView key={phaseDoc.id} spec={spec} doc={phaseDoc} version={params.get('v')} /> : (
           <>
             {tab === 'overview' && <Overview spec={spec} />}
             {tab === 'requirements' && <Requirements spec={spec} />}
@@ -189,6 +190,10 @@ function TaskList({ rows, more, spec }: { rows: TaskRow[]; more?: number; spec: 
 
 function Design({ spec }: { spec: Spec }) {
   const [params, setParams] = useSearchParams();
+  const visual = params.get('mode') === 'visual';
+  const dg = spec.diagrams?.design;
+  // the design diagrams go into the sections of the design they explain (Sequence, Data, Deployment, ...)
+  const pics = useAsync(dg ? () => getText(dg.file).then(diagramSections) : null, [dg?.file]);
   const docs: [string, string][] = [
     ...([['plan', 'Design'], ['data-model', 'Data model'], ['test-plan', 'Test plan']] as [string, string][]).filter(([f]) => spec.files[f]),
     ...(spec.pages || []).map((p) => [`page:${p.id}`, p.title.replace(/\s+—.*$/, '')] as [string, string]),
@@ -201,9 +206,10 @@ function Design({ spec }: { spec: Spec }) {
   return (
     <div>
       {docs.length > 1 && (
-        <div role="group" aria-label="Design documents" className="mb-5 flex flex-wrap gap-2">
+        <div role="group" aria-label="Documents of this phase" className="mb-5 flex flex-wrap items-center gap-2">
+          <span className="mr-1 text-xs text-ink-3">Documents of this phase</span>
           {docs.map(([f, l]) => (
-            <button key={f} type="button" aria-pressed={doc === f} onClick={() => setParams({ doc: f }, { replace: true })}
+            <button key={f} type="button" aria-pressed={doc === f} onClick={() => setParams((p) => { const n = new URLSearchParams(); n.set('doc', f); if (p.get('mode')) n.set('mode', p.get('mode')!); return n; }, { replace: true })}
               className={cx('rounded-md border px-3 py-1 text-sm', doc === f ? 'border-ink bg-ink text-paper' : 'border-line-2 bg-paper text-ink-2 hover:text-ink')}>{l}</button>
           ))}
         </div>
@@ -211,9 +217,12 @@ function Design({ spec }: { spec: Spec }) {
       {phaseDoc ? <PhaseDocView key={phaseDoc.id} spec={spec} doc={phaseDoc} version={params.get('v')} /> : page ? (
         <>
           <p className="mb-3 text-xs text-ink-3">{page.title} · version {page.version.replace(/\.html$/, '')} · from <span className="font-mono">outputs/{page.source.replace(/^outputs\//, '')}</span></p>
-          <HtmlPage key={page.file} path={page.file} title={page.title} />
+          <HtmlPage key={page.file} path={page.file} title={page.title.replace(/\s+—.*$/, '')} sectioned />
         </>
-      ) : <MarkdownFile key={doc} path={specDoc(spec, `${doc}.md`)} sectioned />}
+      ) : doc === 'plan' && pics.data?.length ? (
+        <MarkdownFile key={doc + visual} path={specDoc(spec, `${doc}.md`)} sectioned visuals={pics.data} visualOnly={visual} visualPath={dg!.file}
+          label="the design" />
+      ) : <MarkdownFile key={doc} path={specDoc(spec, `${doc}.md`)} sectioned label={docs.find(([f]) => f === doc)?.[1]} />}
     </div>
   );
 }
