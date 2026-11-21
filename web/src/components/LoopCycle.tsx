@@ -7,6 +7,7 @@ import { phaseState } from './PhaseNav';
 import { phaseList, phaseWiring } from './Sdlc';
 import { RunList } from './Handover';
 import { RunView, useRun } from './RunView';
+import { PhaseVisual } from './PhaseVisual';
 import { CopyButton, cx, Dot, Panel, Pill } from './ui';
 
 type PhaseCfg = NonNullable<LoopConfig['phases']>[number];
@@ -75,7 +76,7 @@ export function LoopCycle({ spec }: { spec: Spec }) {
 function StepDetail({ spec, phases, i, cur, runs, api }: { spec: Spec; phases: PhaseCfg[]; i: number; cur: number; runs: AgentRun[]; api: LoopApi | null | undefined }) {
   const hub = useHub();
   const p = phases[i];
-  const [view, setView] = useState<'agents' | 'blocks'>('agents');
+  const [view, setView] = useState<'agents' | 'blocks' | 'diagrams'>('agents');
   const w = phaseWiring(hub.manifest.agentic, p.command, i);
   const gate = GATE_OF[p.key as Phase];
   const rec = gate ? spec.approved[gate] : undefined;
@@ -100,7 +101,7 @@ function StepDetail({ spec, phases, i, cur, runs, api }: { spec: Spec; phases: P
         <StepActions spec={spec} phases={phases} i={i} cur={cur} api={api} />
       </div>
       <div className="mt-4 flex items-center gap-1 border-b border-line text-sm">
-        {([['agents', `Who works on it${runs.length ? ` · ${runs.length} runs` : ''}`], ['blocks', 'Building blocks']] as const).map(([k, l]) => (
+        {([['agents', `Who works on it${runs.length ? ` · ${runs.length} runs` : ''}`], ['blocks', 'Building blocks'], ['diagrams', `Diagrams${spec.diagrams?.[p.key as Phase] ? '' : ' (none yet)'}`]] as const).map(([k, l]) => (
           <button key={k} type="button" onClick={() => setView(k)} aria-pressed={view === k}
             className={cx('-mb-px border-b-2 px-3 py-1.5', view === k ? 'border-ink font-medium text-ink' : 'border-transparent text-ink-3 hover:text-ink')}>{l}</button>
         ))}
@@ -116,7 +117,7 @@ function StepDetail({ spec, phases, i, cur, runs, api }: { spec: Spec; phases: P
           </div>
           {runs.length ? <RunList runs={runs.slice(0, 8)} /> : <p className="mt-2 text-xs text-ink-3">{api ? 'No runs recorded for this step yet.' : 'Runs on this step show on the local hub.'}</p>}
         </div>
-      ) : <StepBlocks ag={hub.manifest.agentic} p={p} i={i} spec={spec} />}
+      ) : view === 'blocks' ? <StepBlocks ag={hub.manifest.agentic} p={p} i={i} spec={spec} /> : <div className="pt-3"><PhaseVisual spec={spec} phase={p.key as Phase} /></div>}
     </div>
   );
 }

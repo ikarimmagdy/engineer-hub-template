@@ -18,6 +18,7 @@ import { ImpactCard, WorkImpact } from './System';
 import { WorkAgents } from '../components/Handover';
 import { LoopCycle } from '../components/LoopCycle';
 import { ChatPanel } from '../components/Chat';
+import { PhaseVisual } from '../components/PhaseVisual';
 import { PhaseBanner, PhaseNav, TAB_PHASE } from '../components/PhaseNav';
 import { WorkQuestions } from './Questions';
 import { WorkReleases } from './Releases';
@@ -61,7 +62,7 @@ export function WorkItem() {
       <div className="pt-6">
         <PhaseBanner spec={spec} tab={tab as Tab} />
         <PhaseDocs spec={spec} tab={tab as Tab} open={phaseDoc} />
-        {phaseDoc ? <PhaseDocView key={phaseDoc.id} spec={spec} doc={phaseDoc} version={params.get('v')} /> : (
+        {params.get('mode') === 'visual' && TAB_PHASE[tab as Tab] ? <PhaseVisual spec={spec} phase={TAB_PHASE[tab as Tab]!} /> : phaseDoc ? <PhaseDocView key={phaseDoc.id} spec={spec} doc={phaseDoc} version={params.get('v')} /> : (
           <>
             {tab === 'overview' && <Overview spec={spec} />}
             {tab === 'requirements' && <Requirements spec={spec} />}

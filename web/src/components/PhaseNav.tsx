@@ -1,8 +1,8 @@
-import { Link, NavLink } from 'react-router';
+import { Link, NavLink, useSearchParams } from 'react-router';
 import { PHASES, PHASE_TITLE, useHub, type Phase, type Spec } from '../lib/data';
 import { taskTotal } from '../lib/attention';
 import { howRoute, phaseCommand, type Tab } from '../lib/routes';
-import { CopyButton, cx } from './ui';
+import { CopyButton, cx, Segmented } from './ui';
 
 /** Which work-item tab holds what each phase produces. Overview, Documents and Activity span every phase. */
 export const PHASE_TAB: Record<Phase, { tab: Tab; label: string } | null> = {
@@ -112,9 +112,14 @@ export function PhaseBanner({ spec, tab }: { spec: Spec; tab: Tab }) {
   const cfg = manifest.loopConfig.phases?.find((x) => x.key === p);
   const cmd = cfg?.command.split(',')[0]?.trim();
   const how = phaseCommand(hub, p);
+  const [params, setParams] = useSearchParams();
+  const mode = params.get('mode') === 'visual' ? 'visual' : 'document';
+  const n = spec.diagrams?.[p]?.versions.length;
   return (
     <div className={cx('mb-6 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border px-4 py-2.5 text-sm',
       st.state === 'now' ? 'border-brand/50 bg-paper' : 'border-line bg-sunk/50')}>
+      <Segmented label="Show the phase as" value={mode} onChange={(v) => setParams((x) => { if (v === 'visual') x.set('mode', 'visual'); else x.delete('mode'); return x; }, { replace: true })}
+        options={[['document', 'Document'], ['visual', n ? `Visual · ${n}` : 'Visual']]} />
       <span className="font-semibold">Phase {st.index + 1} · {PHASE_TITLE[p]}</span>
       <span className={cx(st.state === 'now' ? 'text-ink' : 'text-ink-2')}>
         {st.state === 'now' ? 'Current phase' : st.state === 'done' ? 'Done' : 'Not started'}

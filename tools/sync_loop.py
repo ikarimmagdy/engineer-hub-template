@@ -141,7 +141,10 @@ def spec_pages(cfg: dict, d: Path, name: str, dest: Path) -> list:
     listed = {(e.get("src") or "").strip("/") for e in entries}
     for sub in sorted(x for x in (d / "outputs").iterdir() if x.is_dir()) if (d / "outputs").is_dir() else []:
         if f"outputs/{sub.name}" not in listed and any(sub.glob("v*-*.html")):
-            entries.append({"id": sub.name, "src": f"outputs/{sub.name}", "phase": "design", "auto": True})
+            # a Floorplan map (/build) is the code map of the work item's repos
+            fp = sub.name == "floorplan"
+            entries.append({"id": sub.name, "src": f"outputs/{sub.name}", "phase": "build" if fp else "design", "auto": True,
+                            **({"kind": "code-map", "title": "Code map (Floorplan)"} if fp else {})})
     for p in entries:
         pid, raw = p.get("id"), p.get("src") or ""
         if not pid or not raw:
@@ -159,6 +162,26 @@ def spec_pages(cfg: dict, d: Path, name: str, dest: Path) -> list:
         out.append({"id": pid, "title": title, "kind": p.get("kind") or page_kind(f"{pid} {raw} {title}"),
                     "file": f"content/specs/{name}/pages/{pid}.html", "version": src.name, "phase": p.get("phase"),
                     "source": raw.rstrip("/") + ("/" + src.name if not raw.endswith(".html") else "")})
+    return out
+
+
+PHASE_NAMES = ("intent", "spec", "design", "build", "test", "deploy", "maintain")
+
+
+def spec_diagrams(d: Path, name: str, dest: Path) -> dict:
+    """outputs/diagrams/<phase>/v<N>-<date>.md: each phase in pictures (Mermaid), written by the phase commands.
+    Every version is copied; the hub opens the newest and lists the others."""
+    out = {}
+    root = d / "outputs" / "diagrams"
+    for phase in PHASE_NAMES:
+        vs = sorted((root / phase).glob("v*-*.md"), key=lambda f: (int((re.match(r"v(\d+)-", f.name) or [0, 0])[1]), f.name)) if (root / phase).is_dir() else []
+        if not vs:
+            continue
+        (dest / "diagrams" / phase).mkdir(parents=True, exist_ok=True)
+        for f in vs:
+            shutil.copy2(f, dest / "diagrams" / phase / f.name)
+        out[phase] = {"file": f"content/specs/{name}/diagrams/{phase}/{vs[-1].name}", "version": vs[-1].name,
+                      "versions": [f.name for f in reversed(vs)]}
     return out
 
 
@@ -303,7 +326,8 @@ def main() -> None:
                       "intake": r.get("intake", status.get("intake")), "approved": status.get("approved", r.get("approved")),
                       "tracker": status.get("tracker", r.get("tracker")), "sources": status.get("sources", []),
                       "repos": status.get("repos", []), "history": status.get("history", []),
-                      "pages": spec_pages(loop_cfg, d, name, dest), "docs": spec_docs(loop_cfg, name)})
+                      "pages": spec_pages(loop_cfg, d, name, dest), "docs": spec_docs(loop_cfg, name),
+                      "diagrams": spec_diagrams(d, name, dest)})
     figures = extract_figures()
     loop = {"generated": dt.date.today().isoformat(), "workspace": ws.name, "specs": specs, "figures": figures}
     (C / "data").mkdir(parents=True, exist_ok=True)

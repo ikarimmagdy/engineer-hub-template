@@ -6,9 +6,9 @@ import { cx, Pill } from './ui';
  * A work item's whole-page documents (architecture, communication matrix, environment), shown inside the page that
  * needs them: pick one from the list, read it full width with every diagram, open it full page or in its work item.
  */
-export type PageKind = 'architecture' | 'matrix' | 'infra' | 'other';
+export type PageKind = 'architecture' | 'matrix' | 'infra' | 'code-map' | 'other';
 export type SpecPage = NonNullable<Spec['pages']>[number] & { spec: Spec };
-export const KIND_LABEL: Record<PageKind, string> = { architecture: 'Architecture', matrix: 'Communication matrix', infra: 'Infrastructure and environments', other: 'Document' };
+export const KIND_LABEL: Record<PageKind, string> = { architecture: 'Architecture', matrix: 'Communication matrix', infra: 'Infrastructure and environments', 'code-map': 'Code map (Floorplan)', other: 'Document' };
 
 export function useSpecPages(kinds?: PageKind[], key?: string): SpecPage[] {
   const { loop } = useHub();

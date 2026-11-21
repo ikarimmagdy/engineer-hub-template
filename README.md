@@ -4,6 +4,20 @@ One engine, many hubs: the engine files come from this repo and are updated in p
 `tools/hub-update.sh`; each project keeps only its content (`content/`, `assets/img/`).
 Never edit engine files inside a hub; fix them here, tag a release, and update the hubs.
 
+## Each phase in pictures, code map (5.14.0)
+
+- **Visual mode:** each phase tab of a work item (Findings, Requirements, Design, Tasks, Tests) has a **Document /
+  Visual** switch (`?mode=visual`); Visual shows the phase's diagrams (`components/PhaseVisual.tsx`): the newest
+  `outputs/diagrams/<phase>/v<N>-<date>.md` of the work item, any version one click away. Every step of **Where this
+  work is in the loop** has a **Diagrams** tab too, so Deploy and Maintain (no tab of their own) show theirs. Wide
+  diagrams keep their natural size and scroll sideways instead of shrinking to the column.
+- `tools/sync_loop.py` copies every version of `outputs/diagrams/<phase>/` and lists them in `loop.json` as
+  `diagrams` per phase. What each phase draws is the workspace's convention (`specs/README.md`, "Diagrams"); the
+  phase commands write them.
+- **Code map:** an `outputs/floorplan/v<N>-<date>.html` (a [Floorplan](https://github.com/haydenschmitty/floorplan)
+  map of the work item's repos, saved by `/build`) becomes a page of kind `code-map`, shown in the Build phase's
+  Visual mode and on System > Architecture.
+
 ## Filters and long lists on Home and Work (5.13.0)
 
 - One filter bar on **Home** and **Work** (`components/WorkFilter.tsx`), kept in the URL: **Work item** (type a ticket,
