@@ -46,7 +46,7 @@ export function buildIndex(hub: Hub) {
   if (hub.system) {
     const sys = hub.system;
     [['/system', 'System map'], ['/system/matrix', 'Communication matrix, whole system'], ['/system/infra', 'Infrastructure, whole system'],
-      ['/system/screens', 'Screens, whole system'], ['/system/use-cases', 'Use cases'], ['/system/timeline', 'How the system grew']]
+      ['/system/screens', 'Screens, whole system'], ['/system/use-cases', 'Use cases'], ['/system/timeline', 'How the system grew'], ['/system/documents', 'Work item documents: architecture, network matrices, code maps']]
       .forEach(([to, title]) => docs.push({ id: `sys:${to}`, group: 'Pages', title, to }));
     for (const c of sys.components) docs.push({ id: `sc:c:${c.id}`, group: 'Pages', title: c.name, hint: `component · ${c.layer}`, to: `/system?c=${encodeURIComponent(c.id)}` });
     for (const w of sys.works) docs.push({ id: `w:${w.key}:impact`, group: 'Work', title: `${w.key} · Impact`, hint: w.title, to: `/work/${w.key}/impact` });

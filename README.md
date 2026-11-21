@@ -4,6 +4,17 @@ One engine, many hubs: the engine files come from this repo and are updated in p
 `tools/hub-update.sh`; each project keeps only its content (`content/`, `assets/img/`).
 Never edit engine files inside a hub; fix them here, tag a release, and update the hubs.
 
+## System: the system first, documents as a library (5.17.0)
+
+- **System** opens on the **Map**: every lens up to **How it grew** shows the one system model merged from every work
+  item's `impact.json`, nothing else. The work items' own HTML documents (architecture, network matrices, environment
+  documents, code maps) moved from the first tab and from the top of Communication matrix and Infrastructure into a
+  last tab, **Documents**: a library with a filter by kind and by work item. Communication matrix and Infrastructure
+  point to the documents of their kind in one line.
+- The work item control is **Highlight a work item** (a chip shows which one and clears it); on Documents it picks
+  whose documents to list. `/system/architecture` redirects to `/system/documents` with the same query; a component
+  found in search opens on the Map.
+
 ## Top people, recent news, People and News pages (5.16.0)
 
 - **Home:** **Top people using AI** sits beside the AI chart: the ten who use it most (AI-assisted commits plus agent

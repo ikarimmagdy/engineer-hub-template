@@ -6,15 +6,17 @@ import { ChangedBy, ComponentDetail, FlowPairs, InfraList, Legend, ScreenGrid, S
 import { cx, Empty, fmtDate, PageHeader, Pager, Pill, Select, TabBar } from '../components/ui';
 import { DocViewer, useSpecPages } from '../components/SpecPages';
 
+// The system first (one model merged from every work item's impact.json), then the work items' own documents
 const LENSES = [
-  ['architecture', 'Architecture'],
   ['map', 'Map'],
   ['matrix', 'Communication matrix'],
   ['infra', 'Infrastructure'],
   ['screens', 'Screens'],
   ['use-cases', 'Use cases'],
   ['timeline', 'How it grew'],
+  ['documents', 'Documents'],
 ] as const;
+const DOC_KINDS: [string, string][] = [['', 'All'], ['architecture', 'Architecture'], ['matrix', 'Network matrices'], ['infra', 'Infrastructure'], ['code-map', 'Code maps'], ['other', 'Other']];
 
 const NO_MODEL = (
   <Empty>
@@ -26,7 +28,7 @@ const NO_MODEL = (
 /** The whole system as the loop has built it up: the big picture first, then any component, flow or screen and the work that changed it. */
 export function SystemPage() {
   const { system: sys } = useHub();
-  const { lens = 'architecture' } = useParams();
+  const { lens = 'map' } = useParams();
   const [params, setParams] = useSearchParams();
   const work = params.get('work') || '';
   const layer = params.get('layer') || '';
@@ -34,11 +36,15 @@ export function SystemPage() {
   const set = (k: string, v: string | null) => setParams((p) => { if (v) p.set(k, v); else p.delete(k); return p; }, { replace: true });
   const docs = useSpecPages(undefined, work || undefined);
 
+  const allDocs = useSpecPages();
+  if (lens === 'architecture') return <Navigate to={`/system/documents${params.toString() ? `?${params}` : ''}`} replace />;
   if (!sys) return <div><PageHeader title="System" />{NO_MODEL}</div>;
   if (!LENSES.some(([l]) => l === lens)) return <Navigate to="/system" replace />;
+  const kind = params.get('kind') || '';
+  const docsOf = (k: string) => allDocs.filter((d) => (d.kind || 'other') === k);
 
   const counts: Record<string, number> = {
-    architecture: docs.length, map: sys.components.length, matrix: sys.flows.length, infra: sys.infra.length, screens: sys.screens.length,
+    documents: allDocs.length, map: sys.components.length, matrix: sys.flows.length, infra: sys.infra.length, screens: sys.screens.length,
     'use-cases': sys.useCases.length, timeline: sys.works.length,
   };
   const qs = params.toString() ? `?${params}` : '';
@@ -52,42 +58,56 @@ export function SystemPage() {
         title="System"
         lede={`What the system is made of and how it talks, built up by every work item: ${sys.components.length} components in ${sys.layers.length} layers, ${sys.flows.length} flows, ${changed} components changed by ${sys.works.length} work items so far.`}
       />
-      <TabBar label="System views" tabs={LENSES.map(([l, t]) => ({ to: `/system${l === 'architecture' ? '' : `/${l}`}${qs}`, label: t, count: counts[l], end: true }))} />
+      <TabBar label="System views" tabs={LENSES.map(([l, t]) => ({ to: `/system${l === 'map' ? '' : `/${l}`}${qs}`, label: t, count: counts[l], end: true }))} />
       <div className="mb-4 mt-4 flex flex-wrap items-center gap-3">
-        <Select label="Work item" value={work} onChange={(v) => set('work', v || null)}
-          options={[['', 'All work'], ...sys.works.map((w) => [w.key, `${w.key} ${w.title}`] as [string, string])]} />
+        <Select label={lens === 'documents' ? 'Work item' : 'Highlight a work item'} value={work} onChange={(v) => set('work', v || null)}
+          options={[['', lens === 'documents' ? 'All work items' : 'None: the whole system'], ...sys.works.map((w) => [w.key, `${w.key} ${w.title}`] as [string, string])]} />
         {lens === 'map' && (
           <Select label="Layer" value={layer} onChange={(v) => set('layer', v || null)}
             options={[['', 'All layers'], ...sys.layers.map((l) => [l.id, l.name] as [string, string])]} />
         )}
-        {work && <Link to={`/work/${work}/impact`} className="text-xs underline decoration-line-2 underline-offset-4 hover:decoration-ink">Open {work} impact</Link>}
+        {lens === 'documents' && <span className="flex flex-wrap gap-1">{DOC_KINDS.filter(([k]) => !k || allDocs.some((d) => (d.kind || 'other') === k)).map(([k, l]) => (
+          <button key={k} type="button" onClick={() => set('kind', k || null)} aria-pressed={kind === k}
+            className={cx('rounded-full border px-2.5 py-0.5 text-xs', kind === k ? 'border-ink bg-ink text-paper' : 'border-line-2 text-ink-2 hover:border-ink')}>{l} {k ? docsOf(k).length : allDocs.length}</button>
+        ))}</span>}
+        {work && (
+          <span className="inline-flex items-center gap-2 rounded-full border border-brand/50 bg-paper px-2.5 py-0.5 text-xs">
+            {lens === 'documents' ? 'Documents of' : 'Highlighting'} <span className="font-mono">{work}</span>
+            <Link to={`/work/${work}/impact`} className="underline decoration-line-2 underline-offset-2">its impact</Link>
+            <button type="button" onClick={() => set('work', null)} aria-label="Clear the work item" className="text-ink-3 hover:text-ink">×</button>
+          </span>
+        )}
       </div>
 
-      {lens === 'architecture' && (
-        <div className="space-y-6">
-          <DocViewer title="Architecture, infrastructure and network documents" docs={docs}
-            empty="No work item has an architecture document yet. A work item's outputs/<folder>/v<N>-<date>.html (architecture, communication matrix, environment) shows here on the next sync." />
-          <p className="text-sm text-ink-2">The whole system, built up by every work item, is in <Link to={`/system/map${qs}`} className="underline">Map</Link>, <Link to={`/system/matrix${qs}`} className="underline">Communication matrix</Link> and <Link to={`/system/infra${qs}`} className="underline">Infrastructure</Link>.</p>
-        </div>
-      )}
       {lens === 'map' && <MapLens sys={sys} work={work} layer={layer} sel={sel} onSelect={(id) => set('c', id)} />}
       {lens === 'matrix' && (
-        <div className="space-y-6">
-          <DocViewer title="Network communication matrices, per environment" docs={docs.filter((d) => d.kind === 'matrix')} />
-          <div><h2 className="mb-3 text-base font-semibold">Who talks to whom, from every work item</h2><MatrixLens sys={sys} work={work} /></div>
+        <div className="space-y-3">
+          <DocsHint n={docsOf('matrix').length} kind="matrix" what="per-environment network matrices (for firewall and DNS requests)" qs={params} />
+          <MatrixLens sys={sys} work={work} />
         </div>
       )}
       {lens === 'infra' && (
-        <div className="space-y-6">
-          <DocViewer title="Infrastructure and environment documents" docs={docs.filter((d) => d.kind === 'infra' || d.kind === 'architecture')} />
-          <div><h2 className="mb-3 text-base font-semibold">Infrastructure each work item recorded</h2><InfraList sys={sys} items={pick(sys.infra)} focus={work || undefined} /></div>
+        <div className="space-y-3">
+          <DocsHint n={docsOf('infra').length} kind="infra" what="environment and infrastructure documents" qs={params} />
+          <InfraList sys={sys} items={pick(sys.infra)} focus={work || undefined} />
         </div>
+      )}
+      {lens === 'documents' && (
+        <DocViewer key={kind + work} title={work ? `${work} documents` : 'Documents of the work items'} docs={docs.filter((d) => !kind || (d.kind || 'other') === kind)}
+          empty="No documents yet. A work item's outputs/<folder>/v<N>-<date>.html (architecture, network matrix, environment, code map) shows here on the next sync." />
       )}
       {lens === 'screens' && <ScreenGrid sys={sys} screens={pick(sys.screens)} focus={work || undefined} />}
       {lens === 'use-cases' && <UseCaseList sys={sys} items={work ? sys.useCases.filter((u) => u.key === work) : sys.useCases} showKey />}
       {lens === 'timeline' && <Timeline sys={sys} />}
     </div>
   );
+}
+
+/** A one-line pointer from a system view to the work items' documents of the same kind. */
+function DocsHint({ n, kind, what, qs }: { n: number; kind: string; what: string; qs: URLSearchParams }) {
+  if (!n) return null;
+  const p = new URLSearchParams(qs); p.set('kind', kind); p.delete('doc');
+  return <p className="text-xs text-ink-3">This is the whole system, from every work item's recorded impact. The {n} {what} are documents of single work items: <Link to={`/system/documents?${p}`} className="underline">Documents</Link>.</p>;
 }
 
 function MapLens({ sys, work, layer, sel, onSelect }: { sys: SystemModel; work: string; layer: string; sel: string | null; onSelect: (id: string | null) => void }) {
