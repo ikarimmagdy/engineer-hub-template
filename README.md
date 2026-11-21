@@ -4,6 +4,15 @@ One engine, many hubs: the engine files come from this repo and are updated in p
 `tools/hub-update.sh`; each project keeps only its content (`content/`, `assets/img/`).
 Never edit engine files inside a hub; fix them here, tag a release, and update the hubs.
 
+## What a hub expects from its workspace
+
+The hub reads a workspace made from the agentic engineering template (`BeyondOneGroup/agentic-engineering-template`),
+which carries the rules these pages rely on: each phase's diagrams in `outputs/diagrams/<phase>/v<N>-<date>.md` with
+titles starting by kind (Visual mode, diagrams inside sections), the Floorplan code map in `outputs/floorplan/`,
+`## ` / `<h2>` sections in long documents, version indexes, no laptop paths (publishing refuses them), `impact.json`
+per work item (System), and `usage/agent-runs/` for shared agent counts (Home). A workspace adopting the hub, or work
+written before these rules, runs `python3 tools/hub_check.py` and `/hub-review all` there to come in line.
+
 ## Sections with their diagrams, sectioned HTML documents (5.18.0)
 
 - A phase's documents and their sections are labelled: **Documents of this phase** above the buttons, **Sections of
