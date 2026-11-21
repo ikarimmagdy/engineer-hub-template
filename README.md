@@ -4,6 +4,25 @@ One engine, many hubs: the engine files come from this repo and are updated in p
 `tools/hub-update.sh`; each project keeps only its content (`content/`, `assets/img/`).
 Never edit engine files inside a hub; fix them here, tag a release, and update the hubs.
 
+## Workspace insights on Home, weekly digest (5.15.0)
+
+- `tools/sync_insights.py` (run by `sync.sh`) writes `content/data/insights.json`: the last 12 weeks of git history of
+  the workspace and every cloned repo of `repos.yaml` (commits per week, repo and person; AI-assisted when the message
+  says `Co-Authored-By: Claude` or "Generated with Claude Code"), their pull requests through `gh` (agent pull request:
+  "Claude Code" in the description, or an `agent/` or `<KEY>/T<n>` branch), agent runs, adoption per repo group and
+  events for the inspiration cards. Bots are left out, name spellings of one person merged, people by name only (no
+  email or login is written).
+- **Home** opens with six headline tiles (each with a 12-week trend and the change on the week before), inspiration
+  cards from real events, **AI-assisted work week by week** (commits or pull requests), **Agents at work** (runs per
+  agent, an estimate of time saved, stated as an assumption), **The loop** (work per phase, median days per gate from
+  the items that went through it live) and **Most active repos**; then one feed **What is happening** (needs someone,
+  approvals, phase moves, agent runs) under the filter bar; **People using agents** (cards, alphabetical, no ranking,
+  achievements) and **Adoption by repo group** close it. Charts follow the dataviz rules (validated series colours
+  `--series-1`, `--series-2` in both themes, legends, tooltips, a table view).
+- **Weekly digest** (`/insights`): the same in one page, **Copy for Slack** and **Print**.
+- Team agent numbers: `tools/share_usage.py --push` shares a person's daily run counts (agent and count only) into the
+  workspace folder named by brand.json `usageDir`; without it the agent numbers are this laptop's.
+
 ## Each phase in pictures, code map (5.14.0)
 
 - **Visual mode:** each phase tab of a work item (Findings, Requirements, Design, Tasks, Tests) has a **Document /

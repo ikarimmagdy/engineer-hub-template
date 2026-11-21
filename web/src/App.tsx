@@ -19,6 +19,7 @@ import { Releases } from './pages/Releases';
 import { Architecture } from './pages/Architecture';
 import { Agents } from './pages/Agents';
 import { ChatPage } from './components/Chat';
+import { Insights } from './pages/Insights';
 import { OperationsPage } from './pages/Operations';
 import { AgentWidget } from './pages/AgentStudio';
 
@@ -63,6 +64,7 @@ export function App() {
             <Route path="/system/:lens?" element={<SystemPage />} />
             <Route path="/agents/:view?/:sub?" element={<Agents />} />
             <Route path="/chat/:id?" element={<ChatPage />} />
+            <Route path="/insights" element={<Insights />} />
             <Route path="/operations/:view?/:id?/:tab?" element={<OperationsPage />} />
             <Route path="/knowledge/:page?/:id?/:sub?" element={<Knowledge />} />
             <Route path="/questions/:view?" element={<Questions />} />

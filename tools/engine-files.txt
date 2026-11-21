@@ -15,6 +15,8 @@ tools/sync_agentic.py
 tools/sync_system.py
 tools/sync_modules.py
 tools/sync_operations.py
+tools/sync_insights.py
+tools/share_usage.py
 tools/hub-update.sh
 tools/hub-migrate.mjs
 tools/engine-files.txt

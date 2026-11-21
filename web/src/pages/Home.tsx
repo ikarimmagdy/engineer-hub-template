@@ -5,6 +5,9 @@ import { attention, taskTotal, type AttentionKind } from '../lib/attention';
 import { LatestRelease } from './Releases';
 import { Empty, fmtDate, fmtDateTime, KeyLink, Meter, Panel, Pill, type Tone } from '../components/ui';
 import { useWorkFilter, WorkFilterBar } from '../components/WorkFilter';
+import { AdoptionChart, AgentsChart, AiChart, InspirationCards, LoopChart, PeopleCards, ReposChart, StatTiles } from '../components/InsightsPanels';
+import { useInsights } from '../lib/insights';
+import { useLoopApi, useRuns, type AgentRun } from '../lib/loop';
 
 const TONE: Record<AttentionKind, Tone> = { gate: 'wait', blocked: 'block', critical: 'critical', ready: 'ok', failing: 'block' };
 
@@ -23,19 +26,38 @@ export function Home() {
     .slice(0, 30);
   const openFindings = specs.reduce((n, s) => n + (s.findings?.open || 0), 0);
   const critical = specs.reduce((n, s) => n + (s.findings?.bySeverity?.critical || 0), 0);
+  const ins = useInsights();
+  const api = useLoopApi();
+  const keys = new Set(specs.map((s) => s.key));
+  const runs = useRuns(!!api).filter((r) => r.key && keys.has(r.key)).slice(0, 40);
 
   return (
     <div className="space-y-6">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold">What needs attention</h1>
+          <h1 className="text-2xl font-semibold">The workspace at a glance</h1>
           <p className="mt-1 text-ink-2">
-            {specs.length} work items · {openFindings} open findings, {critical} critical · data from {hub.loop.workspace} on {fmtDate(hub.loop.generated)}
+            {hub.loop.specs.length} work items · {openFindings} open findings, {critical} critical · data from {hub.loop.workspace} on {fmtDate(hub.loop.generated)}
           </p>
         </div>
-        <Link to="/work" className="text-sm font-medium underline decoration-line-2 underline-offset-4 hover:decoration-ink">All work</Link>
+        <span className="flex items-center gap-4 text-sm">
+          <Link to="/insights" className="font-medium underline decoration-line-2 underline-offset-4 hover:decoration-ink">Weekly digest</Link>
+          <Link to="/work" className="font-medium underline decoration-line-2 underline-offset-4 hover:decoration-ink">All work</Link>
+        </span>
       </header>
-      <WorkFilterBar all={hub.loop.specs} filter={filter} />
+
+      {ins.data && <>
+        <StatTiles ins={ins.data} specs={hub.loop.specs} />
+        <InspirationCards ins={ins.data} />
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+          <AiChart ins={ins.data} />
+          <AgentsChart ins={ins.data} />
+        </div>
+        <div className="grid gap-6 lg:grid-cols-2">
+          <LoopChart specs={hub.loop.specs} />
+          <ReposChart ins={ins.data} />
+        </div>
+      </>}
 
       <LatestRelease />
 
@@ -50,42 +72,8 @@ export function Home() {
         </div>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-        <Panel title="Act on these first" action={<span className="text-xs text-ink-3">{items.length}</span>}>
-          {items.length === 0 ? (
-            <Empty>Nothing waits on the team right now.</Empty>
-          ) : (
-            <Capped n={6} total={items.length} render={(k) => <ul className="-my-1 divide-y divide-line">
-              {items.slice(0, k).map((a, i) => (
-                <li key={i}>
-                  <Link to={a.to} className="group grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 py-2.5 md:grid-cols-[104px_96px_minmax(0,1fr)_auto]">
-                    <Pill tone={TONE[a.kind]} className="justify-start md:w-[104px]">{a.label}</Pill>
-                    <span className="font-mono text-[11.5px] text-ink-3">{a.spec.key}</span>
-                    <span className="col-span-3 row-start-2 min-w-0 md:col-span-1 md:col-start-3 md:row-start-1">
-                      <span className="font-medium group-hover:underline">{a.spec.title}</span>
-                      <span className="text-ink-2">: {a.text}</span>
-                    </span>
-                    <span className="col-start-3 row-start-1 text-right text-xs text-ink-3 md:col-start-4">{a.since ? `since ${fmtDate(a.since)}` : ''}</span>
-                  </Link>
-                </li>
-              ))}
-            </ul>} />
-          )}
-        </Panel>
-
-        <Panel title="Recent activity">
-          <Capped n={8} total={activity.length} render={(k) => <ul className="-my-1 divide-y divide-line">
-            {activity.slice(0, k).map((h, i) => (
-              <li key={i} className="flex gap-3 py-2 text-sm">
-                <span className="w-12 shrink-0 text-xs tabular-nums text-ink-3">{fmtDate(h.date)}</span>
-                <span className="min-w-0">
-                  <KeyLink to={`/work/${h.key}/activity`} k={h.key} /> <span className="text-ink-2">{h.event}{h.by ? `, ${h.by.replace(/\s*\(.*\)$/, '')}` : ''}</span>
-                </span>
-              </li>
-            ))}
-          </ul>} />
-        </Panel>
-      </div>
+      <WorkFilterBar all={hub.loop.specs} filter={filter} />
+      <Feed items={items} activity={activity} runs={runs} />
 
       <Panel title="In flight" action={<Link to={`/work${search}`} className="text-xs underline">All in Work</Link>}>
         {flight.length === 0 ? <Empty action={<Link to="/knowledge/how-we-work" className="underline">Start a work item</Link>}>No work is past intent yet.</Empty> : (
@@ -114,7 +102,55 @@ export function Home() {
         )}
       </Panel>
       <LastRuns />
+      {ins.data && <>
+        <PeopleCards ins={ins.data} />
+        <AdoptionChart ins={ins.data} />
+      </>}
     </div>
+  );
+}
+
+type FeedKind = 'needs' | 'approval' | 'phase' | 'run' | 'other';
+interface FeedRow { kind: FeedKind; date: string; key: string; node: ReactNode; tone?: Tone }
+
+/** One stream instead of three lists: what waits on someone, what the loop did, and the agents' runs (local hub). */
+function Feed({ items, activity, runs }: { items: ReturnType<typeof attention>; activity: { date: string; event: string; by?: string; key: string }[]; runs: AgentRun[] }) {
+  const [show, setShow] = useState<FeedKind | 'all'>('all');
+  const rows: FeedRow[] = [
+    ...items.map((a) => ({ kind: 'needs' as const, date: a.since || '9999', key: a.spec.key, tone: TONE[a.kind],
+      node: <Link to={a.to} className="hover:underline"><span className="font-medium">{a.spec.title}</span><span className="text-ink-2">: {a.text}</span></Link> })),
+    ...activity.map((h) => ({ kind: (h.event.startsWith('approved') ? 'approval' : h.event.startsWith('phase') ? 'phase' : 'other') as FeedKind, date: h.date, key: h.key,
+      node: <span className="text-ink-2">{h.event}{h.by ? `, ${h.by.replace(/\s*\(.*\)$/, '')}` : ''}</span> })),
+    ...runs.filter((r) => r.key).map((r) => ({ kind: 'run' as const, date: r.started.slice(0, 10), key: r.key!, tone: (r.state === 'running' ? 'run' : r.state === 'failed' ? 'block' : 'ok') as Tone,
+      node: <span className="text-ink-2"><span className="font-mono">{r.agent.replace(/^(team|command|module):/, '')}</span> {r.state === 'running' ? 'is working' : r.state}: {r.description}</span> })),
+  ];
+  const label: Record<FeedKind | 'all', string> = { all: 'Everything', needs: 'Needs someone', approval: 'Approvals', phase: 'Phase moves', run: 'Agent runs', other: 'Other' };
+  const counts = rows.reduce((c, r) => ({ ...c, [r.kind]: (c[r.kind] || 0) + 1 }), {} as Record<string, number>);
+  const shown = rows.filter((r) => show === 'all' || r.kind === show).sort((x, y) => (x.kind === 'needs' ? -1 : 0) - (y.kind === 'needs' ? -1 : 0) || y.date.localeCompare(x.date));
+  return (
+    <Panel title="What is happening" action={
+      <span className="flex flex-wrap gap-1">
+        {(['all', 'needs', 'approval', 'phase', 'run'] as const).filter((k) => k === 'all' || counts[k]).map((k) => (
+          <button key={k} type="button" onClick={() => setShow(k)} aria-pressed={show === k}
+            className={`rounded-full border px-2 py-0.5 text-xs ${show === k ? 'border-ink bg-ink text-paper' : 'border-line-2 text-ink-2 hover:border-ink'}`}>{label[k]}{k !== 'all' ? ` ${counts[k]}` : ''}</button>
+        ))}
+      </span>
+    }>
+      {shown.length === 0 ? <Empty>Nothing here for these filters.</Empty> : (
+        <Capped n={10} total={shown.length} render={(k) => (
+          <ul className="-my-1 divide-y divide-line">
+            {shown.slice(0, k).map((r, i) => (
+              <li key={i} className="grid grid-cols-[116px_96px_minmax(0,1fr)_56px] items-center gap-x-3 py-2 text-sm">
+                <span>{r.kind === 'needs' || r.kind === 'run' ? <Pill tone={r.tone} className="justify-start">{label[r.kind]}</Pill> : <span className="text-xs text-ink-3">{label[r.kind]}</span>}</span>
+                <KeyLink to={`/work/${r.key}/overview`} k={r.key} />
+                <span className="min-w-0 break-words">{r.node}</span>
+                <span className="text-right text-xs tabular-nums text-ink-3">{r.date === '9999' ? '' : fmtDate(r.date)}</span>
+              </li>
+            ))}
+          </ul>
+        )} />
+      )}
+    </Panel>
   );
 }
 

@@ -9,6 +9,8 @@
   --brand: #EF3E23;
   --sev-critical: #B42318; --sev-high: #C4580E; --sev-medium: #A77A06; --sev-low: #5C6B7A;
   --ok: #1F7A4D; --run: #2F5FB3; --wait: #8A857B; --block: #B42318;
+  /* chart series (dataviz reference palette, slots 1 and 2; validated on this surface in both modes) */
+  --series-1: #2a78d6; --series-2: #eb6834;
   color-scheme: light;
 }
 :root[data-theme="dark"] {
@@ -17,6 +19,7 @@
   --line: #34322D; --line-2: #45423C;
   --sev-critical: #F0645A; --sev-high: #EE8A45; --sev-medium: #D9B23A; --sev-low: #8C9BAA;
   --ok: #4CB884; --run: #6E9BEA; --wait: #8E897F; --block: #F0645A;
+  --series-1: #3987e5; --series-2: #d95926;
   color-scheme: dark;
 }
 @media (prefers-color-scheme: dark) {
@@ -26,12 +29,15 @@
     --line: #34322D; --line-2: #45423C;
     --sev-critical: #F0645A; --sev-high: #EE8A45; --sev-medium: #D9B23A; --sev-low: #8C9BAA;
     --ok: #4CB884; --run: #6E9BEA; --wait: #8E897F; --block: #F0645A;
+    --series-1: #3987e5; --series-2: #d95926;
     color-scheme: dark;
   }
 }
 
 @theme inline {
   --color-ink: var(--ink);
+  --color-series-1: var(--series-1);
+  --color-series-2: var(--series-2);
   --color-ink-2: var(--ink-2);
   --color-ink-3: var(--ink-3);
   --color-paper: var(--paper);
