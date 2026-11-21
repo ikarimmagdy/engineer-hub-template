@@ -129,6 +129,12 @@ def doc_title(f: Path) -> str:
     return re.sub(r"\s+", " ", re.sub(r"<[^>]+>", "", m.group(1))).strip() if m else ""
 
 
+def ignored(f: Path) -> bool:
+    """True when git ignores the file in its repo: a local draft, never shared."""
+    r = subprocess.run(["git", "check-ignore", "-q", str(f)], cwd=f.parent, capture_output=True)
+    return r.returncode == 0
+
+
 def spec_pages(cfg: dict, d: Path, name: str, dest: Path) -> list:
     """loop-config "pages": whole self-contained HTML documents shown as full pages of a spec (own menu, tabs,
     inline JS, CSS and SVG kept), one entry each in the spec page and under the spec in the side menu.
@@ -140,7 +146,7 @@ def spec_pages(cfg: dict, d: Path, name: str, dest: Path) -> list:
     entries = list((cfg.get("pages") or {}).get(name, []))
     listed = {(e.get("src") or "").strip("/") for e in entries}
     for sub in sorted(x for x in (d / "outputs").iterdir() if x.is_dir()) if (d / "outputs").is_dir() else []:
-        if f"outputs/{sub.name}" not in listed and any(sub.glob("v*-*.html")):
+        if f"outputs/{sub.name}" not in listed and any(not ignored(f) for f in sub.glob("v*-*.html")):
             # a Floorplan map (/build) is the code map of the work item's repos
             fp = sub.name == "floorplan"
             entries.append({"id": sub.name, "src": f"outputs/{sub.name}", "phase": "build" if fp else "design", "auto": True,
@@ -151,7 +157,8 @@ def spec_pages(cfg: dict, d: Path, name: str, dest: Path) -> list:
             continue
         src = (HUB / raw) if raw.startswith("content/") else (d / raw)
         if src.is_dir():
-            vs = sorted(src.glob("v*-*.html"), key=lambda f: (int((re.match(r"v(\d+)-", f.name) or [0, 0])[1]), f.name))
+            # a gitignored draft lives on one laptop only: the hub never shows it (nor publishes it)
+            vs = sorted((f for f in src.glob("v*-*.html") if not ignored(f)), key=lambda f: (int((re.match(r"v(\d+)-", f.name) or [0, 0])[1]), f.name))
             src = vs[-1] if vs else None
         if not src or not src.is_file():
             print(f"pages: {name} {pid}: {raw} not found", file=sys.stderr)
