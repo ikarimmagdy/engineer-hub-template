@@ -13,8 +13,21 @@ export interface Insights {
   agents: { source: 'local' | 'shared'; sharedBy: string[]; total: number; thisWeek: number; byWeek: { week: string; runs: number }[]; byAgent: { agent: string; runs: number }[]; minutesPerRun: number };
   people: Person[];
   adoption: { group: string; repos: number; touched: number; names: string[] }[];
-  events: { date: string; kind: string; text: string; key?: string; person?: string }[];
+  events: NewsItem[];
 }
+
+export interface NewsItem { date: string; kind: string; text: string; detail?: string; key?: string; person?: string | null; value?: number }
+
+/** Kinds of news: highlights (speed, quality, pictures, maps, first steps with AI) and routine loop events. */
+export const NEWS_KIND: Record<string, { label: string; icon: string; routine?: boolean }> = {
+  speed: { label: 'Speed', icon: '⏱' }, quality: { label: 'Quality', icon: '✓' }, diagrams: { label: 'Diagrams', icon: '◇' },
+  map: { label: 'Code maps', icon: '⌘' }, new: { label: 'New to AI', icon: '★' }, pr: { label: 'Agent pull requests', icon: '⇡' },
+  agent: { label: 'Agents', icon: '⚙' }, started: { label: 'Work started', icon: '＋', routine: true }, approved: { label: 'Approvals', icon: '◆', routine: true },
+};
+
+/** How much someone uses AI in their work: AI-assisted commits, agent pull requests and shared agent runs. */
+export const usage = (p: Person) => p.ai + p.agentPrs + p.agentRuns;
+export const topPeople = (ins: Insights, n: number) => [...ins.people].filter(isAgentic).sort((a, b) => usage(b) - usage(a) || a.name.localeCompare(b.name)).slice(0, n);
 
 export function useInsights() {
   return useAsync(() => getJson<Insights>('content/data/insights.json').catch(() => null), []);

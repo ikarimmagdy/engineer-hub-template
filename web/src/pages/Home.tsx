@@ -5,7 +5,7 @@ import { attention, taskTotal, type AttentionKind } from '../lib/attention';
 import { LatestRelease } from './Releases';
 import { Empty, fmtDate, fmtDateTime, KeyLink, Meter, Panel, Pill, type Tone } from '../components/ui';
 import { useWorkFilter, WorkFilterBar } from '../components/WorkFilter';
-import { AdoptionChart, AgentsChart, AiChart, InspirationCards, LoopChart, PeopleCards, ReposChart, StatTiles } from '../components/InsightsPanels';
+import { AdoptionChart, AgentsChart, AiChart, LoopChart, NewsList, ReposChart, StatTiles, TopPeople } from '../components/InsightsPanels';
 import { useInsights } from '../lib/insights';
 import { useLoopApi, useRuns, type AgentRun } from '../lib/loop';
 
@@ -48,9 +48,12 @@ export function Home() {
 
       {ins.data && <>
         <StatTiles ins={ins.data} specs={hub.loop.specs} />
-        <InspirationCards ins={ins.data} />
         <div className="grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
           <AiChart ins={ins.data} />
+          <TopPeople ins={ins.data} />
+        </div>
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+          <NewsList ins={ins.data} />
           <AgentsChart ins={ins.data} />
         </div>
         <div className="grid gap-6 lg:grid-cols-2">
@@ -102,10 +105,7 @@ export function Home() {
         )}
       </Panel>
       <LastRuns />
-      {ins.data && <>
-        <PeopleCards ins={ins.data} />
-        <AdoptionChart ins={ins.data} />
-      </>}
+      {ins.data && <AdoptionChart ins={ins.data} />}
     </div>
   );
 }

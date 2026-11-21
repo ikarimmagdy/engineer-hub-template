@@ -183,7 +183,7 @@ def main() -> None:
         p["last"] = max(p["last"], c["date"])
         p["weeks"][w] += 1
         if c["ai"] and (not p["firstAi"] or c["date"] < p["firstAi"]):
-            p["firstAi"] = c["date"]
+            p["firstAi"], p["firstAiRepo"] = c["date"], c["repo"]
 
     # pull requests through gh
     pr_rows, pr_ok = [], False
@@ -216,6 +216,8 @@ def main() -> None:
         people[nm]["prs"] = people[nm].get("prs", 0) + 1
         people[nm]["agentPrs"] = people[nm].get("agentPrs", 0) + p["agent"]
         people[nm]["agentMerged"] = people[nm].get("agentMerged", 0) + bool(p["agent"] and p["merged"])
+        if p["agent"] and p["merged"] and (not people[nm].get("firstAgentPr") or p["merged"] < people[nm]["firstAgentPr"][0]):
+            people[nm]["firstAgentPr"] = (p["merged"], p["repo"], p["number"])
         # someone seen only through pull requests still has repos, a last active day and a weekly trend
         people[nm]["repos"][p["repo"]] += 0 if people[nm]["commits"] else 1
         people[nm]["last"] = max(people[nm]["last"], p["merged"] or p["created"])
@@ -255,28 +257,73 @@ def main() -> None:
             honest = moves and not any(x.get("forced") for x in h if x["event"].startswith("phase"))
             if reached and honest and reached > created:
                 days = (dt.date.fromisoformat(reached) - dt.date.fromisoformat(created)).days
+                first = {}
+                for x in h:  # each gate's first approval: a later re-approval is not a step forward
+                    if x["event"].startswith("approved"):
+                        first.setdefault(x["event"].replace("approved ", ""), x["date"])
+                steps = [f"{g} approved {d}" for g, d in first.items()]
                 events.append({"date": reached, "kind": "speed", "key": s["key"],
-                               "text": f"{s['key']} went from intent to {s['phase']} in {days} day{'s' if days != 1 else ''}", "value": days})
+                               "text": f"{s['key']} went from intent to {s['phase']} in {days} day{'s' if days != 1 else ''}", "value": days,
+                               "detail": f"{s.get('title', '')}. Started {created}; " + "; ".join(steps) + f"; {s['phase']} on {reached}."})
         if s.get("criteria", 0) > 1 and s.get("criteria_passing") == s.get("criteria"):
-            events.append({"date": s.get("updated") or "", "kind": "quality", "key": s["key"], "text": f"{s['key']}: all {s['criteria']} acceptance criteria passing"})
+            events.append({"date": s.get("updated") or "", "kind": "quality", "key": s["key"], "text": f"{s['key']}: all {s['criteria']} acceptance criteria passing",
+                           "detail": f"{s.get('title', '')}: every acceptance criterion has a passing test."})
         d = ws / "specs" / s["dir"] / "outputs" / "diagrams"
-        n = sum(len(re.findall(r"^```mermaid", f.read_text(encoding="utf-8"), re.M)) for f in d.glob("*/v*-*.md")) if d.is_dir() else 0
+        per = {f.parent.name: len(re.findall(r"^```mermaid", f.read_text(encoding="utf-8"), re.M)) for f in sorted(d.glob("*/v*-*.md"))} if d.is_dir() else {}
+        n = sum(per.values())
         if n:
-            events.append({"date": s.get("updated") or "", "kind": "diagrams", "key": s["key"], "text": f"{n} diagrams explain {s['key']} in pictures"})
+            events.append({"date": s.get("updated") or "", "kind": "diagrams", "key": s["key"], "text": f"{n} diagrams explain {s['key']} in pictures",
+                           "detail": f"{s.get('title', '')}: " + ", ".join(f"{v} for {k}" for k, v in per.items()) + ". Open a phase tab and switch to Visual."})
         if (ws / "specs" / s["dir"] / "outputs" / "floorplan").is_dir():
-            events.append({"date": s.get("updated") or "", "kind": "map", "key": s["key"], "text": f"{s['key']} has a code map of its {len(s.get('repos') or [])} repos"})
+            events.append({"date": s.get("updated") or "", "kind": "map", "key": s["key"], "text": f"{s['key']} has a code map of its {len(s.get('repos') or [])} repos",
+                           "detail": "Floorplan map of " + ", ".join(s.get("repos") or []) + ": parts, endpoints and the requests between them. Build phase, Visual."})
+        for x in h:
+            by = re.sub(r"\s*\(.*\)$", "", x.get("by") or "")
+            if x["date"] < (today - dt.timedelta(days=30)).isoformat():
+                continue
+            if x["event"].startswith("created"):
+                events.append({"date": x["date"], "kind": "started", "key": s["key"], "person": sb or by or None,
+                               "text": f"{sb or by or 'Someone'} started {s['key']}", "detail": s.get("title", "")})
+            elif x["event"].startswith("approved") and by:
+                events.append({"date": x["date"], "kind": "approved", "key": s["key"], "person": by,
+                               "text": f"{by} approved the {x['event'].replace('approved ', '')} of {s['key']}", "detail": s.get("title", "")})
     for nm, p in people.items():
         if p.get("firstAi"):
             achievements[nm].add("AI-assisted commits")
         if p.get("agentMerged"):
             achievements[nm].add("Agent pull request merged")
         if p.get("firstAi") and p["firstAi"] >= (today - dt.timedelta(days=30)).isoformat():
-            events.append({"date": p["firstAi"], "kind": "new", "text": f"{nm} made a first AI-assisted commit", "person": nm})
+            events.append({"date": p["firstAi"], "kind": "new", "text": f"{nm} made a first AI-assisted commit", "person": nm,
+                           "detail": f"In {p.get('firstAiRepo')}; {p['ai']} AI-assisted of {p['commits']} commits since."})
+        fa = p.get("firstAgentPr")
+        if fa and fa[0] >= (today - dt.timedelta(days=30)).isoformat():
+            events.append({"date": fa[0], "kind": "pr", "text": f"{nm}'s first agent pull request merged", "person": nm,
+                           "detail": f"{fa[1]} #{fa[2]}; {p.get('agentMerged', 0)} agent pull requests merged so far."})
     named = [(k, v) for k, v in run_agent.most_common() if k not in ("general-purpose", "Explore", "Plan", "claude-code-guide", "statusline-setup")]
     if named:
         top, n = named[0]
-        events.append({"date": today.isoformat(), "kind": "agent", "text": f"{top} is the busiest agent: {n} runs in {a.weeks} weeks"})
-    events.sort(key=lambda e: e.get("date") or "", reverse=True)
+        events.append({"date": today.isoformat(), "kind": "agent", "text": f"{top} is the busiest agent: {n} runs in {a.weeks} weeks",
+                       "detail": "Next: " + ", ".join(f"{k} {v}" for k, v in named[1:5]) + "." if len(named) > 1 else ""})
+    # one line for one person's approvals of one work item on one day ("approved the intent, spec and design of X")
+    merged, seen = [], {}
+    for e in events:
+        if e["kind"] != "approved":
+            merged.append(e)
+            continue
+        k = (e["date"], e["key"], e["person"])
+        gate = e["text"].split(" approved the ")[1].rsplit(" of ", 1)[0]
+        if k in seen:
+            seen[k]["gates"].append(gate)
+        else:
+            seen[k] = {**e, "gates": [gate]}
+            merged.append(seen[k])
+    for e in seen.values():
+        g = e.pop("gates")
+        e["text"] = f"{e['person']} approved the {' and '.join([', '.join(g[:-1]), g[-1]] if len(g) > 1 else g)} of {e['key']}"
+    # highlights first, then the newest of the routine events, newest first within the page's list
+    highlight = [e for e in merged if e["kind"] not in ("approved", "started")]
+    routine = sorted((e for e in merged if e["kind"] in ("approved", "started")), key=lambda e: e.get("date") or "", reverse=True)
+    events = sorted(highlight + routine[: max(0, 80 - len(highlight))], key=lambda e: e.get("date") or "", reverse=True)
 
     # adoption: repo groups the loop has touched
     touched = Counter(r for s in loop["specs"] for r in s.get("repos") or [])
@@ -314,7 +361,7 @@ def main() -> None:
                    "minutesPerRun": MINUTES_PER_RUN},
         "people": sorted((person_out(nm, p) for nm, p in people.items() if p.get("commits") or p.get("prs") or p.get("started")), key=lambda x: x["name"].lower()),
         "adoption": [{"group": g, **v} for g, v in sorted(groups.items())],
-        "events": events[:12],
+        "events": events[:80],
     }
     (C / "data").mkdir(parents=True, exist_ok=True)
     (C / "data" / "insights.json").write_text(json.dumps(out, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")

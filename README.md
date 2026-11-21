@@ -4,6 +4,21 @@ One engine, many hubs: the engine files come from this repo and are updated in p
 `tools/hub-update.sh`; each project keeps only its content (`content/`, `assets/img/`).
 Never edit engine files inside a hub; fix them here, tag a release, and update the hubs.
 
+## Top people, recent news, People and News pages (5.16.0)
+
+- **Home:** **Top people using AI** sits beside the AI chart: the ten who use it most (AI-assisted commits plus agent
+  pull requests), one bar each in the chart colours, a star for anyone new to AI this month, and a link to **People**.
+  **Recent news** replaces the inspiration cards: highlights first (speed through the loop, quality reached, diagrams,
+  code maps, first AI-assisted commits, first agent pull requests merged), each with its detail, and a link to **News**.
+  The people cards left Home for the People page.
+- **People** (`/people`): the top ten as detailed cards (commits, AI-assisted, agent pull requests, agent runs, AI
+  share, weekly trend, first AI-assisted commit, work items started, repos, achievements), everyone else in a table;
+  using AI or everyone, sort by use of AI, AI-assisted commits, commits, agent pull requests or name; `?q=` finds one.
+- **News** (`/news`): every event by kind (highlights, speed, quality, diagrams, code maps, new to AI, agent pull
+  requests, agents, work started, approvals) and by when (this week, earlier this month, before).
+- `sync_insights.py` writes up to 80 events with a `detail` line, adds work started, approvals (one line per person,
+  work item and day) and first agent pull requests merged, and keeps every highlight before routine events.
+
 ## Workspace insights on Home, weekly digest (5.15.0)
 
 - `tools/sync_insights.py` (run by `sync.sh`) writes `content/data/insights.json`: the last 12 weeks of git history of

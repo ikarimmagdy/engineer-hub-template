@@ -1,8 +1,8 @@
 import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { PHASES, PHASE_TITLE, type Spec } from '../lib/data';
-import { gateSpeed, isAgentic, lastChange, loopActivity, pct, type Insights, type Person } from '../lib/insights';
-import { HBars, Sparkline, WeeklyStacked } from './Charts';
+import { gateSpeed, isAgentic, lastChange, loopActivity, NEWS_KIND, pct, topPeople, usage, type Insights, type NewsItem, type Person } from '../lib/insights';
+import { HBars, Legend, Sparkline, WeeklyStacked } from './Charts';
 import { cx, Panel, Pill } from './ui';
 
 const recent = (d: string | null, n: number) => !!d && Date.parse(d) >= Date.now() - n * 86400000;
@@ -47,23 +47,35 @@ export function StatTiles({ ins, specs }: { ins: Insights; specs: Spec[] }) {
   );
 }
 
-const KIND_ICON: Record<string, string> = { speed: '⏱', quality: '✓', diagrams: '◇', map: '⌘', new: '★', agent: '⚙' };
-
-/** Stories from real events: speed through the loop, quality reached, new people using agents. */
-export function InspirationCards({ ins, n = 6 }: { ins: Insights; n?: number }) {
-  const ev = ins.events.slice(0, n);
-  if (!ev.length) return null;
+/** The latest news: highlights first (speed, quality, pictures, first steps with AI), then routine loop events. */
+export function NewsList({ ins, n = 6 }: { ins: Insights; n?: number }) {
+  const high = ins.events.filter((e) => !NEWS_KIND[e.kind]?.routine);
+  const items = [...high, ...ins.events.filter((e) => NEWS_KIND[e.kind]?.routine)].slice(0, n);
   return (
-    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-      {ev.map((e, i) => {
-        const body = (
-          <div className="flex h-full items-start gap-3 rounded-lg border border-line bg-sunk/50 px-4 py-3 hover:border-line-2">
-            <span aria-hidden className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full bg-paper text-sm text-ink-2">{KIND_ICON[e.kind] || '•'}</span>
-            <span className="min-w-0 text-sm leading-snug"><span className="font-medium">{e.text}</span>{e.date && <span className="mt-0.5 block text-[11px] text-ink-3">{new Date(e.date + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</span>}</span>
-          </div>
-        );
-        return e.key ? <Link key={i} to={`/work/${e.key}/overview`}>{body}</Link> : <div key={i}>{body}</div>;
-      })}
+    <Panel title="Recent news" action={<Link to="/news" className="text-xs underline">All news · {ins.events.length}</Link>}>
+      {items.length ? (
+        <ul className="-my-1 divide-y divide-line">
+          {items.map((e, i) => <li key={i}><NewsRow e={e} /></li>)}
+        </ul>
+      ) : <p className="text-sm text-ink-3">Nothing new yet.</p>}
+    </Panel>
+  );
+}
+
+export function NewsRow({ e, full }: { e: NewsItem; full?: boolean }) {
+  const k = NEWS_KIND[e.kind] || { label: e.kind, icon: '•' };
+  return (
+    <div className="flex items-start gap-3 py-2.5">
+      <span aria-hidden className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full bg-sunk text-sm text-ink-2">{k.icon}</span>
+      <div className="min-w-0 flex-1">
+        <div className="text-sm font-medium leading-snug">{e.key ? <Link to={`/work/${e.key}/overview`} className="hover:underline">{e.text}</Link> : e.text}</div>
+        {e.detail && <div className={cx('mt-0.5 text-xs text-ink-2', !full && 'line-clamp-1')}>{e.detail}</div>}
+        <div className="mt-0.5 flex flex-wrap gap-x-2 text-[11px] text-ink-3">
+          <span>{k.label}</span>
+          {e.date && <span>{new Date(e.date + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</span>}
+          {e.person && <Link to={`/people?q=${encodeURIComponent(e.person)}`} className="underline decoration-line-2 underline-offset-2 hover:decoration-ink">{e.person}</Link>}
+        </div>
+      </div>
     </div>
   );
 }
@@ -131,46 +143,67 @@ export function AdoptionChart({ ins }: { ins: Insights }) {
   );
 }
 
-const initials = (n: string) => n.split(/[\s_-]+/).filter(Boolean).slice(0, 2).map((x) => x[0]!.toUpperCase()).join('');
+export const initials = (n: string) => n.split(/[\s_-]+/).filter(Boolean).slice(0, 2).map((x) => x[0]!.toUpperCase()).join('');
+const shortDate = (d: string | null) => (d ? new Date(d + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '–');
 
-function PersonCard({ p }: { p: Person }) {
+/** One person in detail: what they did, how much of it with AI, the work they started, their weekly rhythm. */
+export function PersonCard({ p, rank, weeks }: { p: Person; rank?: number; weeks: string[] }) {
   return (
     <div className="flex min-w-0 flex-col rounded-lg border border-line bg-paper p-3">
       <div className="flex items-center gap-2.5">
         <span aria-hidden className="flex size-9 shrink-0 items-center justify-center rounded-full bg-sunk text-sm font-semibold text-ink-2">{initials(p.name)}</span>
-        <div className="min-w-0">
-          <div className="truncate text-sm font-medium" title={p.name}>{p.name}</div>
-          <div className="text-[11px] text-ink-3">{p.last ? `active ${new Date(p.last + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}` : ''}{recent(p.firstAi, 30) && <span className="ml-1.5 rounded-full border border-ok px-1.5 text-ok">new to AI</span>}</div>
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-sm font-medium" title={p.name}>{rank ? <span className="mr-1 tabular-nums text-ink-3">{rank}.</span> : null}{p.name}</div>
+          <div className="flex flex-wrap items-center gap-x-1.5 text-[11px] text-ink-3">active {shortDate(p.last)}{recent(p.firstAi, 30) && <span className="whitespace-nowrap rounded-full border border-ok px-1.5 text-ok">new to AI</span>}</div>
         </div>
       </div>
-      <dl className="mt-2.5 grid grid-cols-3 gap-2 text-center text-[11px] text-ink-3">
+      <dl className="mt-2.5 grid grid-cols-4 gap-2 text-center text-[11px] text-ink-3">
         <div><dd className="text-base font-semibold tabular-nums text-ink">{p.commits}</dd><dt>commits</dt></div>
-        <div><dd className="text-base font-semibold tabular-nums text-ink">{pct(p.ai, p.commits)}%</dd><dt>AI-assisted</dt></div>
+        <div><dd className="text-base font-semibold tabular-nums text-ink">{p.ai}</dd><dt>AI-assisted</dt></div>
         <div><dd className="text-base font-semibold tabular-nums text-ink">{p.agentPrs}<span className="text-xs font-normal text-ink-3">/{p.prs}</span></dd><dt>agent PRs</dt></div>
+        <div><dd className="text-base font-semibold tabular-nums text-ink">{p.agentRuns || '–'}</dd><dt>agent runs</dt></div>
       </dl>
-      {p.started.length > 0 && <div className="mt-2 flex flex-wrap gap-1">{p.started.slice(0, 4).map((k) => <Link key={k} to={`/work/${k}/overview`} className="rounded border border-line px-1.5 font-mono text-[10.5px] text-ink-2 hover:border-ink">{k}</Link>)}{p.started.length > 4 && <span className="text-[10.5px] text-ink-3">+{p.started.length - 4}</span>}</div>}
+      {p.weeks.some((w) => w > 0) && (
+        <div className="mt-2 flex items-center justify-between gap-2 text-[11px] text-ink-3"><span>per week</span><Sparkline values={p.weeks} labels={weeks} label={`${p.name}: activity per week`} /></div>
+      )}
+      {p.commits > 0 && (
+        <div className="mt-2 flex items-center gap-2 text-[11px] text-ink-3">
+          <span className="h-1.5 flex-1 rounded-full bg-sunk"><span className="block h-full rounded-full" style={{ width: `${pct(p.ai, p.commits)}%`, background: 'var(--series-1)' }} /></span>
+          <span className="tabular-nums">{pct(p.ai, p.commits)}% AI-assisted</span>
+        </div>
+      )}
+      {p.firstAi && <div className="mt-1.5 text-[11px] text-ink-3">first AI-assisted commit {shortDate(p.firstAi)}</div>}
+      {p.started.length > 0 && <div className="mt-2 flex flex-wrap gap-1">{p.started.map((k) => <Link key={k} to={`/work/${k}/overview`} className="rounded border border-line px-1.5 font-mono text-[10.5px] text-ink-2 hover:border-ink">{k}</Link>)}</div>}
       {p.repos.length > 0 && <div className="mt-1.5 truncate font-mono text-[10.5px] text-ink-3" title={p.repos.join(', ')}>{p.repos.join(', ')}</div>}
       {p.achievements.length > 0 && <div className="mt-2 flex flex-wrap gap-1">{p.achievements.map((a) => <Pill key={a} className="text-[10.5px]">{a}</Pill>)}</div>}
     </div>
   );
 }
 
-/** Who uses agents, alphabetically (no ranking), then everyone else who contributed. */
-export function PeopleCards({ ins }: { ins: Insights }) {
-  const [all, setAll] = useState(false);
-  const agentic = ins.people.filter(isAgentic);
-  const rest = ins.people.filter((p) => !isAgentic(p));
+/** The people who use AI most in their work (AI-assisted commits, agent pull requests, shared agent runs). */
+export function TopPeople({ ins, n = 10 }: { ins: Insights; n?: number }) {
+  const top = topPeople(ins, n);
+  const max = Math.max(1, ...top.map(usage));
   return (
-    <Panel title={`People using agents · ${agentic.length}`} action={<span className="text-xs text-ink-3">alphabetical, last {ins.weeks.length - 1} weeks</span>}>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        {agentic.map((p) => <PersonCard key={p.name} p={p} />)}
-      </div>
-      {rest.length > 0 && (
-        <div className="mt-4 border-t border-line pt-3">
-          <button type="button" onClick={() => setAll(!all)} className="text-xs underline">{all ? 'Hide' : 'Show'} the other {rest.length} contributors</button>
-          {all && <p className="mt-2 text-xs leading-relaxed text-ink-2">{rest.map((p) => `${p.name} (${p.commits + p.prs})`).join(' · ')}</p>}
-        </div>
-      )}
+    <Panel title="Top people using AI" action={<Link to="/people" className="text-xs underline">All people · {ins.people.filter(isAgentic).length}</Link>}>
+      <div className="mb-2"><Legend items={[['AI-assisted commits', '--series-1'], ['Agent pull requests', '--series-2']]} /></div>
+      <ol className="space-y-2">
+        {top.map((p, i) => (
+          <li key={p.name}>
+            <Link to={`/people?q=${encodeURIComponent(p.name)}`} className="grid grid-cols-[18px_28px_minmax(0,8.5rem)_minmax(0,1fr)_auto] items-center gap-2 text-xs hover:underline">
+              <span className="text-right tabular-nums text-ink-3">{i + 1}</span>
+              <span aria-hidden className="flex size-7 items-center justify-center rounded-full bg-sunk text-[11px] font-semibold text-ink-2">{initials(p.name)}</span>
+              <span className="truncate font-medium text-ink" title={p.name}>{p.name}{recent(p.firstAi, 30) && <span className="ml-1 text-ok">★</span>}</span>
+              <span className="flex h-2.5 items-center gap-[2px]" style={{ width: `${Math.max(3, (usage(p) / max) * 100)}%` }} title={`${p.ai} AI-assisted commits, ${p.agentPrs} agent pull requests`}>
+                {p.ai > 0 && <span className="h-full rounded-l-[4px] last:rounded-r-[4px]" style={{ width: `${(p.ai / usage(p)) * 100}%`, background: 'var(--series-1)' }} />}
+                {p.agentPrs > 0 && <span className="h-full rounded-r-[4px] first:rounded-l-[4px]" style={{ width: `${(p.agentPrs / usage(p)) * 100}%`, background: 'var(--series-2)' }} />}
+              </span>
+              <span className="tabular-nums text-ink-2">{p.ai} · {p.agentPrs}</span>
+            </Link>
+          </li>
+        ))}
+      </ol>
+      <p className="mt-3 text-[11px] text-ink-3">Ranked by AI-assisted commits plus agent pull requests in {ins.weeks.length - 1} weeks. ★ new to AI this month.</p>
     </Panel>
   );
 }
@@ -185,7 +218,7 @@ export function digestText(ins: Insights, specs: Spec[], brand: string) {
     ...(ins.prs.available ? [`• ${ins.prs.merged} pull requests merged, ${ins.prs.agentMerged} of them by agents; ${ins.prs.open} open`] : []),
     `• ${ins.agents.thisWeek} agent runs this week, ${ins.agents.total} in ${ins.weeks.length - 1} weeks`,
     `• ${ins.people.filter(isAgentic).length} people using agents`,
-    '', '*Highlights*', ...ins.events.slice(0, 6).map((e) => `• ${e.text}`),
+    '', '*Highlights*', ...ins.events.filter((e) => !NEWS_KIND[e.kind]?.routine).slice(0, 6).map((e) => `• ${e.text}`),
   ];
   return lines.join('\n');
 }
