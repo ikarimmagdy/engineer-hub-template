@@ -1,9 +1,10 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { PHASES, PHASE_TITLE, useHub, type Spec } from '../lib/data';
 import { taskTotal } from '../lib/attention';
 import { releaseRoute, releasesFor } from '../lib/releases';
-import { Empty, fmtDate, Meter, PageHeader, Pill, Segmented, Select } from '../components/ui';
+import { Dot, Empty, fmtDate, Meter, PageHeader, Pill, Segmented, Select } from '../components/ui';
+import { useLoopApi, useRuns } from '../lib/loop';
 
 type View = 'board' | 'table';
 type SortKey = 'key' | 'starter' | 'phase' | 'tasks' | 'criteria' | 'findings' | 'critical' | 'updated';
@@ -17,6 +18,9 @@ export function Work() {
   const q = (params.get('q') || '').toLowerCase();
   const sort = (params.get('sort') as SortKey) || 'phase';
   const set = (k: string, v: string) => setParams((p) => { if (v) p.set(k, v); else p.delete(k); return p; }, { replace: true });
+  // remembered per browser; storage can be missing (private window), then the board shows every column
+  const [hideEmpty, setHideEmpty] = useState(() => { try { return localStorage.getItem('hub.work.hideEmpty') === '1'; } catch { return false; } });
+  const toggleEmpty = (v: boolean) => { setHideEmpty(v); try { localStorage.setItem('hub.work.hideEmpty', v ? '1' : '0'); } catch { /* not remembered */ } };
 
   const repos = useMemo(() => [...new Set(loop.specs.flatMap((s) => s.repos))].sort(), [loop]);
   const specs = loop.specs.filter((s) =>
@@ -44,32 +48,53 @@ export function Work() {
         />
         <Select label="Repo" value={repo} onChange={(v) => set('repo', v)} options={[['', 'Any'], ...repos.map((r) => [r, r] as [string, string])]} />
         <Select label="Show" value={flag} onChange={(v) => set('flag', v)} options={[['', 'All work'], ['blocked', 'Has blocked tasks'], ['critical', 'Has critical findings']]} />
+        {view === 'board' && (
+          <label className="flex items-center gap-1.5 text-xs text-ink-2">
+            <input type="checkbox" checked={hideEmpty} onChange={(e) => toggleEmpty(e.target.checked)} className="size-3.5 accent-current" />
+            Hide empty columns
+          </label>
+        )}
         <span className="text-xs text-ink-3">{specs.length} of {loop.specs.length}</span>
       </div>
       {specs.length === 0 ? (
         <Empty action={<button type="button" className="underline" onClick={() => setParams({}, { replace: true })}>Clear filters</button>}>No work matches these filters.</Empty>
-      ) : view === 'board' ? <Board specs={specs} /> : <Table specs={specs} sort={sort} onSort={(s) => set('sort', s)} />}
+      ) : view === 'board' ? <Board specs={specs} hideEmpty={hideEmpty} /> : <Table specs={specs} sort={sort} onSort={(s) => set('sort', s)} />}
     </div>
   );
 }
 
-function Card({ s }: { s: Spec }) {
+/** The board card: the whole title, the next step, progress, findings, and the agent working on it now (local hub). */
+function Card({ s, working }: { s: Spec; working: string[] }) {
   const hub = useHub();
   const rel = releasesFor(hub, s.key)[0];
   const crit = s.findings?.bySeverity.critical || 0;
   const gate = (['intent', 'spec', 'design'] as const).find((g) => g === s.phase && !s.approved?.[g]);
+  const total = taskTotal(s);
+  const next = s.next?.trim();
   return (
-    <Link to={`/work/${s.key}/overview`} className="block rounded-lg border border-line bg-paper p-3 hover:border-line-2">
-      <div className="flex items-center gap-2 font-mono text-[11px] text-ink-3">{s.key}<ProposedTag s={s} /></div>
-      <div className="mt-0.5 line-clamp-2 text-sm font-medium">{s.title}</div>
-      {s.started_by && <div className="mt-1 truncate text-[11px] text-ink-3">started by <span className="text-ink-2">{s.started_by.name}</span></div>}
-      {s.criteria > 1 && (
-        <div className="mt-2.5">
-          <Meter value={s.criteria_passing} total={s.criteria} />
-          <div className="mt-1 text-[11px] tabular-nums text-ink-3">{s.criteria_passing}/{s.criteria} criteria</div>
+    <Link to={`/work/${s.key}/overview`} className="block rounded-lg border border-line bg-paper p-3 hover:border-line-2 hover:shadow-sm">
+      <div className="flex flex-wrap items-center gap-2 font-mono text-[11px] text-ink-3">{s.key}<ProposedTag s={s} /><span className="ml-auto font-sans">{fmtDate(s.updated)}</span></div>
+      <div className="mt-1 text-sm font-medium leading-snug break-words">{s.title}</div>
+      {s.started_by && <div className="mt-1 text-[11px] text-ink-3">started by <span className="text-ink-2">{s.started_by.name}</span></div>}
+      {working.length > 0 && (
+        <div className="mt-2 flex items-center gap-1.5 text-[11px] text-run"><Dot tone="run" className="animate-pulse" /><span className="min-w-0 break-words">{working.join(', ')} working</span></div>
+      )}
+      {next && (
+        <div className="mt-2 rounded-md bg-sunk px-2 py-1.5 text-[11.5px] leading-snug">
+          <span className="text-ink-3">Next: </span><span className={/^\//.test(next) ? 'font-mono text-ink' : 'text-ink-2'}>{next}</span>
         </div>
       )}
-      {rel && <div className="mt-2 truncate text-[11px] text-ink-3" title={rel.title}>Shipped in <span className="font-mono">{rel.id}</span></div>}
+      {(total > 0 || s.criteria > 1) && (
+        <dl className="mt-2.5 grid grid-cols-2 gap-x-3 gap-y-1.5 text-[11px] tabular-nums text-ink-3">
+          {total > 0 && <div><Meter value={s.tasks.done} total={total} /><dd className="mt-1">{s.tasks.done}/{total} tasks</dd></div>}
+          {s.criteria > 1 && <div><Meter value={s.criteria_passing} total={s.criteria} /><dd className="mt-1">{s.criteria_passing}/{s.criteria} criteria</dd></div>}
+        </dl>
+      )}
+      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-ink-3">
+        {s.repos.length > 0 && <span className="font-mono" title={s.repos.join(', ')}>{s.repos.slice(0, 2).join(', ')}{s.repos.length > 2 ? ` +${s.repos.length - 2}` : ''}</span>}
+        {s.findings && s.findings.open > 0 && <span>{s.findings.open} open findings</span>}
+        {rel && <span title={rel.title}>shipped in <span className="font-mono">{rel.id}</span></span>}
+      </div>
       {(gate || s.tasks.blocked > 0 || crit > 0) && (
         <div className="mt-2 flex flex-wrap gap-1.5">
           {gate && <Pill tone="wait">needs approval</Pill>}
@@ -81,24 +106,26 @@ function Card({ s }: { s: Spec }) {
   );
 }
 
-function Board({ specs }: { specs: Spec[] }) {
+function Board({ specs, hideEmpty }: { specs: Spec[]; hideEmpty: boolean }) {
+  const api = useLoopApi();
+  const runs = useRuns(!!api);
+  const working = (key: string) => [...new Set(runs.filter((r) => r.key === key && r.state === 'running').map((r) => r.agent.replace(/^(team|command|module):/, '')))];
+  const cols = PHASES.map((p, i) => ({ p, i, list: specs.filter((s) => s.phase === p) })).filter((c) => !hideEmpty || c.list.length);
+  // all seven fit a laptop screen; fewer columns share the width, so their cards get wider
   return (
     <div className="-mx-4 overflow-x-auto px-4 pb-2 md:mx-0 md:px-0">
-      <div className="grid min-w-[980px] grid-cols-7 gap-3">
-        {PHASES.map((p, i) => {
-          const list = specs.filter((s) => s.phase === p);
-          return (
-            <section key={p} aria-label={PHASE_TITLE[p]} className="min-w-0">
-              <h2 className="mb-2 flex items-center justify-between border-b border-line pb-1.5 text-xs font-semibold text-ink-2">
-                <span><span className="mr-1 tabular-nums text-ink-3">{i + 1}</span>{PHASE_TITLE[p]}</span>
-                <span className="tabular-nums text-ink-3">{list.length}</span>
-              </h2>
-              <div className="space-y-2">
-                {list.length ? list.map((s) => <Card key={s.key} s={s} />) : <p className="py-2 text-xs text-ink-3">Nothing in {PHASE_TITLE[p].toLowerCase()}.</p>}
-              </div>
-            </section>
-          );
-        })}
+      <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${cols.length}, minmax(168px, 1fr))`, minWidth: cols.length * 180 }}>
+        {cols.map(({ p, i, list }) => (
+          <section key={p} aria-label={PHASE_TITLE[p]} className="min-w-0">
+            <h2 className="mb-2 flex items-center justify-between border-b border-line pb-1.5 text-xs font-semibold text-ink-2">
+              <span><span className="mr-1 tabular-nums text-ink-3">{i + 1}</span>{PHASE_TITLE[p]}</span>
+              <span className="tabular-nums text-ink-3">{list.length}</span>
+            </h2>
+            <div className="space-y-2">
+              {list.length ? list.map((s) => <Card key={s.key} s={s} working={working(s.key)} />) : <p className="py-2 text-xs text-ink-3">Nothing in {PHASE_TITLE[p].toLowerCase()}.</p>}
+            </div>
+          </section>
+        ))}
       </div>
     </div>
   );

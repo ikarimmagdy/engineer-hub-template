@@ -16,6 +16,8 @@ import { TestsTab, LatestRun } from './Tests';
 import { Requirements } from './Requirements';
 import { ImpactCard, WorkImpact } from './System';
 import { WorkAgents } from '../components/Handover';
+import { LoopCycle } from '../components/LoopCycle';
+import { ChatPanel } from '../components/Chat';
 import { PhaseBanner, PhaseNav, TAB_PHASE } from '../components/PhaseNav';
 import { WorkQuestions } from './Questions';
 import { WorkReleases } from './Releases';
@@ -68,6 +70,7 @@ export function WorkItem() {
             {tab === 'tests' && <TestsTab spec={spec} />}
             {tab === 'findings' && <Findings spec={spec} />}
             {tab === 'agents' && <WorkAgents spec={spec} />}
+            {tab === 'chat' && <ChatPanel workKey={spec.key} />}
             {tab === 'impact' && <WorkImpact spec={spec} />}
             {tab === 'documents' && <Documents spec={spec} hub={hub} />}
             {tab === 'activity' && <Activity spec={spec} />}
@@ -103,6 +106,7 @@ function Overview({ spec }: { spec: Spec }) {
   const f = spec.findings;
   return (
     <div className="space-y-6">
+      <LoopCycle spec={spec} />
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <div className="rounded-lg border border-line bg-paper px-4 py-3">
           <div className="text-2xl font-semibold tabular-nums">{spec.criteria_passing} <span className="text-base font-normal text-ink-3">/ {spec.criteria}</span></div>

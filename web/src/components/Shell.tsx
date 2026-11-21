@@ -14,6 +14,7 @@ const NAV: [string, string][] = [
   ['/quality', 'Quality'],
   ['/system', 'System'],
   ['/agents', 'Agents'],
+  ['/chat', 'Chat'],
   ['/operations', 'Operations'],
   ['/environments', 'Environments'],
   ['/knowledge', 'Knowledge'],

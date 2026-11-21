@@ -4,6 +4,25 @@ One engine, many hubs: the engine files come from this repo and are updated in p
 `tools/hub-update.sh`; each project keeps only its content (`content/`, `assets/img/`).
 Never edit engine files inside a hub; fix them here, tag a release, and update the hubs.
 
+## The loop on the work item, actions per step, chat (5.12.0)
+
+- **Work board** cards show the whole title, the next step, tasks and criteria meters, repos, open findings, the
+  updated date and, on the local hub, the agent working on the item now. **Hide empty columns** (remembered per
+  browser) drops phases with no work; the columns share the width, so fewer columns mean wider cards.
+- A work item's **Overview** opens with **Where this work is in the loop** (`components/LoopCycle.tsx`): the seven
+  steps as one cycle (done, current, not reached; gates; the agents of each step; live and last runs; Maintain
+  feeding back into Intent). Pick a step for what it does, its gate, what it hands over, **Who works on it** (agents,
+  tools, runs) and **Building blocks** (you and context, the recipe, the model and subagents, what is enforced, what
+  it reaches and hands over), read from the workspace's `.claude` wiring.
+- **Actions per step** on the local hub: approve the gate, accept and move on, revalidate (`spec.py check`), rerun
+  the step's command with an optional note, send the work back a phase, reopen a done step (both with a reason that
+  `spec.py phase --note` records). Reruns are `/intent`, `/gap`, `/spec`, `/design` and `/tasks` only: no shell,
+  writes inside the work item (and `docs/adr/` for `/design`), the hub's copy refreshed when the run ends, nothing
+  shared until a gate is approved. Build, test, deploy and maintain commands are shown to copy into the terminal.
+- **Chat** (`/chat`, and a **Chat** tab on every work item): read-only conversations with Claude on the local hub,
+  each message resuming the conversation's Claude Code session; kept in the workspace's `.claude/state/hub-chats/`.
+- Work item keys with a prefix (`FP-IDEA-3`) are accepted by the loop API.
+
 ## One request, ways side by side, MCP map (5.11.0)
 
 - **The cycle** and **The loop** are one section, **One request, end to end**: a map with steps 1 to 5 once, steps 6

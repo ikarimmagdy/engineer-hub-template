@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import type { Phase, Spec } from './data';
+import type { LoopConfig, Phase, Spec } from './data';
 import { PHASES } from './data';
 
 /** The local loop API (web/hub-loop-api.ts): present only on the hub's dev or preview server. */
-export interface LoopApi { writable: boolean; approver: string; agents: boolean; claude: string }
+export interface LoopApi { writable: boolean; approver: string; agents: boolean; claude: string; rerun?: string[] }
 export interface AgentRun { id: string; agent: string; description: string; key: string | null; source: string; started: string; ended?: string; state: 'running' | 'done' | 'failed' | 'lost' }
 export interface LiveRun {
   id: string; agent: string; module?: string; key: string | null; question: string; state: 'running' | 'done' | 'failed';
@@ -42,9 +42,18 @@ export function useRuns(enabled: boolean, key?: string, ms = 3000) {
 }
 
 export const approve = (key: string, what: string) => call<{ ok: boolean; output: string; note: string }>('/api/loop/approve', { key, what });
-export const movePhase = (key: string, phase: Phase) => call<{ ok: boolean; output: string; note: string }>('/api/loop/phase', { key, phase });
+export const movePhase = (key: string, phase: Phase, note?: string) => call<{ ok: boolean; output: string; note: string }>('/api/loop/phase', { key, phase, note });
 export const checkSpec = (key: string) => call<{ ok: boolean; output: string }>(`/api/loop/check?key=${encodeURIComponent(key)}`);
-export const startAgent = (body: { agent: 'oncall' | 'module' | 'team' | 'intent'; module?: string; name?: string; mode?: string; repo?: string; question: string; key?: string }) => call<{ id: string }>('/api/loop/agent', body);
+export const startAgent = (body: { agent: 'oncall' | 'module' | 'team' | 'intent' | 'phase'; module?: string; name?: string; mode?: string; repo?: string; question?: string; key?: string; command?: string; note?: string }) => call<{ id: string }>('/api/loop/agent', body);
+/** Runs a phase command (/spec, /design, ...) on a work item again; the run writes only inside the work item. */
+export const rerunPhase = (key: string, command: string, note?: string) => startAgent({ agent: 'phase', key, command, note });
+
+export interface ChatTurn { role: 'you' | 'claude'; text: string; at: string; run?: string; failed?: boolean }
+export interface ChatThread { id: string; key: string | null; title: string; created: string; updated: string; turns: ChatTurn[] }
+export interface ChatSummary { id: string; key: string | null; title: string; created: string; updated: string; turns: number; running: boolean }
+export const chatThreads = (key?: string) => call<{ threads: ChatSummary[] }>(`/api/loop/chats${key ? `?key=${encodeURIComponent(key)}` : ''}`).then((d) => d.threads);
+export const chatThread = (id: string) => call<ChatThread>(`/api/loop/chats/${encodeURIComponent(id)}`);
+export const sendChat = (body: { thread?: string; key?: string; message: string }) => call<{ thread: string; run: string }>('/api/loop/chat', body);
 export const startWork = (body: { kind: string; key: string; slug: string; title?: string; ref?: string }) =>
   call<{ ok: boolean; dir: string | null; output: string; shared: boolean }>('/api/loop/start', body);
 export const stopAgent = (id: string) => call<{ ok: boolean }>('/api/loop/agent/stop', { id });
@@ -75,6 +84,15 @@ export function nextAction(spec: Spec): { kind: 'approve'; what: 'intent' | 'spe
   if (what && !spec.approved[what]) return { kind: 'approve', what };
   const i = PHASES.indexOf(spec.phase);
   return i < PHASES.length - 1 ? { kind: 'phase', to: PHASES[i + 1] } : null;
+}
+
+/** The phase a run belongs to: a rerun names its command (command:spec), /intent from the hub is "intent", a subagent is found in the phase's command files. */
+export function phaseOfRun(agent: string, phases: NonNullable<LoopConfig['phases']>, wiring: { agents: string[] }[]) {
+  const cmds = (c: string) => c.split(/[,\s]+/).filter((x) => x.startsWith('/'));
+  if (agent === 'intent') return phases.findIndex((p) => p.key === 'intent');
+  const cmd = agent.match(/^command:(.+)$/)?.[1];
+  if (cmd) return phases.findIndex((p) => cmds(p.command).includes(`/${cmd}`));
+  return wiring.findIndex((w) => w.agents.includes(agent));
 }
 
 export function since(iso: string, end?: string) {

@@ -9,12 +9,15 @@ import type { Plugin } from 'vite';
 // read the subagent runs the workspace's agent-log hook records, and run read-only agents
 // (on-call, one per module) and the team agents in the workspace's .claude/agents/ through the
 // local Claude Code login. A team agent in propose mode edits an isolated git worktree of one
-// repo on a local agent/ branch and shows the diff; nothing is pushed. Mounted only on the dev and
+// repo on a local agent/ branch and shows the diff; nothing is pushed. A work item's planning commands
+// (/intent, /gap, /spec, /design, /tasks) can run again, writing only inside the work item. A chat is a
+// read-only conversation whose turns resume one Claude Code session. Mounted only on the dev and
 // preview servers, loopback clients only. A statically served hub has no /api/loop, so the
 // front-end shows the same views read-only, with the commands to run instead.
 
 const LOOPBACK = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
-const KEY = /^[A-Z][A-Z0-9]*-\d+$/;
+// TELCO-2513, IDEA-7, and a prefixed key such as FP-IDEA-3
+const KEY = /^[A-Z][A-Z0-9]*(?:-[A-Z][A-Z0-9]*)?-\d+$/;
 const APPROVABLE = ['intent', 'spec', 'design'];
 const PHASES = ['intent', 'spec', 'design', 'build', 'test', 'deploy', 'maintain'];
 const MAX_QUESTION = 4000;
@@ -38,7 +41,12 @@ interface Live {
   mode?: string; repo?: string; worktree?: string; branch?: string; base?: string; diffStat?: string; diff?: string; reach?: Reach;
   /** Exactly how the run was started: the directory, the command line, and the instructions appended to the system prompt. */
   launch?: { cwd: string; command: string; instructions: string };
+  /** Claude Code session of a chat turn, resumed by the next turn of the same conversation. */
+  session?: string;
 }
+
+/** A conversation from the hub: each turn is one run, the next turn resumes its Claude Code session. Kept in .claude/state/hub-chats/ (gitignored). */
+interface Thread { id: string; key: string | null; title: string; session?: string; created: string; updated: string; turns: { role: 'you' | 'claude'; text: string; at: string; run?: string; failed?: boolean }[] }
 
 const live = new Map<string, Live>();
 const children = new Map<string, ReturnType<typeof spawn>>();
@@ -206,6 +214,57 @@ function oncallPrompt(mods: any[], brand: string) {
     + `6) mitigation options and who to involve. Do not run anything yourself beyond reading.\n\nModules:\n${map}\n\nRules:\n${RULES}`;
 }
 
+function chatPrompt(mods: any[], brand: string, key: string | null) {
+  return `You are Claude, talking with an engineer of the ${brand} team from the Engineering Hub, in the engineering workspace. `
+    + (key ? `This conversation is about work item ${key}: its intent, spec, design, tasks, tests and outputs are in specs/${key}-*/ (status.json is the phase and the approvals). ` : '')
+    + `The repositories are cloned under code/<name>/ (each is an added directory: pass that path to Grep and Glob), the documents under docs/, the work items under specs/, `
+    + `the process in CLAUDE.md and constitution/. You read only: the engineer approves, moves phases and reruns commands with the buttons on the work item, `
+    + `and changes code from the terminal or a propose run. When something needs a write, say exactly which command or button does it.\n\n`
+    + `Modules: ${mods.map((m) => m.name).join(', ') || '(none listed)'}\n\nRules:\n${RULES}`;
+}
+
+const chatDir = (ws: string) => join(ws, '.claude', 'state', 'hub-chats');
+const THREAD = /^[0-9a-f]{8}$/;
+function readThread(ws: string, id: string): Thread {
+  if (!THREAD.test(id)) throw new Error('no such conversation');
+  const f = join(chatDir(ws), `${id}.json`);
+  if (!existsSync(f)) throw new Error('no such conversation');
+  return JSON.parse(readFileSync(f, 'utf8'));
+}
+function saveThread(ws: string, t: Thread) {
+  mkdirSync(chatDir(ws), { recursive: true });
+  writeFileSync(join(chatDir(ws), `${t.id}.json`), JSON.stringify(t, null, 1));
+}
+function threads(ws: string, key?: string) {
+  if (!existsSync(chatDir(ws))) return [];
+  return readdirSync(chatDir(ws)).filter((f) => f.endsWith('.json')).map((f) => { try { return JSON.parse(readFileSync(join(chatDir(ws), f), 'utf8')) as Thread; } catch { return null; } })
+    .filter((t): t is Thread => !!t && (!key || t.key === key))
+    .map(({ turns, session, ...t }) => ({ ...t, turns: turns.length, running: turns.some((x) => x.run && live.get(x.run)?.state === 'running') }))
+    .sort((a, b) => b.updated.localeCompare(a.updated)).slice(0, 100);
+}
+
+/** One message of a conversation: a read-only run that resumes the conversation's session; the answer is added when the run ends. */
+function chat(hubDir: string, ws: string, b: any) {
+  const message = String(b.message || '').trim();
+  if (!message || message.length > MAX_QUESTION) throw new Error(`the message must be 1 to ${MAX_QUESTION} characters`);
+  const now = new Date().toISOString();
+  const t: Thread = b.thread ? readThread(ws, String(b.thread))
+    : { id: randomUUID().slice(0, 8), key: b.key && KEY.test(b.key) ? b.key : null, title: message.split('\n')[0].slice(0, 80), created: now, updated: now, turns: [] };
+  const last = t.turns[t.turns.length - 1];
+  if (last?.run && live.get(last.run)?.state === 'running') throw new Error('Claude is still answering the last message');
+  const r = launch(hubDir, ws, { agent: 'chat', key: t.key, question: message, session: t.session }, (done) => {
+    const cur = readThread(ws, t.id);
+    if (done.session) cur.session = done.session;
+    cur.turns.push({ role: 'claude', text: done.text || done.error || 'No answer.', at: done.ended || new Date().toISOString(), run: done.id, failed: done.state !== 'done' });
+    cur.updated = new Date().toISOString();
+    saveThread(ws, cur);
+  });
+  t.turns.push({ role: 'you', text: message, at: now, run: r.id });
+  t.updated = now;
+  saveThread(ws, t);
+  return { thread: t.id, run: r.id };
+}
+
 /** The last commits of each repo, so agents without a shell still see what changed recently. */
 function history(ws: string, repos: string[]) {
   const out = repos.filter((r) => existsSync(join(ws, 'code', r, '.git')) || existsSync(join(ws, 'code', r))).slice(0, 12).map((r) => {
@@ -230,6 +289,16 @@ function target(input: any, base: string): string {
 }
 
 const specDirOf = (ws: string, key: string) => { try { return readdirSync(join(ws, 'specs')).find((d) => d.startsWith(`${key}-`)) || null; } catch { return null; } };
+// Phase commands the hub may run again on a work item. Each writes only where it says (the work item's folder; /design
+// also its ADRs) and has no shell, so it cannot run spec.py, git, builds or tests. Build, test, deploy and maintain
+// change code or environments: those run in the terminal.
+const PHASE_RUNS: Record<string, { phase: string; edits: (dir: string) => string[]; code?: boolean; mcp?: boolean }> = {
+  '/intent': { phase: 'intent', edits: (d) => [`specs/${d}`], mcp: true },
+  '/gap': { phase: 'intent', edits: (d) => [`specs/${d}`], code: true },
+  '/spec': { phase: 'spec', edits: (d) => [`specs/${d}`] },
+  '/design': { phase: 'design', edits: (d) => [`specs/${d}`, 'docs/adr'], code: true },
+  '/tasks': { phase: 'build', edits: (d) => [`specs/${d}`] },
+};
 // /intent from the hub reads its sources with these read tools only: no Jira or Confluence writes, no Figma edits
 const INTENT_MCP: Record<string, string[]> = {
   atlassian: ['getAccessibleAtlassianResources', 'getJiraIssue', 'searchJiraIssuesUsingJql', 'getJiraIssueRemoteIssueLinks', 'getConfluencePage', 'getConfluencePageDescendants', 'searchConfluenceUsingCql', 'search', 'fetch'],
@@ -253,14 +322,18 @@ function startWork(hubDir: string, ws: string, b: any) {
   return { ok: true, dir: specDirOf(ws, key), output: r.out, shared: /share: .* pushed/.test(r.out) };
 }
 
-function launch(hubDir: string, ws: string, body: any): Live {
-  if (body.agent === 'intent') {
+function launch(hubDir: string, ws: string, body: any, onEnd?: (r: Live) => void): Live {
+  // /intent from the Start page is a phase run of /intent
+  if (body.agent === 'intent') body = { ...body, agent: 'phase', command: '/intent' };
+  if (body.agent === 'phase') {
     const k = String(body.key || ''), dir = KEY.test(k) ? specDirOf(ws, k) : null;
     if (!dir) throw new Error(`no work item ${k} in specs/: create it first`);
+    if (!PHASE_RUNS[body.command]) throw new Error(`the hub runs ${Object.keys(PHASE_RUNS).join(', ')}; run ${body.command || 'that command'} in the terminal`);
     let st: any = {};
     try { st = JSON.parse(readFileSync(join(ws, 'specs', dir, 'status.json'), 'utf8')); } catch { /* new folder */ }
-    const ref = st.intake?.ref || st.intake?.summary || k;
-    body = { ...body, question: `/intent ${k} ${dir.slice(k.length + 1)} ${ref}` };
+    const note = String(body.note || '').replace(/[\r\n]+/g, ' ').trim().slice(0, 1000);
+    const args = body.command === '/intent' ? `${k} ${dir.slice(k.length + 1)} ${st.intake?.ref || st.intake?.summary || k}` : k;
+    body = { ...body, question: `${body.command} ${args}${note ? `\n\nThe reviewer asks for this change on the rerun: ${note}` : ''}` };
   }
   const question = String(body.question || '').trim();
   if (!question || question.length > MAX_QUESTION) throw new Error(`the question must be 1 to ${MAX_QUESTION} characters`);
@@ -276,27 +349,48 @@ function launch(hubDir: string, ws: string, body: any): Live {
     system = modulePrompt(m, brand); agent = `module:${m.id}`; module = m.id;
   } else if (body.agent === 'oncall') {
     system = oncallPrompt(mods, brand);
-  } else if (body.agent !== 'team' && body.agent !== 'intent') throw new Error('agent must be oncall, module, team or intent');
+  } else if (body.agent === 'chat') {
+    system = chatPrompt(mods, brand, key); agent = 'chat';
+  } else if (body.agent !== 'team' && body.agent !== 'phase') throw new Error('agent must be oncall, module, team, intent, phase or chat');
 
   const id = randomUUID();
   let mcpFile: string | undefined, mcpNames: string[] = [];
   let tools: string[] = [], dirs: string[] = [], mode: string | undefined, repo: string | undefined, wt: string | undefined, branch: string | undefined, base: string | undefined;
-  if (body.agent === 'intent') {
-    const dir = specDirOf(ws, key!)!;
-    agent = 'intent'; mode = 'intent';
-    tools = [`Edit(./specs/${dir}/**)`];
-    let all: Record<string, unknown> = {};
-    try { all = JSON.parse(readFileSync(join(ws, '.mcp.json'), 'utf8')).mcpServers || {}; } catch { /* no .mcp.json */ }
-    const picked = Object.fromEntries(Object.keys(INTENT_MCP).filter((n) => all[n]).map((n) => [n, all[n]]));
-    if (Object.keys(picked).length) {
-      mcpFile = join(tmpdir(), `engineering-hub-mcp-${id.slice(0, 8)}.json`);
-      writeFileSync(mcpFile, JSON.stringify({ mcpServers: picked }));
-      mcpNames = Object.keys(picked);
-      tools.push(...mcpNames.flatMap((n) => INTENT_MCP[n].map((t) => `mcp__${n}__${t}`)));
+  if (body.agent === 'phase') {
+    const dir = specDirOf(ws, key!)!, cfg = PHASE_RUNS[body.command], edits = cfg.edits(dir);
+    // the Start page's /intent keeps its own name, so earlier runs still read as intent
+    agent = body.command === '/intent' ? 'intent' : `command:${body.command.slice(1)}`; mode = body.command === '/intent' ? 'intent' : 'phase';
+    tools = edits.map((p) => `Edit(./${p}/**)`);
+    if (cfg.code) {
+      let repos: string[] = [];
+      try { repos = JSON.parse(readFileSync(join(ws, 'specs', dir, 'status.json'), 'utf8')).repos || []; } catch { /* no repos linked yet */ }
+      dirs = repos.filter((r) => existsSync(join(ws, 'code', r))).map((r) => join(ws, 'code', r));
     }
-    system = `You are running /intent from the ${brand} Engineering Hub, without a shell. Write only inside specs/${dir}/: the dated source snapshots in inputs/ and intent.md. `
-      + `You cannot run tools/spec.py, git or /gap here: list the links you would record (initiative, epics, stories, source URLs) under a "Links to record" heading at the end of intent.md, and say whether /gap is needed. `
-      + `Do not approve anything and do not move the phase: the owner reviews intent.md in the hub and approves there. If Jira, Confluence or Figma is not signed in, say so and write what you can.\n\nRules:\n${bullets(COMMON)}`;
+    if (cfg.mcp) {
+      let all: Record<string, unknown> = {};
+      try { all = JSON.parse(readFileSync(join(ws, '.mcp.json'), 'utf8')).mcpServers || {}; } catch { /* no .mcp.json */ }
+      const picked = Object.fromEntries(Object.keys(INTENT_MCP).filter((n) => all[n]).map((n) => [n, all[n]]));
+      if (Object.keys(picked).length) {
+        mcpFile = join(tmpdir(), `engineering-hub-mcp-${id.slice(0, 8)}.json`);
+        writeFileSync(mcpFile, JSON.stringify({ mcpServers: picked }));
+        mcpNames = Object.keys(picked);
+        tools.push(...mcpNames.flatMap((n) => INTENT_MCP[n].map((t) => `mcp__${n}__${t}`)));
+      }
+    }
+    const places = edits.map((p) => `${p}/`).join(' and ');
+    system = body.command === '/intent'
+      ? `You are running /intent from the ${brand} Engineering Hub, without a shell. Write only inside ${places}: the dated source snapshots in inputs/ and intent.md. `
+        + `You cannot run tools/spec.py, git or /gap here: list the links you would record (initiative, epics, stories, source URLs) under a "Links to record" heading at the end of intent.md, and say whether /gap is needed. `
+        + `Do not approve anything and do not move the phase: the owner reviews intent.md in the hub and approves there. If Jira, Confluence or Figma is not signed in, say so and write what you can.\n\nRules:\n${bullets(COMMON)}`
+      : `You are running ${body.command} for ${key} again from the ${brand} Engineering Hub, without a shell. Write only inside ${places}. `
+        + `${dirs.length ? `The work item's repositories are cloned at ${dirs.map((d) => d.slice(ws.length + 1) + '/').join(', ')}: pass one of these paths to Grep and Glob. ` : ''}`
+        + `You cannot run tools/spec.py, git, builds or tests here: where the command would run one, say which command the engineer should run. `
+        + `Keep what is still right in the existing documents and change what the rerun asks for; never edit a frozen v<N>-<date> file, write the next version instead. `
+        + `Do not approve anything and do not move the phase: the owner reviews the result in the hub and approves there. `
+        + `End with what changed, by file, and what the owner should check.\n\nRules:\n${bullets(COMMON)}`;
+  } else if (body.agent === 'chat') {
+    cwd = ws;
+    dirs = mods.filter((m) => existsSync(join(ws, 'code', m.id))).map((m) => join(ws, 'code', m.id));
   } else if (body.agent === 'team') {
     const a = teamAgents(ws).find((x) => x.name === body.name);
     if (!a) throw new Error(`no team agent ${body.name} in .claude/agents/`);
@@ -344,17 +438,20 @@ function launch(hubDir: string, ws: string, body: any): Live {
   if (agent === 'oncall') system += history(ws, mods.map((m) => m.id));
   else if (module) system += history(ws, [module]);
 
-  const deny = [...DENY_READ.map((p) => `Read(${p})`), ...(mode === 'propose' || mode === 'intent' ? DENY_READ.map((p) => `Edit(${p})`) : [])];
+  const writes = mode === 'propose' || mode === 'intent' || mode === 'phase';
+  const deny = [...DENY_READ.map((p) => `Read(${p})`), ...(writes ? DENY_READ.map((p) => `Edit(${p})`) : [])];
   const settings = JSON.stringify({ permissions: { deny } });
-  const args = ['-p', question, '--output-format', 'stream-json', '--verbose', '--no-session-persistence', '--strict-mcp-config',
+  // a chat keeps its session so the next turn can resume it; every other run leaves nothing behind
+  const resume = agent === 'chat' && typeof body.session === 'string' && /^[0-9a-f-]{36}$/.test(body.session) ? body.session : null;
+  const args = ['-p', question, '--output-format', 'stream-json', '--verbose', ...(agent === 'chat' ? (resume ? ['--resume', resume] : []) : ['--no-session-persistence']), '--strict-mcp-config',
     '--settings', settings, '--setting-sources', 'project', '--append-system-prompt', system,
-    '--tools', ...TOOLS, ...(mode === 'propose' || mode === 'intent' ? ['Edit', 'Write'] : []), ...(tools.length ? ['--allowedTools', ...tools] : [])];
+    '--tools', ...TOOLS, ...(writes ? ['Edit', 'Write'] : []), ...(tools.length ? ['--allowedTools', ...tools] : [])];
   for (const d of dirs) args.push('--add-dir', d);
   if (mcpFile) args.push('--mcp-config', mcpFile);
   const home = (x: string) => x.split(process.env.HOME || '\u0000').join('~');
   const shown = args.map((a) => (a === question ? '"<the task>"' : a === system ? '"<the instructions below>"' : /[\s{}"*()]/.test(a) ? `'${a}'` : a));
   const reach: Reach = { repos: wt && repo ? [repo] : dirs.filter((d) => d.startsWith(join(ws, 'code') + '/')).map((d) => d.slice(join(ws, 'code').length + 1)),
-    docs: true, edits: wt ? `${repo} worktree on ${branch}` : mode === 'intent' ? `specs/${specDirOf(ws, key!)}/` : null, shell: false, mcp: mcpNames,
+    docs: true, edits: wt ? `${repo} worktree on ${branch}` : writes ? tools.filter((t) => t.startsWith('Edit(./')).map((t) => t.slice(7, -4) + '/').join(', ') : null, shell: false, mcp: mcpNames,
     // only through an MCP server the agent file names; the server's name says what it reaches
     databases: mcpNames.some((n) => /db|sql|maria|mysql|postgres|database/i.test(n)), clusters: mcpNames.some((n) => /k8s|kube|argo|rancher|okd|openshift/i.test(n)), network: false };
   if (module) reach.repos = [module];
@@ -373,6 +470,7 @@ function launch(hubDir: string, ws: string, body: any): Live {
       const line = buf.slice(0, i); buf = buf.slice(i + 1);
       let ev: any;
       try { ev = JSON.parse(line); } catch { continue; }
+      if (ev.session_id && agent === 'chat') r.session = ev.session_id;
       if (ev.type === 'assistant') {
         for (const b of ev.message?.content || []) {
           const at = new Date().toISOString();
@@ -399,9 +497,12 @@ function launch(hubDir: string, ws: string, body: any): Live {
       r.diff = d.length > MAX_DIFF ? `${d.slice(0, MAX_DIFF)}\n... diff cut at 300 KB; see the worktree` : d;
     }
     r.state = ok && !r.error ? 'done' : 'failed';
+    // a rerun changed the work item's documents: refresh the hub's copy so its tabs show them
+    if (writes && !r.worktree && existsSync(join(hubDir, 'tools', 'sync_loop.py'))) run('python3', ['tools/sync_loop.py'], hubDir);
     if (!ok && !r.error) r.error = why || err.trim() || 'the agent stopped';
     r.ended = new Date().toISOString();
     logRun(ws, { ts: r.ended, event: 'end', id: r.id, agent, description: question.slice(0, 200), key, source: 'hub', ok: r.state === 'done' });
+    onEnd?.(r);
   };
   child.on('error', (e) => finish(false, `could not start claude: ${e.message}`));
   child.on('close', (code) => finish(code === 0));
@@ -443,8 +544,10 @@ export function hubLoopApi(hubDir: string): Plugin {
             const c = spawnSync('claude', ['--version'], { encoding: 'utf8', timeout: 15000 });
             claudeVersion = c.status === 0 ? (c.stdout || '').trim() : null;
           }
-          return send(res, 200, { writable: true, approver: who, agents: !!claudeVersion, claude: claudeVersion || '' });
+          return send(res, 200, { writable: true, approver: who, agents: !!claudeVersion, claude: claudeVersion || '', rerun: Object.keys(PHASE_RUNS) });
         }
+        if (path === '/api/loop/chats') return send(res, 200, { threads: threads(ws, q.get('key') || undefined) });
+        if (path.startsWith('/api/loop/chats/')) return send(res, 200, readThread(ws, path.slice('/api/loop/chats/'.length)));
         if (path === '/api/loop/agents') {
           return send(res, 200, { agents: teamAgents(ws).map((a) => ({ ...a, cloned: a.scope.filter((x) => existsSync(join(ws, 'code', x))) })) });
         }
@@ -471,7 +574,9 @@ export function hubLoopApi(hubDir: string): Plugin {
         if (!approve && !PHASES.includes(body.phase)) throw new Error(`phase must be one of ${PHASES.join(', ')}`);
         const who = run('git', ['config', 'user.name'], ws).out;
         if (approve && !who) throw new Error('set git config user.name in the workspace first: approvals carry a name');
-        const r = run('python3', approve ? ['tools/spec.py', 'approve', body.key, body.what, '--by', who] : ['tools/spec.py', 'phase', body.key, body.phase], ws);
+        // a note says why (sending work back, reopening a phase); spec.py records it in the history
+        const note = String(body.note || '').replace(/[\r\n]+/g, ' ').trim().slice(0, 300);
+        const r = run('python3', approve ? ['tools/spec.py', 'approve', body.key, body.what, '--by', who] : ['tools/spec.py', 'phase', body.key, body.phase, ...(note ? ['--note', note] : [])], ws);
         if (r.code !== 0) return send(res, 409, { error: r.out || 'tools/spec.py refused' });
         // refresh the hub's copy of the loop so the page shows the new state
         const sync = existsSync(join(hubDir, 'tools', 'sync_loop.py')) ? run('python3', ['tools/sync_loop.py'], hubDir) : { code: 0, out: '' };
@@ -481,6 +586,7 @@ export function hubLoopApi(hubDir: string): Plugin {
         const r = launch(hubDir, ws, body);
         return send(res, 200, { id: r.id });
       }
+      if (path === '/api/loop/chat') return send(res, 200, chat(hubDir, ws, body));
       if (path === '/api/loop/agents') return send(res, 200, createAgent(ws, body));
       if (path === '/api/loop/start') return send(res, 200, startWork(hubDir, ws, body));
       if (path === '/api/loop/agent/stop' || path === '/api/loop/agent/discard') {

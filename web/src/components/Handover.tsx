@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { PHASES, PHASE_TITLE, useHub, type LoopConfig, type Phase, type Spec } from '../lib/data';
-import { approve, checkSpec, movePhase, nextAction, since, useLoopApi, useRuns, type AgentRun } from '../lib/loop';
+import { approve, checkSpec, movePhase, nextAction, phaseOfRun, since, useLoopApi, useRuns, type AgentRun } from '../lib/loop';
 import { howRoute } from '../lib/routes';
 import { phaseList, phaseWiring } from './Sdlc';
 import { CopyButton, cx, Dot, ErrorNote, fmtDate, fmtDateTime, Panel, Pill, type Tone } from './ui';
@@ -18,7 +18,7 @@ export function WorkAgents({ spec }: { spec: Spec }) {
   const phases = phaseList(hub.manifest.loopConfig) as NonNullable<LoopConfig['phases']>;
   const cur = PHASES.indexOf(spec.phase);
   const wiring = phases.map((p, i) => phaseWiring(ag, p.command, i));
-  const phaseOfAgent = (name: string) => wiring.findIndex((w) => w.agents.includes(name));
+  const phaseOfAgent = (name: string) => phaseOfRun(name, phases, wiring);
   const byPhase = phases.map((_, i) => runs.filter((r) => phaseOfAgent(r.agent) === i));
   const other = runs.filter((r) => phaseOfAgent(r.agent) < 0);
   const running = runs.filter((r) => r.state === 'running');
@@ -88,7 +88,7 @@ export function WorkAgents({ spec }: { spec: Spec }) {
   );
 }
 
-function RunList({ runs }: { runs: AgentRun[] }) {
+export function RunList({ runs }: { runs: AgentRun[] }) {
   return (
     <ul className="mt-2 divide-y divide-line rounded-md border border-line">
       {runs.map((r) => (

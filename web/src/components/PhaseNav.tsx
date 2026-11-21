@@ -41,7 +41,7 @@ function counts(spec: Spec): Partial<Record<Tab, number>> {
 }
 
 const SIDE: [Tab, string][] = [['overview', 'Overview']];
-const AFTER: [Tab, string][] = [['agents', 'Agents'], ['impact', 'Impact'], ['documents', 'Documents'], ['activity', 'Activity']];
+const AFTER: [Tab, string][] = [['agents', 'Agents'], ['chat', 'Chat'], ['impact', 'Impact'], ['documents', 'Documents'], ['activity', 'Activity']];
 
 export function PhaseNav({ spec }: { spec: Spec }) {
   const c = counts(spec);
