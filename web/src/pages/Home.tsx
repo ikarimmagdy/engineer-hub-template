@@ -1,14 +1,18 @@
-import { Link } from 'react-router';
-import { PHASE_TITLE, useHub, usePoll, type TestLatest } from '../lib/data';
+import { useState, type ReactNode } from 'react';
+import { Link, useLocation } from 'react-router';
+import { PHASES, PHASE_TITLE, useHub, usePoll, type TestLatest } from '../lib/data';
 import { attention, taskTotal, type AttentionKind } from '../lib/attention';
 import { LatestRelease } from './Releases';
 import { Empty, fmtDate, fmtDateTime, KeyLink, Meter, Panel, Pill, type Tone } from '../components/ui';
+import { useWorkFilter, WorkFilterBar } from '../components/WorkFilter';
 
 const TONE: Record<AttentionKind, Tone> = { gate: 'wait', blocked: 'block', critical: 'critical', ready: 'ok', failing: 'block' };
 
 export function Home() {
   const hub = useHub();
-  const specs = hub.loop.specs;
+  const filter = useWorkFilter(hub.loop.specs);
+  const specs = filter.specs;
+  const { search } = useLocation();
   const items = attention(specs);
   const live = usePoll<{ sessions: { key: string; state: string; platform: string; device: { model: string }; passed: number; failed: number; total: number }[] }>('content/test-executions/live.json', 5000);
   const running = (live?.sessions || []).filter((s) => s.state === 'running');
@@ -16,7 +20,7 @@ export function Home() {
   const activity = specs
     .flatMap((s) => s.history.map((h) => ({ ...h, key: s.key })))
     .sort((a, b) => b.date.localeCompare(a.date))
-    .slice(0, 10);
+    .slice(0, 30);
   const openFindings = specs.reduce((n, s) => n + (s.findings?.open || 0), 0);
   const critical = specs.reduce((n, s) => n + (s.findings?.bySeverity?.critical || 0), 0);
 
@@ -31,6 +35,7 @@ export function Home() {
         </div>
         <Link to="/work" className="text-sm font-medium underline decoration-line-2 underline-offset-4 hover:decoration-ink">All work</Link>
       </header>
+      <WorkFilterBar all={hub.loop.specs} filter={filter} />
 
       <LatestRelease />
 
@@ -50,8 +55,8 @@ export function Home() {
           {items.length === 0 ? (
             <Empty>Nothing waits on the team right now.</Empty>
           ) : (
-            <ul className="-my-1 divide-y divide-line">
-              {items.map((a, i) => (
+            <Capped n={6} total={items.length} render={(k) => <ul className="-my-1 divide-y divide-line">
+              {items.slice(0, k).map((a, i) => (
                 <li key={i}>
                   <Link to={a.to} className="group grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 py-2.5 md:grid-cols-[104px_96px_minmax(0,1fr)_auto]">
                     <Pill tone={TONE[a.kind]} className="justify-start md:w-[104px]">{a.label}</Pill>
@@ -64,13 +69,13 @@ export function Home() {
                   </Link>
                 </li>
               ))}
-            </ul>
+            </ul>} />
           )}
         </Panel>
 
         <Panel title="Recent activity">
-          <ul className="-my-1 divide-y divide-line">
-            {activity.map((h, i) => (
+          <Capped n={8} total={activity.length} render={(k) => <ul className="-my-1 divide-y divide-line">
+            {activity.slice(0, k).map((h, i) => (
               <li key={i} className="flex gap-3 py-2 text-sm">
                 <span className="w-12 shrink-0 text-xs tabular-nums text-ink-3">{fmtDate(h.date)}</span>
                 <span className="min-w-0">
@@ -78,31 +83,49 @@ export function Home() {
                 </span>
               </li>
             ))}
-          </ul>
+          </ul>} />
         </Panel>
       </div>
 
-      <Panel title="In flight" action={<span className="text-xs text-ink-3">criteria passing</span>}>
+      <Panel title="In flight" action={<Link to={`/work${search}`} className="text-xs underline">All in Work</Link>}>
         {flight.length === 0 ? <Empty action={<Link to="/knowledge/how-we-work" className="underline">Start a work item</Link>}>No work is past intent yet.</Empty> : (
-          <ul className="-my-1 divide-y divide-line">
-            {flight.map((s) => (
-              <li key={s.key}>
-                <Link to={`/work/${s.key}/overview`} className="group grid grid-cols-[96px_minmax(0,1fr)] items-center gap-x-3 gap-y-1 py-2.5 md:grid-cols-[96px_minmax(0,1fr)_80px_200px_160px]">
-                  <span className="font-mono text-[11.5px] text-ink-3">{s.key}</span>
-                  <span className="truncate font-medium group-hover:underline">{s.title}</span>
-                  <span className="hidden md:block"><Pill>{PHASE_TITLE[s.phase]}</Pill></span>
-                  <span className="col-span-2 text-xs tabular-nums text-ink-3 md:col-span-1">
-                    tasks {s.tasks.done}/{taskTotal(s)} · criteria {s.criteria_passing}/{s.criteria}
-                  </span>
-                  <span className="col-span-2 md:col-span-1"><Meter value={s.criteria_passing} total={s.criteria} /></span>
-                </Link>
-              </li>
+          <div className="space-y-4">
+            {PHASES.map((p) => ({ p, list: flight.filter((s) => s.phase === p) })).filter((g) => g.list.length).map(({ p, list }) => (
+              <section key={p}>
+                <h3 className="mb-1 flex items-center justify-between text-xs font-semibold text-ink-2">
+                  <span>{PHASE_TITLE[p]} <span className="font-normal tabular-nums text-ink-3">{list.length}</span></span>
+                  {list.length > 4 && <Link to={`/work?phase=${p}`} className="font-normal underline">All {list.length} in {PHASE_TITLE[p]}</Link>}
+                </h3>
+                <ul className="divide-y divide-line">
+                  {list.slice(0, 4).map((s) => (
+                    <li key={s.key}>
+                      <Link to={`/work/${s.key}/overview`} className="group grid grid-cols-[96px_minmax(0,1fr)] items-center gap-x-3 gap-y-1 py-2 md:grid-cols-[96px_minmax(0,1fr)_200px_160px]">
+                        <span className="font-mono text-[11.5px] text-ink-3">{s.key}</span>
+                        <span className="min-w-0 font-medium leading-snug break-words group-hover:underline">{s.title}</span>
+                        <span className="col-span-2 text-xs tabular-nums text-ink-3 md:col-span-1">tasks {s.tasks.done}/{taskTotal(s)} · criteria {s.criteria_passing}/{s.criteria}</span>
+                        <span className="col-span-2 md:col-span-1"><Meter value={s.criteria_passing} total={s.criteria} /></span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </section>
             ))}
-          </ul>
+          </div>
         )}
       </Panel>
       <LastRuns />
     </div>
+  );
+}
+
+/** A long list shows its first n; the rest open in place. */
+function Capped({ n, total, render }: { n: number; total: number; render: (shown: number) => ReactNode }) {
+  const [all, setAll] = useState(false);
+  return (
+    <>
+      {render(all ? total : n)}
+      {total > n && <button type="button" onClick={() => setAll(!all)} className="mt-2 text-xs underline">{all ? 'Show fewer' : `Show all ${total}`}</button>}
+    </>
   );
 }
 

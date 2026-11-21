@@ -4,6 +4,17 @@ One engine, many hubs: the engine files come from this repo and are updated in p
 `tools/hub-update.sh`; each project keeps only its content (`content/`, `assets/img/`).
 Never edit engine files inside a hub; fix them here, tag a release, and update the hubs.
 
+## Filters and long lists on Home and Work (5.13.0)
+
+- One filter bar on **Home** and **Work** (`components/WorkFilter.tsx`), kept in the URL: **Work item** (type a ticket,
+  idea key or name; suggestions list every item as "KEY · title"), **Phase**, **Needs** (waiting for approval, blocked
+  tasks, critical findings), **Type** (idea, Jira ticket, GitHub issue, pull request), **Started by** and **Repo**.
+- **Board:** five cards per column, then "Show N more"; **Detailed** or **Compact** cards (one line: key, title and a
+  dot for what needs attention), remembered per browser; any column collapses to its title.
+- **Table:** 25 rows a page and a header that stays in view.
+- **Home:** "Act on these first" and "Recent activity" show their first items with "Show all"; **In flight** is grouped
+  by phase, four per phase, with a link to the rest on Work.
+
 ## The loop on the work item, actions per step, chat (5.12.0)
 
 - **Work board** cards show the whole title, the next step, tasks and criteria meters, repos, open findings, the

@@ -1,33 +1,31 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { PHASES, PHASE_TITLE, useHub, type Spec } from '../lib/data';
 import { taskTotal } from '../lib/attention';
 import { releaseRoute, releasesFor } from '../lib/releases';
-import { Dot, Empty, fmtDate, Meter, PageHeader, Pill, Segmented, Select } from '../components/ui';
+import { cx, Dot, Empty, fmtDate, Meter, PageHeader, Pager, Pill, Segmented } from '../components/ui';
+import { useWorkFilter, WorkFilterBar } from '../components/WorkFilter';
 import { useLoopApi, useRuns } from '../lib/loop';
 
 type View = 'board' | 'table';
 type SortKey = 'key' | 'starter' | 'phase' | 'tasks' | 'criteria' | 'findings' | 'critical' | 'updated';
 
+/** A per-browser choice; storage can be missing (private window), then the default holds. */
+function useStored(key: string, fallback: string): [string, (v: string) => void] {
+  const [v, setV] = useState(() => { try { return localStorage.getItem(key) ?? fallback; } catch { return fallback; } });
+  return [v, (x: string) => { setV(x); try { localStorage.setItem(key, x); } catch { /* not remembered */ } }];
+}
+
 export function Work() {
   const { loop } = useHub();
   const [params, setParams] = useSearchParams();
   const view = (params.get('view') as View) || 'board';
-  const repo = params.get('repo') || '';
-  const flag = params.get('flag') || '';
-  const q = (params.get('q') || '').toLowerCase();
   const sort = (params.get('sort') as SortKey) || 'phase';
   const set = (k: string, v: string) => setParams((p) => { if (v) p.set(k, v); else p.delete(k); return p; }, { replace: true });
-  // remembered per browser; storage can be missing (private window), then the board shows every column
-  const [hideEmpty, setHideEmpty] = useState(() => { try { return localStorage.getItem('hub.work.hideEmpty') === '1'; } catch { return false; } });
-  const toggleEmpty = (v: boolean) => { setHideEmpty(v); try { localStorage.setItem('hub.work.hideEmpty', v ? '1' : '0'); } catch { /* not remembered */ } };
-
-  const repos = useMemo(() => [...new Set(loop.specs.flatMap((s) => s.repos))].sort(), [loop]);
-  const specs = loop.specs.filter((s) =>
-    (!repo || s.repos.includes(repo)) &&
-    (!flag || (flag === 'blocked' ? s.tasks.blocked > 0 : flag === 'critical' ? (s.findings?.bySeverity.critical || 0) > 0 : true)) &&
-    (!q || `${s.key} ${s.title}`.toLowerCase().includes(q)),
-  );
+  const filter = useWorkFilter(loop.specs);
+  const { specs } = filter;
+  const [hideEmpty, setHideEmpty] = useStored('hub.work.hideEmpty', '0');
+  const [density, setDensity] = useStored('hub.work.density', 'detailed');
 
   return (
     <div>
@@ -36,30 +34,37 @@ export function Work() {
         lede="Every piece of work in the engineering workspace, by phase. Status comes from spec.py and nowhere else."
         actions={<Link to="/knowledge/how-we-work/start" className="rounded-md bg-ink px-3 py-1.5 text-sm font-medium text-paper">Start a work item</Link>}
       />
-      <div className="mb-4 flex flex-wrap items-center gap-3">
+      <div className="mb-3 flex flex-wrap items-center gap-3">
         <Segmented label="View" value={view} onChange={(v) => set('view', v === 'board' ? '' : v)} options={[['board', 'Board'], ['table', 'Table']]} />
-        <input
-          type="search"
-          value={params.get('q') || ''}
-          onChange={(e) => set('q', e.target.value)}
-          placeholder="Filter by key or title"
-          aria-label="Filter by key or title"
-          className="h-8 w-52 rounded-md border border-line-2 bg-paper px-2.5 text-sm"
-        />
-        <Select label="Repo" value={repo} onChange={(v) => set('repo', v)} options={[['', 'Any'], ...repos.map((r) => [r, r] as [string, string])]} />
-        <Select label="Show" value={flag} onChange={(v) => set('flag', v)} options={[['', 'All work'], ['blocked', 'Has blocked tasks'], ['critical', 'Has critical findings']]} />
-        {view === 'board' && (
+        {view === 'board' && <>
+          <Segmented label="Cards" value={density as 'detailed' | 'compact'} onChange={setDensity} options={[['detailed', 'Detailed'], ['compact', 'Compact']]} />
           <label className="flex items-center gap-1.5 text-xs text-ink-2">
-            <input type="checkbox" checked={hideEmpty} onChange={(e) => toggleEmpty(e.target.checked)} className="size-3.5 accent-current" />
+            <input type="checkbox" checked={hideEmpty === '1'} onChange={(e) => setHideEmpty(e.target.checked ? '1' : '0')} className="size-3.5 accent-current" />
             Hide empty columns
           </label>
-        )}
-        <span className="text-xs text-ink-3">{specs.length} of {loop.specs.length}</span>
+        </>}
       </div>
+      <div className="mb-4"><WorkFilterBar all={loop.specs} filter={filter} /></div>
       {specs.length === 0 ? (
-        <Empty action={<button type="button" className="underline" onClick={() => setParams({}, { replace: true })}>Clear filters</button>}>No work matches these filters.</Empty>
-      ) : view === 'board' ? <Board specs={specs} hideEmpty={hideEmpty} /> : <Table specs={specs} sort={sort} onSort={(s) => set('sort', s)} />}
+        <Empty action={<button type="button" className="underline" onClick={filter.clear}>Clear filters</button>}>No work matches these filters.</Empty>
+      ) : view === 'board' ? <Board specs={specs} hideEmpty={hideEmpty === '1'} compact={density === 'compact'} /> : <Table specs={specs} sort={sort} onSort={(s) => set('sort', s)} />}
     </div>
+  );
+}
+
+/** One line per item: key, title, next step, and a dot for what needs attention. */
+function CompactCard({ s, working }: { s: Spec; working: string[] }) {
+  const gate = (['intent', 'spec', 'design'] as const).some((g) => g === s.phase && !s.approved?.[g]);
+  const tone = working.length ? 'run' : (s.findings?.bySeverity.critical || 0) > 0 ? 'critical' : s.tasks.blocked > 0 ? 'block' : gate ? 'wait' : null;
+  return (
+    <Link to={`/work/${s.key}/overview`} title={[s.title, s.next && `Next: ${s.next}`, working.length && `${working.join(', ')} working`].filter(Boolean).join('\n')}
+      className="flex items-start gap-2 rounded-md border border-line bg-paper px-2.5 py-1.5 hover:border-line-2">
+      {tone ? <Dot tone={tone} className={cx('mt-1.5 shrink-0', working.length > 0 && 'animate-pulse')} /> : <span className="mt-1.5 size-2 shrink-0" />}
+      <span className="min-w-0">
+        <span className="font-mono text-[10.5px] text-ink-3">{s.key}</span>
+        <span className="block text-[13px] font-medium leading-snug break-words">{s.title}</span>
+      </span>
+    </Link>
   );
 }
 
@@ -106,30 +111,58 @@ function Card({ s, working }: { s: Spec; working: string[] }) {
   );
 }
 
-function Board({ specs, hideEmpty }: { specs: Spec[]; hideEmpty: boolean }) {
+const PER_COLUMN = 5;
+
+function Board({ specs, hideEmpty, compact }: { specs: Spec[]; hideEmpty: boolean; compact: boolean }) {
   const api = useLoopApi();
   const runs = useRuns(!!api);
+  const [more, setMore] = useState<Set<string>>(new Set());
+  const [shut, setShut] = useState<Set<string>>(new Set());
+  const flip = (set: Set<string>, k: string) => { const n = new Set(set); if (n.has(k)) n.delete(k); else n.add(k); return n; };
   const working = (key: string) => [...new Set(runs.filter((r) => r.key === key && r.state === 'running').map((r) => r.agent.replace(/^(team|command|module):/, '')))];
   const cols = PHASES.map((p, i) => ({ p, i, list: specs.filter((s) => s.phase === p) })).filter((c) => !hideEmpty || c.list.length);
-  // all seven fit a laptop screen; fewer columns share the width, so their cards get wider
+  // all seven fit a laptop screen; a collapsed column keeps only its title, and the others share the width
+  const tracks = cols.map((c) => (shut.has(c.p) ? '44px' : 'minmax(168px, 1fr)')).join(' ');
   return (
     <div className="-mx-4 overflow-x-auto px-4 pb-2 md:mx-0 md:px-0">
-      <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${cols.length}, minmax(168px, 1fr))`, minWidth: cols.length * 180 }}>
-        {cols.map(({ p, i, list }) => (
-          <section key={p} aria-label={PHASE_TITLE[p]} className="min-w-0">
-            <h2 className="mb-2 flex items-center justify-between border-b border-line pb-1.5 text-xs font-semibold text-ink-2">
-              <span><span className="mr-1 tabular-nums text-ink-3">{i + 1}</span>{PHASE_TITLE[p]}</span>
+      <div className="grid gap-3" style={{ gridTemplateColumns: tracks, minWidth: cols.reduce((n, c) => n + (shut.has(c.p) ? 56 : 180), 0) }}>
+        {cols.map(({ p, i, list }) => {
+          const closed = shut.has(p);
+          const shown = more.has(p) ? list : list.slice(0, PER_COLUMN);
+          if (closed) return (
+            <button key={p} type="button" onClick={() => setShut(flip(shut, p))} aria-label={`Show ${PHASE_TITLE[p]}`} title={`Show ${PHASE_TITLE[p]}`}
+              className="flex min-h-40 flex-col items-center gap-2 rounded-md border border-line bg-sunk/50 py-2 text-xs text-ink-2 hover:border-line-2">
               <span className="tabular-nums text-ink-3">{list.length}</span>
-            </h2>
-            <div className="space-y-2">
-              {list.length ? list.map((s) => <Card key={s.key} s={s} working={working(s.key)} />) : <p className="py-2 text-xs text-ink-3">Nothing in {PHASE_TITLE[p].toLowerCase()}.</p>}
-            </div>
-          </section>
-        ))}
+              <span className="[writing-mode:vertical-rl]">{i + 1} {PHASE_TITLE[p]}</span>
+            </button>
+          );
+          return (
+            <section key={p} aria-label={PHASE_TITLE[p]} className="min-w-0">
+              <h2 className="mb-2 flex items-center justify-between gap-2 border-b border-line pb-1.5 text-xs font-semibold text-ink-2">
+                <span><span className="mr-1 tabular-nums text-ink-3">{i + 1}</span>{PHASE_TITLE[p]}</span>
+                <span className="flex items-center gap-2">
+                  <span className="tabular-nums text-ink-3">{list.length}</span>
+                  <button type="button" onClick={() => setShut(flip(shut, p))} aria-label={`Collapse ${PHASE_TITLE[p]}`} title="Collapse" className="text-ink-3 hover:text-ink">‹</button>
+                </span>
+              </h2>
+              <div className={compact ? 'space-y-1.5' : 'space-y-2'}>
+                {list.length ? shown.map((s) => (compact ? <CompactCard key={s.key} s={s} working={working(s.key)} /> : <Card key={s.key} s={s} working={working(s.key)} />))
+                  : <p className="py-2 text-xs text-ink-3">Nothing in {PHASE_TITLE[p].toLowerCase()}.</p>}
+                {list.length > PER_COLUMN && (
+                  <button type="button" onClick={() => setMore(flip(more, p))} className="w-full rounded-md border border-dashed border-line-2 py-1.5 text-xs text-ink-2 hover:border-ink">
+                    {more.has(p) ? 'Show fewer' : `Show ${list.length - PER_COLUMN} more`}
+                  </button>
+                )}
+              </div>
+            </section>
+          );
+        })}
       </div>
     </div>
   );
 }
+
+const PAGE = 25;
 
 const COLS: [SortKey, string, boolean][] = [
   ['key', 'Work', false], ['starter', 'Started by', false], ['phase', 'Phase', false], ['tasks', 'Tasks done', true], ['criteria', 'Criteria passing', true],
@@ -147,10 +180,14 @@ function Table({ specs, sort, onSort }: { specs: Spec[]; sort: SortKey; onSort: 
     const c = typeof x === 'number' && typeof y === 'number' ? y - x : String(x).localeCompare(String(y));
     return sort === 'phase' ? -c : c;
   });
+  const [page, setPage] = useState(0);
+  const pages = Math.ceil(rows.length / PAGE);
+  const at = Math.min(page, Math.max(0, pages - 1));
   return (
-    <div className="overflow-x-auto rounded-lg border border-line bg-paper">
+    <div className="space-y-3">
+    <div className="max-h-[70vh] overflow-auto rounded-lg border border-line bg-paper">
       <table className="w-full min-w-[920px] text-sm">
-        <thead className="bg-sunk text-left text-xs text-ink-2">
+        <thead className="sticky top-0 z-10 bg-sunk text-left text-xs text-ink-2">
           <tr>
             {COLS.map(([k, l, num]) => (
               <th key={k} scope="col" aria-sort={sort === k ? 'descending' : 'none'} className={num ? 'text-right' : ''}>
@@ -163,7 +200,7 @@ function Table({ specs, sort, onSort }: { specs: Spec[]; sort: SortKey; onSort: 
           </tr>
         </thead>
         <tbody className="divide-y divide-line">
-          {rows.map((s) => (
+          {rows.slice(at * PAGE, (at + 1) * PAGE).map((s) => (
             <tr key={s.key} className="hover:bg-sunk">
               <td className="px-3 py-2">
                 <Link to={`/work/${s.key}/overview`} className="hover:underline">
@@ -182,6 +219,8 @@ function Table({ specs, sort, onSort }: { specs: Spec[]; sort: SortKey; onSort: 
           ))}
         </tbody>
       </table>
+    </div>
+    <Pager page={at} pages={pages} total={rows.length} size={PAGE} onPage={setPage} />
     </div>
   );
 }
