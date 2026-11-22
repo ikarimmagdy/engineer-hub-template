@@ -253,8 +253,8 @@ function HowWeWork() {
 const KINDS: [string, string, string][] = [
   ['jira', 'Jira ticket', 'Jira key, e.g. TELCO-2513'],
   ['idea', 'Idea', 'One or two sentences'],
-  ['github-issue', 'GitHub issue', 'BeyondOneGroup/<repo>#<n>'],
-  ['pr', 'Pull request', 'BeyondOneGroup/<repo>#<n>'],
+  ['github-issue', 'GitHub issue', 'your-org/<repo>#<n>'],
+  ['pr', 'Pull request', 'your-org/<repo>#<n>'],
 ];
 
 function StartForm() {
@@ -273,7 +273,7 @@ function StartForm() {
   const k = key.trim().toUpperCase() || '<KEY>';
   const s = slug.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-') || '<short-name>';
   const exists = loop.specs.some((x) => x.key === key.trim().toUpperCase());
-  const source = kind === 'jira' ? (src.trim() || k) : kind === 'idea' ? `"${src.trim() || '<the idea>'}"` : (src.trim() || 'BeyondOneGroup/<repo>#<n>');
+  const source = kind === 'jira' ? (src.trim() || k) : kind === 'idea' ? `"${src.trim() || '<the idea>'}"` : (src.trim() || 'your-org/<repo>#<n>');
   const cmds = kind === 'pr'
     ? [`/pr-review ${source}`]
     : [`/intent ${k} ${s} ${source}`, `/gap ${k} all`, `python3 tools/spec.py approve ${k} intent --by "<your name>"`, `/spec ${k}`];

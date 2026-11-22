@@ -116,7 +116,7 @@ local stack and stop. Never print a token or a value from .env.
   { b: 'Skill', kind: 'context', file: '.claude/skills/notification-engine/SKILL.md', write: 'The know-how the model loads when the task matches the description: the data model, how a message flows, the API, the two ids, the rules, known gaps. Facts, not steps.',
     code: `---
 name: notification-engine
-description: How the Beyond One notification engine is configured and how a message flows ... Use when creating,
+description: How the notification engine is configured and how a message flows ... Use when creating,
   changing, retrieving or explaining a notification, or when a customer did not receive a message.
 ---
 ## The model
@@ -144,7 +144,7 @@ mcp: notifications
 mcp-tools: list_notifications, find_notification, get_notification, notification_history, list_actions, list_groups, list_test_groups
 modes: ask, plan, propose
 ---
-You are the notification engineer for the Beyond One team ...
+You are the notification engineer for the team ...
 5. With the notifications MCP server: read the live configuration instead of guessing from seed files.` },
   { b: 'MCP server', kind: 'enforced', file: 'tools/mcp/notifications_mcp.py', write: 'The reach into the system: one tool per action, each with a description the model reads and typed inputs. It calls the real API with a token it gets itself; the model never sees a URL or a credential. Writes are separate tools so each one can be gated.',
     code: `TOOLS = [

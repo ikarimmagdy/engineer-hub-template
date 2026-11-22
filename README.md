@@ -6,12 +6,17 @@ Never edit engine files inside a hub; fix them here, tag a release, and update t
 
 ## What a hub expects from its workspace
 
-The hub reads a workspace made from the agentic engineering template (`BeyondOneGroup/agentic-engineering-template`),
+The hub reads a workspace made from the agentic engineering template (`ikarimmagdy/agentic-engineering-template`),
 which carries the rules these pages rely on: each phase's diagrams in `outputs/diagrams/<phase>/v<N>-<date>.md` with
 titles starting by kind (Visual mode, diagrams inside sections), the Floorplan code map in `outputs/floorplan/`,
 `## ` / `<h2>` sections in long documents, version indexes, no laptop paths (publishing refuses them), `impact.json`
 per work item (System), and `usage/agent-runs/` for shared agent counts (Home). A workspace adopting the hub, or work
 written before these rules, runs `python3 tools/hub_check.py` and `/hub-review all` there to come in line.
+
+## No organisation names in the engine (5.18.1)
+
+- The intake examples read `your-org/<repo>#<n>` and the agent design examples name no team, so a hub never shows
+  another organisation's name. The engine also ships inside the agentic workspace template as its `hub/` folder.
 
 ## Sections with their diagrams, sectioned HTML documents (5.18.0)
 
