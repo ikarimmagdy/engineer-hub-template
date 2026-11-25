@@ -17,6 +17,8 @@ export interface TeamAgent { name: string; description: string; team: string; fa
 
 async function call<T>(path: string, body?: unknown): Promise<T> {
   const r = await fetch(path, body === undefined ? { cache: 'no-store' } : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  // a static host answers an unknown path with index.html and 200: that is no loop API
+  if (!(r.headers.get('content-type') || '').includes('json')) throw new Error(`${path}: no loop API (${r.status})`);
   const data = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(data.error || `${path}: ${r.status}`);
   return data as T;
@@ -33,7 +35,7 @@ export function useRuns(enabled: boolean, key?: string, ms = 3000) {
   useEffect(() => {
     if (!enabled) return;
     let alive = true;
-    const tick = () => call<{ runs: AgentRun[] }>(`/api/loop/runs${key ? `?key=${encodeURIComponent(key)}` : ''}`).then((d) => alive && setRuns(d.runs), () => {});
+    const tick = () => call<{ runs: AgentRun[] }>(`/api/loop/runs${key ? `?key=${encodeURIComponent(key)}` : ''}`).then((d) => alive && setRuns(d.runs || []), () => {});
     tick();
     const id = setInterval(() => { if (!document.hidden) tick(); }, ms);
     return () => { alive = false; clearInterval(id); };

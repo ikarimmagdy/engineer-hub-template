@@ -13,6 +13,12 @@ titles starting by kind (Visual mode, diagrams inside sections), the Floorplan c
 per work item (System), and `usage/agent-runs/` for shared agent counts (Home). A workspace adopting the hub, or work
 written before these rules, runs `python3 tools/hub_check.py` and `/hub-review all` there to come in line.
 
+## Static hosts: no loop API from index.html (5.18.2)
+
+- A static host answers `/api/loop` with `index.html` and 200. The hub took that for the local loop API, polled
+  `/api/loop/runs` and Home failed blank after the password. A loop API answer must now be JSON; agent runs default
+  to an empty list.
+
 ## No organisation names in the engine (5.18.1)
 
 - The intake examples read `your-org/<repo>#<n>` and the agent design examples name no team, so a hub never shows
