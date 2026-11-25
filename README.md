@@ -13,6 +13,14 @@ titles starting by kind (Visual mode, diagrams inside sections), the Floorplan c
 per work item (System), and `usage/agent-runs/` for shared agent counts (Home). A workspace adopting the hub, or work
 written before these rules, runs `python3 tools/hub_check.py` and `/hub-review all` there to come in line.
 
+## AI-assisted without a tool name in the commit (5.20.0)
+
+- A commit counts as AI-assisted when its message has an `AI-Assisted: yes` trailer (besides `Co-Authored-By: Claude`
+  and "Generated with Claude Code"), or when it reached the default branch through an agent pull request: one of the
+  pull request's commits, or its merge or squash commit. Teams that remove tool attribution from commits are counted.
+- `insights.json` adds `commits.aiSignals` (`marker`, `agentPr`): how many AI-assisted commits each signal found.
+- A workspace can add the trailer with a `commit-msg` hook that runs only when `CLAUDECODE=1` (set by Claude Code).
+
 ## Insights from GitHub, not from one laptop's clones (5.19.0)
 
 - `tools/sync_insights.py` reads commits of the workspace and of every `repos.yaml` repo through the GitHub API when

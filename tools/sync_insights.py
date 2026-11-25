@@ -6,7 +6,8 @@ Writes content/data/insights.json from:
   - commits of the workspace and of every repo in repos.yaml (last N weeks): from the GitHub API when gh is signed in
     (default branch, merge commits skipped; repos the token cannot read are listed as unreadable), else git log of the
     clones under code/ (--commits github|local|auto); per week, per repo and per person; a commit is AI-assisted when
-    its message carries "Co-Authored-By: Claude" or "Generated with Claude Code";
+    its message carries "Co-Authored-By: Claude", "Generated with Claude Code" or an "AI-Assisted: yes" trailer, or it
+    reached the default branch through an agent pull request (one of its commits, or its merge or squash commit);
   - pull requests of the same repos through the gh CLI (skipped with --no-prs or when gh is not signed in); an agent pull
     request has "Claude Code" in its description or comes from an agent/ or <KEY>/T<n> branch;
   - agent runs: .claude/state/agent-runs.jsonl of this laptop, plus the shared daily counts in brand.json "usageDir"
@@ -29,7 +30,7 @@ from pathlib import Path
 
 HUB = Path(__file__).resolve().parents[1]
 C = HUB / "content"
-AI_MARK = re.compile(r"co-authored-by:\s*claude|generated with \[?claude code", re.I)
+AI_MARK = re.compile(r"co-authored-by:\s*claude|generated with \[?claude code|^ai-assisted:\s*yes\b", re.I | re.M)
 AGENT_BRANCH = re.compile(r"^agent/|^[A-Z][A-Z0-9]*(?:-[A-Z][A-Z0-9]*)?-\d+/T\d+", re.I)
 KEY = re.compile(r"^[A-Z][A-Z0-9]*(?:-[A-Z][A-Z0-9]*)?-\d+$")
 SEP = "\x1f"
@@ -137,15 +138,43 @@ def remote_slug(path: Path) -> str | None:
 
 def prs(slug: str, since: str) -> list[dict]:
     out = sh(["gh", "pr", "list", "-R", slug, "--state", "all", "--limit", "300", "--search", f"created:>={since}",
-              "--json", "number,author,state,createdAt,mergedAt,headRefName,body"], HUB, 120)
+              "--json", "number,author,state,createdAt,mergedAt,headRefName,body,mergeCommit"], HUB, 120)
     try:
         rows = json.loads(out) if out else []
     except json.JSONDecodeError:
         return []
-    return [{"repo": slug.split("/")[1], "number": p["number"], "login": (p.get("author") or {}).get("login") or "",
+    out = []
+    for p in rows:
+        agent = bool(re.search(r"claude code", p.get("body") or "", re.I) or AGENT_BRANCH.search(p.get("headRefName") or ""))
+        # the commits an agent pull request put on the default branch: its own (merge, rebase) or its squash commit
+        oids = [(p.get("mergeCommit") or {}).get("oid")] if agent and p.get("mergedAt") else []
+        out.append({"repo": slug.split("/")[1], "number": p["number"], "login": (p.get("author") or {}).get("login") or "",
              "name": (p.get("author") or {}).get("name") or "", "state": p["state"].lower(), "created": p["createdAt"][:10],
-             "merged": (p.get("mergedAt") or "")[:10] or None,
-             "agent": bool(re.search(r"claude code", p.get("body") or "", re.I) or AGENT_BRANCH.search(p.get("headRefName") or ""))} for p in rows]
+             "merged": (p.get("mergedAt") or "")[:10] or None, "agent": agent, "oids": [o for o in oids if o]})
+    merged = [r["number"] for r in out if r["oids"]]
+    own = pr_commit_oids(slug, merged)
+    for r in out:
+        r["oids"] += own.get(r["number"], [])
+    return out
+
+
+def pr_commit_oids(slug: str, numbers: list[int]) -> dict[int, list[str]]:
+    """The commits of each pull request, 20 pull requests per query (gh pr list --json commits asks for too much)."""
+    owner, name = slug.split("/", 1)
+    got = {}
+    for i in range(0, len(numbers), 20):
+        part = numbers[i:i + 20]
+        q = "query($o:String!,$n:String!){repository(owner:$o,name:$n){" + " ".join(
+            f"p{k}:pullRequest(number:{k}){{commits(first:250){{nodes{{commit{{oid}}}}}}}}" for k in part) + "}}"
+        out = sh(["gh", "api", "graphql", "-f", f"query={q}", "-F", f"o={owner}", "-F", f"n={name}"], HUB, 120)
+        try:
+            repo = json.loads(out)["data"]["repository"] if out else {}
+        except (json.JSONDecodeError, KeyError, TypeError):
+            repo = {}
+        for k in part:
+            nodes = ((repo or {}).get(f"p{k}") or {}).get("commits", {}).get("nodes", [])
+            got[k] = [n["commit"]["oid"] for n in nodes]
+    return got
 
 
 def agent_runs(ws: Path, since: str) -> list[dict]:
@@ -233,6 +262,20 @@ def main() -> None:
     pick = {k: sorted(v.items(), key=lambda x: (" " not in x[0], -x[1]))[0][0] for k, v in spelled.items()}
     person = lambda c: pick[norm(display[c["email"]])]  # noqa: E731
 
+    # pull requests through gh
+    pr_rows, pr_ok = [], False
+    if signed_in and not a.no_prs:
+        with ThreadPoolExecutor(max_workers=6) as pool:
+            for rows in pool.map(lambda s: prs(s, since), sorted({s for _, s in slugs if s and s.split("/")[1] not in unreadable})):
+                pr_rows += rows
+        pr_ok = True
+    # a commit without a marker still counts as AI-assisted when an agent pull request brought it in
+    agent_oids = {o for p in pr_rows for o in p["oids"]}
+    marked = sum(c["ai"] for c in all_commits)
+    for c in all_commits:
+        c["ai"] = c["ai"] or c["sha"] in agent_oids
+    signals = {"marker": marked, "agentPr": sum(c["ai"] for c in all_commits) - marked}
+
     by_week = {w: {"week": w, "total": 0, "ai": 0} for w in weeks}
     by_repo = defaultdict(lambda: {"total": 0, "ai": 0})
     people = defaultdict(lambda: {"commits": 0, "ai": 0, "repos": Counter(), "last": "", "firstAi": None, "weeks": Counter()})
@@ -252,13 +295,6 @@ def main() -> None:
         if c["ai"] and (not p["firstAi"] or c["date"] < p["firstAi"]):
             p["firstAi"], p["firstAiRepo"] = c["date"], c["repo"]
 
-    # pull requests through gh
-    pr_rows, pr_ok = [], False
-    if signed_in and not a.no_prs:
-        with ThreadPoolExecutor(max_workers=6) as pool:
-            for rows in pool.map(lambda s: prs(s, since), sorted({s for _, s in slugs if s and s.split("/")[1] not in unreadable})):
-                pr_rows += rows
-        pr_ok = True
     pr_week = {w: {"week": w, "total": 0, "agent": 0, "merged": 0} for w in weeks}
     pr_repo = defaultdict(lambda: {"total": 0, "agent": 0, "merged": 0})
     login_name = {}
@@ -416,7 +452,7 @@ def main() -> None:
 
     out = {
         "generated": today.isoformat(), "weeks": weeks, "since": since,
-        "commits": {"total": len(all_commits), "ai": sum(c["ai"] for c in all_commits), "byWeek": list(by_week.values()),
+        "commits": {"total": len(all_commits), "ai": sum(c["ai"] for c in all_commits), "aiSignals": signals, "byWeek": list(by_week.values()),
                     "byRepo": sorted(({"repo": r, **v} for r, v in by_repo.items()), key=lambda x: -x["total"])[:12],
                     "repos": len(repos), "source": source, "unreadable": unreadable},
         "prs": {"available": pr_ok, "total": len(pr_rows), "merged": sum(1 for p in pr_rows if p["merged"]), "open": sum(1 for p in pr_rows if p["state"] == "open"),
