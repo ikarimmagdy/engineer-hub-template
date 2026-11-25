@@ -5,7 +5,11 @@ import { Logo } from './ui';
 // Same session key and ?pass= link as the v4 engine, so an unlocked tab and shared links keep working.
 export const GATE_KEY = 'tb-hub-ok';
 
+/** brand.json "passcode": false opens the hub without a passcode (an internal-network-only host). */
+export const gateOff = (brand: Brand) => brand.passcode === false;
+
 export function isUnlocked(brand: Brand) {
+  if (gateOff(brand)) return true;
   const pass = brand.passcode || 'changeme';
   try {
     const qp = new URLSearchParams(location.search).get('pass');

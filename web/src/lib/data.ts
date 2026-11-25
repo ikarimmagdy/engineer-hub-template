@@ -16,7 +16,7 @@ export interface Brand {
   name: string;
   logo?: string;
   logoDark?: string;
-  passcode?: string;
+  passcode?: string | false;
   repoBase?: string;
 }
 

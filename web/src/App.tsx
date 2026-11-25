@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { HashRouter, Navigate, Route, Routes, useLocation } from 'react-router';
 import { HubContext, loadHub, useHub, type Hub } from './lib/data';
 import { legacyRoute } from './lib/routes';
-import { Gate, GATE_KEY, isUnlocked } from './components/Gate';
+import { Gate, GATE_KEY, gateOff, isUnlocked } from './components/Gate';
 import { Shell } from './components/Shell';
 import { Empty, ErrorNote } from './components/ui';
 import { Home } from './pages/Home';
@@ -57,7 +57,7 @@ export function App() {
       <HashRouter>
         <Routes>
           <Route path="/embed/:name" element={<AgentWidget />} />
-          <Route path="*" element={<Shell onSignOut={signOut}><Routes>
+          <Route path="*" element={<Shell onSignOut={gateOff(hub.brand) ? undefined : signOut}><Routes>
             <Route path="/" element={<Home />} />
             <Route path="/work" element={<Work />} />
             <Route path="/work/:key/:tab?" element={<WorkItem />} />

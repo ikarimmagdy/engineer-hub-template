@@ -13,6 +13,11 @@ titles starting by kind (Visual mode, diagrams inside sections), the Floorplan c
 per work item (System), and `usage/agent-runs/` for shared agent counts (Home). A workspace adopting the hub, or work
 written before these rules, runs `python3 tools/hub_check.py` and `/hub-review all` there to come in line.
 
+## A hub without a passcode (5.18.3)
+
+- `"passcode": false` in `brand.json` opens the hub with no passcode page and no Sign out, for a host that is only on
+  the internal network. Leaving `passcode` out still means the `changeme` default.
+
 ## Static hosts: no loop API from index.html (5.18.2)
 
 - A static host answers `/api/loop` with `index.html` and 200. The hub took that for the local loop API, polled
