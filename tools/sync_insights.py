@@ -3,10 +3,11 @@
   python3 tools/sync_insights.py [--workspace PATH] [--weeks 12] [--no-prs]
 
 Writes content/data/insights.json from:
-  - git history of the workspace and of every repo in repos.yaml cloned under code/ (last N weeks): commits per week,
-    per repo and per person; a commit is AI-assisted when its message carries "Co-Authored-By: Claude" or
-    "Generated with Claude Code";
-  - pull requests of those repos through the gh CLI (skipped with --no-prs or when gh is not signed in); an agent pull
+  - commits of the workspace and of every repo in repos.yaml (last N weeks): from the GitHub API when gh is signed in
+    (default branch, merge commits skipped; repos the token cannot read are listed as unreadable), else git log of the
+    clones under code/ (--commits github|local|auto); per week, per repo and per person; a commit is AI-assisted when
+    its message carries "Co-Authored-By: Claude" or "Generated with Claude Code";
+  - pull requests of the same repos through the gh CLI (skipped with --no-prs or when gh is not signed in); an agent pull
     request has "Claude Code" in its description or comes from an agent/ or <KEY>/T<n> branch;
   - agent runs: .claude/state/agent-runs.jsonl of this laptop, plus the shared daily counts in brand.json "usageDir"
     when the workspace has them (tools/share_usage.py writes them; counts only, never prompts);
@@ -23,6 +24,7 @@ import re
 import subprocess
 import sys
 from collections import Counter, defaultdict
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 HUB = Path(__file__).resolve().parents[1]
@@ -77,6 +79,54 @@ def commits(path: Path, since: str) -> list[dict]:
         h, name, email, date, body = parts[0], parts[1], parts[2].lower(), parts[3], SEP.join(parts[4:])
         rows.append({"sha": h, "name": name, "email": email, "date": date, "ai": bool(AI_MARK.search(body))})
     return rows
+
+
+HISTORY = """query($owner:String!,$name:String!,$since:GitTimestamp!,$after:String){repository(owner:$owner,name:$name){
+defaultBranchRef{target{... on Commit{history(since:$since,first:100,after:$after){pageInfo{hasNextPage endCursor}
+nodes{oid message authoredDate parents{totalCount} author{name email}}}}}}}}"""
+
+
+def gh_commits(slug: str, since: str) -> list[dict] | None:
+    """The default branch's commits since `since` through the GitHub API; None when the repo cannot be read."""
+    owner, name = slug.split("/", 1)
+    rows, after = [], None
+    while True:
+        args = ["gh", "api", "graphql", "-f", f"query={HISTORY}", "-F", f"owner={owner}", "-F", f"name={name}", "-F", f"since={since}T00:00:00Z"]
+        out = sh(args + (["-F", f"after={after}"] if after else []), HUB, 120)
+        try:
+            repo = json.loads(out)["data"]["repository"] if out else None
+        except (json.JSONDecodeError, KeyError, TypeError):
+            repo = None
+        if not repo:
+            return None
+        h = ((repo.get("defaultBranchRef") or {}).get("target") or {}).get("history")
+        if not h:
+            return rows
+        for c in h["nodes"]:
+            if c["parents"]["totalCount"] > 1:
+                continue
+            a = c.get("author") or {}
+            rows.append({"sha": c["oid"], "name": a.get("name") or "", "email": (a.get("email") or "").lower(),
+                         "date": (c.get("authoredDate") or "")[:10], "ai": bool(AI_MARK.search(c.get("message") or ""))})
+        if not h["pageInfo"]["hasNextPage"]:
+            return rows
+        after = h["pageInfo"]["endCursor"]
+
+
+def repo_slugs(ws: Path, owner: str) -> list[tuple[str, str]]:
+    """(name, owner/name) for every repo of repos.yaml: its url when given, else <owner>/<name>."""
+    f = ws / "repos.yaml"
+    out, cur = [], None
+    for line in (f.read_text(encoding="utf-8").splitlines() if f.exists() else []):
+        m = re.match(r"^\s*-\s*name:\s*([\w.-]+)", line)
+        if m:
+            if cur:
+                out.append(cur)
+            cur = (m.group(1), f"{owner}/{m.group(1)}")
+        u = re.match(r"^\s+url:\s*\S*github\.com[:/]([\w.-]+)/([\w.-]+?)(?:\.git)?\s*$", line)
+        if u and cur:
+            cur = (cur[0], f"{u.group(1)}/{u.group(2)}")
+    return out + ([cur] if cur else [])
 
 
 def remote_slug(path: Path) -> str | None:
@@ -136,6 +186,8 @@ def main() -> None:
     ap.add_argument("--workspace")
     ap.add_argument("--weeks", type=int, default=12)
     ap.add_argument("--no-prs", action="store_true")
+    ap.add_argument("--commits", choices=["auto", "github", "local"], default="auto",
+                    help="github: every repos.yaml repo through the API; local: git log of the clones under code/; auto: github when gh is signed in")
     a = ap.parse_args()
     ws = workspace(a.workspace)
     today = dt.date.today()
@@ -144,11 +196,26 @@ def main() -> None:
     weeks = [week_of(start + dt.timedelta(weeks=i)) for i in range(a.weeks + 1)]
     weeks = sorted(set(weeks))
 
-    # commits: the workspace plus every cloned repo of repos.yaml
-    repos = [(ws.name, ws)] +[(r, ws / "code" / r) for r in repo_names(ws) if (ws / "code" / r / ".git").exists()]
-    all_commits = []
-    for name, path in repos:
-        for c in commits(path, since):
+    # commits: the workspace plus every repo of repos.yaml, from GitHub (all of them) or from the clones under code/
+    signed_in = subprocess.run(["gh", "auth", "status"], capture_output=True).returncode == 0
+    source = "github" if a.commits == "github" or (a.commits == "auto" and signed_in) else "local"
+    ws_slug = remote_slug(ws)
+    all_commits, unreadable = [], []
+    if source == "github":
+        if not ws_slug:
+            sys.exit("--commits github: the workspace has no GitHub origin to take the organisation from")
+        slugs = [(ws_slug.split("/")[1], ws_slug)] + repo_slugs(ws, ws_slug.split("/")[0])
+        with ThreadPoolExecutor(max_workers=6) as pool:
+            got = list(pool.map(lambda r: (r[0], gh_commits(r[1], since)), slugs))
+        repos = [(n, None) for n, rows in got if rows is not None]
+        unreadable = [n for n, rows in got if rows is None]
+        fetched = [(n, rows) for n, rows in got if rows is not None]
+    else:
+        repos = [(ws.name, ws)] + [(r, ws / "code" / r) for r in repo_names(ws) if (ws / "code" / r / ".git").exists()]
+        slugs = [(n, s) for n, s in ((n, remote_slug(p)) for n, p in repos) if s]
+        fetched = [(n, commits(p, since)) for n, p in repos]
+    for name, rows in fetched:
+        for c in rows:
             if not BOT.search(c["name"]) and not BOT.search(c["email"]):
                 all_commits.append({**c, "repo": name})
 
@@ -187,11 +254,10 @@ def main() -> None:
 
     # pull requests through gh
     pr_rows, pr_ok = [], False
-    signed_in = not a.no_prs and subprocess.run(["gh", "auth", "status"], capture_output=True).returncode == 0
-    if signed_in:
-        slugs = sorted({s for s in (remote_slug(p) for _, p in repos) if s})
-        for s in slugs:
-            pr_rows += prs(s, since)
+    if signed_in and not a.no_prs:
+        with ThreadPoolExecutor(max_workers=6) as pool:
+            for rows in pool.map(lambda s: prs(s, since), sorted({s for _, s in slugs if s and s.split("/")[1] not in unreadable})):
+                pr_rows += rows
         pr_ok = True
     pr_week = {w: {"week": w, "total": 0, "agent": 0, "merged": 0} for w in weeks}
     pr_repo = defaultdict(lambda: {"total": 0, "agent": 0, "merged": 0})
@@ -352,7 +418,7 @@ def main() -> None:
         "generated": today.isoformat(), "weeks": weeks, "since": since,
         "commits": {"total": len(all_commits), "ai": sum(c["ai"] for c in all_commits), "byWeek": list(by_week.values()),
                     "byRepo": sorted(({"repo": r, **v} for r, v in by_repo.items()), key=lambda x: -x["total"])[:12],
-                    "repos": len(repos)},
+                    "repos": len(repos), "source": source, "unreadable": unreadable},
         "prs": {"available": pr_ok, "total": len(pr_rows), "merged": sum(1 for p in pr_rows if p["merged"]), "open": sum(1 for p in pr_rows if p["state"] == "open"),
                 "agent": sum(p["agent"] for p in pr_rows), "agentMerged": sum(1 for p in pr_rows if p["agent"] and p["merged"]),
                 "byWeek": list(pr_week.values()), "byRepo": sorted(({"repo": r, **v} for r, v in pr_repo.items()), key=lambda x: -x["total"])[:12]},
@@ -365,7 +431,8 @@ def main() -> None:
     }
     (C / "data").mkdir(parents=True, exist_ok=True)
     (C / "data" / "insights.json").write_text(json.dumps(out, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
-    print(f"insights: {out['commits']['total']} commits ({out['commits']['ai']} AI-assisted) in {len(repos)} repos, "
+    print(f"insights: {out['commits']['total']} commits ({out['commits']['ai']} AI-assisted) in {len(repos)} repos from {source}"
+          f"{f' ({len(unreadable)} unreadable: ' + ', '.join(unreadable) + ')' if unreadable else ''}, "
           f"{out['prs']['total'] if pr_ok else 'no'} pull requests, {len(runs)} agent runs ({out['agents']['source']}), {len(out['people'])} people")
 
 

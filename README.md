@@ -13,6 +13,15 @@ titles starting by kind (Visual mode, diagrams inside sections), the Floorplan c
 per work item (System), and `usage/agent-runs/` for shared agent counts (Home). A workspace adopting the hub, or work
 written before these rules, runs `python3 tools/hub_check.py` and `/hub-review all` there to come in line.
 
+## Insights from GitHub, not from one laptop's clones (5.19.0)
+
+- `tools/sync_insights.py` reads commits of the workspace and of every `repos.yaml` repo through the GitHub API when
+  `gh` is signed in (default branch, merge commits skipped), and pull requests of the same list. Before, both came only
+  from the repos cloned under `code/` on the laptop that synced. A repo the token cannot read is listed in
+  `insights.json` as `commits.unreadable`; `--commits local` keeps the old `git log` reading.
+- A hub whose shared repo syncs in CI can run `sync_insights.py` there with a GitHub App token that reads the
+  `repos.yaml` repos, so every viewer sees the same numbers.
+
 ## A hub without a passcode (5.18.3)
 
 - `"passcode": false` in `brand.json` opens the hub with no passcode page and no Sign out, for a host that is only on
